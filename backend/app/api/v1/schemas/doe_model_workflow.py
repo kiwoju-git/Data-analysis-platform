@@ -64,11 +64,10 @@ class DoeAnalysisTermCatalog(WorkflowModel):
     estimability: DoeFractionalEstimability | None = None
 
 
-class DoeModelSelectionOptions(WorkflowModel):
+class DoeSelectionConfiguration(WorkflowModel):
     method: Literal["none", "backward_elimination"] = "none"
     alpha_to_remove: FiniteFloat = Field(default=0.05, gt=0, lt=1)
     hierarchy_policy: Literal["strong"] = "strong"
-    saturated_start_policy: Literal["pool_smallest_adjusted_ss"] = "pool_smallest_adjusted_ss"
     display_step_details: bool = True
     term_policies: list[DoeTermPolicy] = Field(default_factory=list, max_length=512)
 
@@ -78,6 +77,14 @@ class DoeModelSelectionOptions(WorkflowModel):
         if len({policy.term_id for policy in value}) != len(value):
             raise ValueError("doe_factorial_term_policy_invalid")
         return value
+
+
+class DoeModelSelectionOptions(DoeSelectionConfiguration):
+    saturated_start_policy: Literal["pool_smallest_adjusted_ss"] = "pool_smallest_adjusted_ss"
+
+
+class RsmModelSelectionOptions(DoeSelectionConfiguration):
+    saturated_start_policy: Literal["require_positive_residual_df"] = "require_positive_residual_df"
 
 
 class DoeTermPreflightRequest(WorkflowModel):
@@ -125,7 +132,8 @@ class DoeModelSelectionStep(WorkflowModel):
     mallows_cp_unavailable_reason: str | None = None
 
 
-class DoeModelSelectionResult(DoeModelSelectionOptions):
+class DoeModelSelectionResult(DoeSelectionConfiguration):
+    saturated_start_policy: Literal["pool_smallest_adjusted_ss", "require_positive_residual_df"]
     term_catalog: list[DoeAnalysisTerm] = Field(default_factory=list)
     candidate_term_ids: list[str] = Field(default_factory=list)
     initially_excluded_term_ids: list[str] = Field(default_factory=list)
@@ -360,7 +368,7 @@ class DoePredictionResponse(WorkflowModel):
 class DoeAnalysisAssetDescriptor(WorkflowModel):
     asset_id: UUID
     analysis_id: UUID
-    kind: Literal["prediction", "html_report"]
+    kind: Literal["prediction", "html_report", "plot_view"]
     schema_version: Literal[1, 2]
     locale: Literal["en", "ko"] | None
     source_analysis_sha256: str
@@ -371,8 +379,8 @@ class DoeAnalysisAssetDescriptor(WorkflowModel):
 
     @model_validator(mode="after")
     def supported_asset_schema(self) -> DoeAnalysisAssetDescriptor:
-        if self.kind == "prediction" and self.schema_version != 1:
-            raise ValueError("Prediction artifacts require schema 1.")
+        if self.kind in {"prediction", "plot_view"} and self.schema_version != 1:
+            raise ValueError("Prediction and plot-view artifacts require schema 1.")
         return self
 
 
@@ -399,6 +407,7 @@ class DoeAnalysisDeletionPreflight(WorkflowModel):
     analysis_id: UUID
     prediction_count: int
     report_count: int
+    plot_view_count: int = 0
     deletion_manifest_sha256: str
 
 

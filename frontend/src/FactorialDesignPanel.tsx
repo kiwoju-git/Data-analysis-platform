@@ -36,6 +36,7 @@ import { DoeTermSelection, useDoeTermCatalog } from "./doe/DoeTermSelection";
 import { defaultDoeSelection, interactionOrderLabel } from "./doe/factorialWorkflowPresentation";
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
 import { FractionalEstimabilitySummary } from "./doe/FractionalEstimabilitySummary";
+import { DoeLackOfFitNotice } from "./doe/DoeLackOfFitNotice";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
 import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
 import { ChartSourceContext } from "./charts/chartSourceContext";
@@ -1063,7 +1064,8 @@ function FactorialAnalysisResultView({
       </div>
       {result.fractional_design ? <FractionalEstimabilitySummary plan={result.estimability} terms={result.model_selection?.term_catalog} /> : null}
       {result.final_model && result.model_selection ? <FactorialModelSelectionResults
-        selection={result.model_selection} model={result.final_model} fit={result.fit} n={result.sample.n_observations} /> : null}
+        selection={result.model_selection} model={result.final_model} fit={result.fit} n={result.sample.n_observations}
+        factorNames={design.factors.map((factor) => factor.name)} /> : null}
       {!result.final_model ? <div className="metadata-grid" aria-label="DOE 분석 적합 요약">
         <span>N / residual df</span>
         <strong>
@@ -1180,6 +1182,7 @@ function FactorialAnalysisResultView({
           {result.diagnostics.points_truncated ? " (truncated)" : ""}
         </strong>
       </div>
+      <DoeLackOfFitNotice lack={lackOfFit} />
       {result.warnings.map((warning) => (
         <div className="notice-box notice-warning" key={warning}>
           {factorialWarningMessage(warning)}
@@ -1187,7 +1190,7 @@ function FactorialAnalysisResultView({
       ))}
       {result.final_model ? <>
         <FactorialResidualPlots plots={result.final_model.residual_plots} />
-        <FactorialPlotsPanel model={result.final_model} design={design} />
+        <FactorialPlotsPanel model={result.final_model} design={design} selection={result.model_selection} estimability={result.estimability} responseUnit={result.response.unit} />
       </> : null}
       <FactorialStoredModelWorkflow design={design} analysisId={analysis.analysis_id} model={result.final_model} />
     </section>

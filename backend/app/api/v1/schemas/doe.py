@@ -10,7 +10,9 @@ from app.api.v1.schemas.doe_model_workflow import (
     DoeFractionalEstimability,
     DoeModelSelectionOptions,
     DoeModelSelectionResult,
+    RsmModelSelectionOptions,
 )
+from app.api.v1.schemas.rsm_plots import RsmPlotBundle
 from app.core.doe_capabilities import (
     FACTORIAL_AUTHORING_FACTOR_LIMIT,
     GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT,
@@ -451,7 +453,7 @@ class GeneralFactorialDesignResponse(BaseModel):
     design_version_id: UUID
     version_number: Literal[1]
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.4.1"]
     family: Literal["general_full_factorial"]
     name: str
     status: str
@@ -484,7 +486,7 @@ class GeneralFactorialAnalysisResponse(BaseModel):
     design_version_id: UUID
     design_version_number: int = Field(ge=1)
     method_id: Literal["doe.general_factorial_design"]
-    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"]
+    method_version: Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.4.1"]
     analysis_schema_version: Literal[1]
     design_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     response_revision_id: UUID
@@ -499,6 +501,7 @@ class GeneralFactorialAnalysisResponse(BaseModel):
 class DoeDesignDeletionCounts(BaseModel):
     prediction_count: int = Field(default=0, ge=0)
     report_count: int = Field(default=0, ge=0)
+    plot_view_count: int = Field(default=0, ge=0)
     model_config = ConfigDict(extra="forbid")
 
     version_count: int = Field(ge=1)
@@ -734,7 +737,7 @@ class DoeAnovaRowResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     df: int
-    sum_squares: float
+    sum_squares: float | None
     mean_square: float | None = None
     f_statistic: float | None = None
     p_value: float | None = None
@@ -744,6 +747,19 @@ class DoeLackOfFitBreakdownResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     available: bool
+    reason: (
+        Literal[
+            "no_replicated_design_points",
+            "no_lack_of_fit_df",
+            "pure_error_variance_zero",
+            "numerical_decomposition_failure",
+        ]
+        | None
+    ) = None
+    decomposition_available: bool | None = None
+    replication_grouping_policy: Literal["all_design_factor_settings_and_block"] | None = None
+    decomposition_tolerance: float | None = None
+    non_curvature_reason: str | None = None
     unique_design_point_count: int
     pure_error: DoeAnovaRowResponse
     lack_of_fit: DoeAnovaRowResponse
@@ -920,17 +936,61 @@ class ResponseSurfaceDesignCreateRequest(BaseModel):
     name: str = Field(default="Central composite design", min_length=1, max_length=120)
     factors: list[DoeFactorRequest] = Field(min_length=2, max_length=5)
     alpha_mode: Literal["rotatable", "face_centered"] = "rotatable"
+    ccd_type: Literal["circumscribed", "inscribed", "face_centered"] | None = None
+    axial_points_confirmed: bool = False
     factorial_replicates: int = Field(default=1, ge=1, le=4)
     axial_replicates: int = Field(default=1, ge=1, le=4)
     center_points: int = Field(default=5, ge=1, le=32)
+    center_point_mode: Literal["recommended", "custom"] = "custom"
     randomize: bool = True
     randomization_seed: int = Field(ge=0, le=2_147_483_647)
+
+    @model_validator(mode="after")
+    def validate_ccd_mode(self) -> ResponseSurfaceDesignCreateRequest:
+        if self.ccd_type is not None:
+            expected: Literal["rotatable", "face_centered"] = (
+                "face_centered" if self.ccd_type == "face_centered" else "rotatable"
+            )
+            if "alpha_mode" in self.model_fields_set and self.alpha_mode != expected:
+                raise ValueError("doe_rsm_ccd_type_alpha_mode_mismatch")
+            self.alpha_mode = expected
+        if self.ccd_type == "circumscribed" and not self.axial_points_confirmed:
+            raise ValueError("doe_rsm_axial_confirmation_required")
+        if self.center_point_mode == "recommended":
+            from app.statistics.ccd_recommendations import recommend_ccd_centers
+
+            recommendation = recommend_ccd_centers(
+                len(self.factors),
+                factorial_replicates=self.factorial_replicates,
+                axial_replicates=self.axial_replicates,
+            ).center_points
+            if recommendation is None:
+                raise ValueError("doe_rsm_center_recommendation_unavailable")
+            if "center_points" in self.model_fields_set and self.center_points != recommendation:
+                raise ValueError("doe_rsm_center_recommendation_mismatch")
+            self.center_points = recommendation
+        return self
+
+
+class RsmFactorCodingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    center: FiniteFloat
+    scale: FiniteFloat = Field(gt=0)
+    input_bounds_role: Literal["factorial", "axial", "factorial_and_axial"]
+    factorial_low: FiniteFloat
+    factorial_high: FiniteFloat
+    axial_low: FiniteFloat
+    axial_high: FiniteFloat
+    alpha: FiniteFloat = Field(ge=1)
 
 
 class ResponseSurfaceDesignOptionsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     alpha_mode: Literal["rotatable", "face_centered"]
+    ccd_type: Literal["circumscribed", "inscribed", "face_centered"] | None = None
+    center_point_mode: Literal["recommended", "custom"] | None = None
     alpha: float = Field(ge=1)
     factorial_replicates: int = Field(ge=1)
     axial_replicates: int = Field(ge=1)
@@ -959,7 +1019,7 @@ class ResponseSurfaceDesignResponse(BaseModel):
     version_number: int = Field(ge=1)
     method_id: Literal["doe.response_surface"]
     method_version: str
-    design_schema_version: Literal[1, 2]
+    design_schema_version: Literal[1, 2, 3]
     family: Literal["central_composite", "central_composite_inscribed"]
     name: str
     status: str
@@ -971,6 +1031,7 @@ class ResponseSurfaceDesignResponse(BaseModel):
     run_count: int = Field(ge=1)
     design_sha256: str
     runs: list[ResponseSurfaceDesignRunResponse]
+    coding: dict[str, RsmFactorCodingResponse] | None = None
 
 
 class DoeResponseSurfaceAnalysisCreateRequest(BaseModel):
@@ -981,6 +1042,10 @@ class DoeResponseSurfaceAnalysisCreateRequest(BaseModel):
     confidence_level: FiniteFloat = Field(default=0.95, gt=0, lt=1)
     point_limit: int = Field(default=256, ge=1, le=256)
     contour_grid_size: int = Field(default=21, ge=11, le=51)
+    term_preset: Literal["linear", "linear_squares", "linear_interactions", "full_quadratic"] = (
+        "full_quadratic"
+    )
+    model_selection: RsmModelSelectionOptions = Field(default_factory=RsmModelSelectionOptions)
 
 
 class DoeResponseSurfaceCodingResponse(BaseModel):
@@ -991,6 +1056,7 @@ class DoeResponseSurfaceCodingResponse(BaseModel):
     factorial_high: float
     axial_distance: float = Field(ge=1)
     actual_bounds_are_axial_bounds: bool
+    factors: dict[str, RsmFactorCodingResponse] | None = None
 
 
 class DoeResponseSurfaceModelPolicyResponse(BaseModel):
@@ -1038,6 +1104,7 @@ class DoeResponseSurfaceStationaryPointResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     available: bool
+    reason: Literal["singular_hessian"] | None = None
     classification: Literal["minimum", "maximum", "saddle", "indeterminate"]
     coded_coordinates: dict[str, float]
     actual_coordinates: dict[str, float]
@@ -1104,12 +1171,59 @@ class DoeResponseSurfaceDiagnosticsResponse(BaseModel):
     qq_points: list[DoeQqPointResponse]
 
 
-class DoeResponseSurfaceAnalysisResult(BaseModel):
+class RsmFinalBasisResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal[1]
+    factor_names: list[str] = Field(min_length=2, max_length=5)
+    term_ids: list[str]
+    powers: list[list[int]]
+    coefficients: list[FiniteFloat]
+    covariance: list[list[FiniteFloat]] | None
+    residual_df: int = Field(ge=0)
+    residual_mean_square: FiniteFloat | None
+    coding: dict[str, RsmFactorCodingResponse]
+
+    @model_validator(mode="after")
+    def validate_basis(self) -> RsmFinalBasisResponse:
+        count = len(self.term_ids)
+        if (
+            count < 1
+            or len(set(self.term_ids)) != count
+            or len(set(self.factor_names)) != len(self.factor_names)
+            or len(self.powers) != count
+            or len(self.coefficients) != count
+            or set(self.coding) != set(self.factor_names)
+            or any(
+                len(powers) != len(self.factor_names)
+                or any(power < 0 for power in powers)
+                or sum(powers) > 2
+                for powers in self.powers
+            )
+            or len({tuple(powers) for powers in self.powers}) != count
+            or self.powers[0] != [0] * len(self.factor_names)
+            or self.term_ids[0] != "intercept"
+            or (
+                self.covariance is not None
+                and (
+                    len(self.covariance) != count
+                    or any(len(row) != count for row in self.covariance)
+                )
+            )
+        ):
+            raise ValueError("doe_rsm_basis_invalid")
+        return self
+
+
+class DoeResponseSurfaceAnalysisResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1, 2]
     summary_type: Literal["response_surface_analysis"]
-    method: Literal["full_quadratic_ordinary_least_squares"]
+    method: Literal[
+        "full_quadratic_ordinary_least_squares",
+        "hierarchical_response_surface_ordinary_least_squares",
+    ]
     response: DoeFactorialResponseMetadata
     factor_names: list[str]
     coding: DoeResponseSurfaceCodingResponse
@@ -1122,6 +1236,35 @@ class DoeResponseSurfaceAnalysisResult(BaseModel):
     contour: DoeResponseSurfaceContourResponse
     diagnostics: DoeResponseSurfaceDiagnosticsResponse
     warnings: list[str]
+    term_preset: (
+        Literal["linear", "linear_squares", "linear_interactions", "full_quadratic"] | None
+    ) = None
+    model_selection: DoeModelSelectionResult | None = None
+    final_basis: RsmFinalBasisResponse | None = None
+    press: FiniteFloat | None = None
+    predicted_r_squared: FiniteFloat | None = None
+    plot_bundle: RsmPlotBundle | None = None
+    plot_overview: list[RsmPlotBundle] | None = None
+
+    @model_validator(mode="after")
+    def validate_final_basis(self) -> DoeResponseSurfaceAnalysisResult:
+        if self.schema_version < 2:
+            return self
+        basis = self.final_basis
+        if (
+            basis is None
+            or self.model_selection is None
+            or self.term_preset is None
+            or basis.factor_names != self.factor_names
+            or basis.term_ids != [term.term_id for term in self.terms]
+            or basis.coefficients != [term.coefficient for term in self.terms]
+            or basis.residual_df != self.sample.df_residual
+            or len(basis.term_ids) != self.sample.parameter_count
+            or basis.coding != self.coding.factors
+            or self.model_selection.final_term_ids != basis.term_ids[1:]
+        ):
+            raise ValueError("doe_rsm_final_basis_mismatch")
+        return self
 
 
 class DoeResponseSurfaceAnalysisResponse(BaseModel):

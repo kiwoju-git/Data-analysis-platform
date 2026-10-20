@@ -278,15 +278,12 @@ def test_conditional_claims_match_real_schema_and_validator_contracts(
     assert bf["ratio_interval"]["reason"] == "not_provided_by_selected_method"
 
 
-@pytest.mark.parametrize("aliased_kind", ["fractional", "screening"])
 @pytest.mark.parametrize("manual", [True, False])
-def test_full_design_only_selection_claim_matches_actual_service_guard(
+def test_screening_selection_remains_rejected_by_actual_service_guard(
     monkeypatch: pytest.MonkeyPatch,
-    aliased_kind: str,
     manual: bool,
 ) -> None:
-    design = SimpleNamespace(fractional=None, screening=None)
-    setattr(design, aliased_kind, {"stored": True})
+    design = SimpleNamespace(fractional=None, screening={"stored": True})
     monkeypatch.setattr(doe_factorial_analysis, "get_factorial_design", lambda *_args: design)
     policy = (
         {"term_policies": [{"term_id": "factor_1", "disposition": "excluded"}]}
@@ -300,6 +297,46 @@ def test_full_design_only_selection_claim_matches_actual_service_guard(
         doe_factorial_analysis.create_factorial_analysis(None, uuid4(), request)
     expected = "term_selection" if manual else "model_selection"
     assert raised.value.code == f"doe_factorial_{expected}_unsupported_for_aliased_design"
+
+
+@pytest.mark.parametrize("manual", [True, False])
+def test_fractional_selection_reaches_response_dependency_loading(
+    monkeypatch: pytest.MonkeyPatch,
+    manual: bool,
+) -> None:
+    design_version_id = uuid4()
+    design = SimpleNamespace(
+        fractional={"stored": True},
+        screening=None,
+        design_version_id=design_version_id,
+    )
+    monkeypatch.setattr(doe_factorial_analysis, "get_factorial_design", lambda *_args: design)
+
+    class DependencyLoadingReached(Exception):
+        pass
+
+    def stop_at_dependency(settings: object, **kwargs: object) -> None:
+        assert settings is None
+        assert kwargs == {
+            "design_version_id": design_version_id,
+            "response_name": "Y",
+            "response_revision_id": None,
+        }
+        raise DependencyLoadingReached
+
+    monkeypatch.setattr(
+        doe_factorial_analysis, "load_response_revision_dependency", stop_at_dependency
+    )
+    policy = (
+        {"term_policies": [{"term_id": "factor_1", "disposition": "excluded"}]}
+        if manual
+        else {"method": "backward_elimination"}
+    )
+    request = DoeFactorialAnalysisCreateRequest.model_validate(
+        {"response_name": "Y", "model_selection": policy}
+    )
+    with pytest.raises(DependencyLoadingReached):
+        doe_factorial_analysis.create_factorial_analysis(None, uuid4(), request)
 
 
 def test_declared_report_sections_do_not_claim_all_payloads_are_full(facts: dict[str, Any]) -> None:

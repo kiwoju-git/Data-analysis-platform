@@ -158,7 +158,7 @@ export interface GeneralFactorialDesignResponse {
   design_version_id: string;
   version_number: 1;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0" | "0.4.1";
   family: "general_full_factorial";
   name: string;
   status: string;
@@ -189,7 +189,7 @@ export interface GeneralFactorialAnalysisResponse {
   design_version_id: string;
   design_version_number: number;
   method_id: "doe.general_factorial_design";
-  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0";
+  method_version: "0.1.0" | "0.2.0" | "0.3.0" | "0.4.0" | "0.4.1";
   analysis_schema_version: 1;
   design_sha256: string;
   response_revision_id: string;
@@ -201,6 +201,7 @@ export interface GeneralFactorialAnalysisResponse {
   result: {
     model_selection?: DoeModelSelectionResult | null;
     final_model?: DoeFinalModelWorkflow | null;
+    response?: { name: string; unit: string | null };
     coding: { policy: "treatment"; reference_levels: Record<string, number | string> };
     sample: { n_observations: number; df_model: number; df_residual: number };
     fit: {
@@ -221,7 +222,9 @@ export interface GeneralFactorialAnalysisResponse {
         f_statistic: number | null;
         p_value: number | null;
       }>;
-      lack_of_fit: { available: boolean; reason: string | null };
+      pure_error?: DoeFactorialAnovaRow;
+      residual?: DoeFactorialAnovaRow;
+      lack_of_fit: Partial<DoeFactorialAnovaRow> & { available: boolean; reason: string | null; replication_grouping_policy?: string | null };
     };
     group_means: Array<{
       levels: Record<string, number | string>;
@@ -235,6 +238,7 @@ export interface GeneralFactorialAnalysisResponse {
 export interface DoeDesignDeletionCounts {
   prediction_count?: number;
   report_count?: number;
+  plot_view_count?: number;
   version_count: number;
   run_count: number;
   response_count: number;
@@ -422,7 +426,7 @@ export interface DoeFactorialTerm {
 
 export interface DoeFactorialAnovaRow {
   df: number;
-  sum_squares: number;
+  sum_squares: number | null;
   mean_square: number | null;
   f_statistic: number | null;
   p_value: number | null;
@@ -506,6 +510,9 @@ export interface DoeFactorialAnalysisResult {
     total: DoeFactorialAnovaRow;
     lack_of_fit: {
       available: boolean;
+      reason?: string | null;
+      replication_grouping_policy?: string | null;
+      non_curvature_reason?: string | null;
       unique_design_point_count: number;
       pure_error: DoeFactorialAnovaRow;
       lack_of_fit: DoeFactorialAnovaRow;
@@ -571,6 +578,9 @@ export interface ResponseSurfaceDesignCreateRequest {
   name: string;
   factors: DoeFactorRequest[];
   alpha_mode: "rotatable" | "face_centered";
+  ccd_type?: "circumscribed" | "inscribed" | "face_centered";
+  axial_points_confirmed?: boolean;
+  center_point_mode?: "recommended" | "custom";
   factorial_replicates: number;
   axial_replicates: number;
   center_points: number;
@@ -580,6 +590,8 @@ export interface ResponseSurfaceDesignCreateRequest {
 
 export interface ResponseSurfaceDesignOptionsResponse {
   alpha_mode: "rotatable" | "face_centered";
+  ccd_type?: "circumscribed" | "inscribed" | "face_centered" | null;
+  center_point_mode?: "recommended" | "custom" | null;
   alpha: number;
   factorial_replicates: number;
   axial_replicates: number;
@@ -604,7 +616,7 @@ export interface ResponseSurfaceDesignResponse {
   version_number: number;
   method_id: "doe.response_surface";
   method_version: string;
-  design_schema_version: 1 | 2;
+  design_schema_version: 1 | 2 | 3;
   family: "central_composite" | "central_composite_inscribed";
   name: string;
   status: string;
@@ -616,14 +628,26 @@ export interface ResponseSurfaceDesignResponse {
   run_count: number;
   design_sha256: string;
   runs: ResponseSurfaceDesignRunResponse[];
+  coding?: Record<string, RsmFactorCoding> | null;
 }
 
+export interface RsmFactorCoding {
+  center: number; scale: number; alpha: number;
+  input_bounds_role: "factorial" | "axial" | "factorial_and_axial";
+  factorial_low: number; factorial_high: number; axial_low: number; axial_high: number;
+}
+export type RsmTermPreset = "linear" | "linear_squares" | "linear_interactions" | "full_quadratic";
+export type RsmSelectionOptions = Omit<DoeModelSelectionOptions, "saturated_start_policy"> & {
+  saturated_start_policy: "require_positive_residual_df";
+};
 export interface DoeResponseSurfaceAnalysisCreateRequest {
   response_name: string;
   response_revision_id?: string | null;
   confidence_level: number;
   point_limit: number;
   contour_grid_size: number;
+  term_preset?: RsmTermPreset;
+  model_selection?: RsmSelectionOptions;
 }
 
 export interface DoeResponseSurfaceTerm {
@@ -646,9 +670,9 @@ export interface DoeResponseSurfaceDiagnosticPoint extends DoeFactorialDiagnosti
 }
 
 export interface DoeResponseSurfaceAnalysisResult {
-  schema_version: 1;
+  schema_version: 1 | 2;
   summary_type: "response_surface_analysis";
-  method: "full_quadratic_ordinary_least_squares";
+  method: "full_quadratic_ordinary_least_squares" | "hierarchical_response_surface_ordinary_least_squares";
   response: { name: string; unit: string | null };
   factor_names: string[];
   coding: {
@@ -657,6 +681,7 @@ export interface DoeResponseSurfaceAnalysisResult {
     factorial_high: number;
     axial_distance: number;
     actual_bounds_are_axial_bounds: boolean;
+    factors?: Record<string, RsmFactorCoding> | null;
   };
   model_policy: {
     full_quadratic: boolean;
@@ -681,6 +706,7 @@ export interface DoeResponseSurfaceAnalysisResult {
   anova: DoeFactorialAnalysisResult["anova"];
   stationary_point: {
     available: boolean;
+    reason?: "singular_hessian" | null;
     classification: "minimum" | "maximum" | "saddle" | "indeterminate";
     coded_coordinates: Record<string, number>;
     actual_coordinates: Record<string, number>;
@@ -689,6 +715,8 @@ export interface DoeResponseSurfaceAnalysisResult {
     within_factorial_cube: boolean;
     hessian_eigenvalues: number[];
   };
+  plot_bundle?: import("./rsmPlots").RsmPlotBundle | null;
+  plot_overview?: import("./rsmPlots").RsmPlotBundle[] | null;
   contour: {
     x_factor: string;
     y_factor: string;
@@ -707,6 +735,15 @@ export interface DoeResponseSurfaceAnalysisResult {
     points: DoeResponseSurfaceDiagnosticPoint[];
   };
   warnings: string[];
+  term_preset?: RsmTermPreset | null;
+  model_selection?: DoeModelSelectionResult | null;
+  final_basis?: {
+    schema_version: 1; factor_names: string[]; term_ids: string[]; powers: number[][];
+    coefficients: number[]; covariance: number[][] | null;
+    residual_df: number; residual_mean_square: number | null; coding: Record<string, RsmFactorCoding>;
+  } | null;
+  press?: number | null;
+  predicted_r_squared?: number | null;
 }
 
 export interface DoeResponseSurfaceAnalysisResponse {

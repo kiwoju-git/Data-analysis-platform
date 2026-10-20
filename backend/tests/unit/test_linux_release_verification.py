@@ -13,6 +13,7 @@ import sys
 import tarfile
 from pathlib import Path
 from types import SimpleNamespace
+from uuid import UUID
 
 import pytest
 
@@ -323,6 +324,9 @@ def valid_evidence(phase: str) -> dict:
             "analyses": analyses,
             "predictions": predictions,
             "network_guard_checks": [f"check-{index}" for index in range(9)],
+            "doe_rsm_receipt": valid_doe_receipt(),
+            "fractional_receipt": valid_fractional_receipt(),
+            "doe_zoom_receipt": valid_zoom_receipt(),
         }
     if phase == "resume":
         return {
@@ -332,18 +336,390 @@ def valid_evidence(phase: str) -> dict:
             "analysis_post_count": 0,
             "analyses": analyses,
             "predictions": predictions,
+            "doe_rsm_receipt": valid_rsm_phase_receipt("resume"),
         }
     return {
         **base,
         "original_server_unreachable": True,
         "browser_network_offline": True,
         "http_request_count": 0,
+        "doe_rsm_receipt": valid_rsm_phase_receipt("offline"),
         "reports": [
             {"family": family, "locale": locale, "sha256": HASH}
             for family in FAMILIES
             for locale in ("ko", "en")
         ],
     }
+
+
+def valid_doe_receipt() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "succeeded",
+        "fixture": "synthetic",
+        "designs": [
+            {
+                "id": str(UUID(int=index + 1)),
+                "kind": kind,
+                "sha256": HASH,
+                "coding": {f"factor_{item}": {"center": 0.0, "scale": 1.0} for item in range(1, 5)},
+            }
+            for index, kind in enumerate(("inscribed", "face_centered", "circumscribed"))
+        ],
+        "analyses": [
+            {"id": str(UUID(int=index + 10)), "preset": preset}
+            for index, preset in enumerate(
+                ("linear", "linear_squares", "linear_interactions", "full_quadratic")
+            )
+        ],
+        "design_id": str(UUID(int=3)),
+        "analysis_id": str(UUID(int=20)),
+        "view": str(UUID(int=21)),
+        "report_id": str(UUID(int=22)),
+        "report_sha256": HASH,
+        "result_payload_sha256": HASH,
+        "view_sha256": HASH,
+        "report_path": str(ROOT / ".tmp" / "synthetic-contour.html"),
+        "resize_content_widths": [
+            {"viewport": width, "content": width - 100.0, "columns": 2}
+            for width in (1920, 1440, 1280, 1024, 900, 768, 1440)
+        ],
+        "browser_zoom": "not exercised by this fixture",
+    }
+
+
+def valid_rsm_phase_receipt(phase: str) -> dict:
+    initial = valid_doe_receipt()
+    receipt = {
+        "schema_version": 1,
+        "status": "succeeded",
+        "phase": phase,
+        "report_id": initial["report_id"],
+        "report_sha256": initial["report_sha256"],
+    }
+    if phase == "offline":
+        return {**receipt, "visible_stored_geometry": True}
+    return {
+        **receipt,
+        **{
+            key: initial[key]
+            for key in ("design_id", "analysis_id", "view", "result_payload_sha256", "view_sha256")
+        },
+        "analysis_post_count": 0,
+        "visible_saved_view_restored": True,
+        "report_bytes_unchanged": True,
+    }
+
+
+def test_rsm_restart_and_server_stopped_proof_preserves_exact_source_ids_and_hashes() -> None:
+    initial, resume, offline = (valid_evidence(phase) for phase in ("initial", "resume", "offline"))
+    original = copy.deepcopy([initial, resume, offline])
+    proof = VERIFY.require_rsm_roundtrip(initial, [resume, copy.deepcopy(resume)], offline)
+    assert proof["restart_count"] == 2
+    assert proof["view_sha256"] == HASH
+    assert proof["server_stopped_stored_geometry_visible"] is True
+    assert [initial, resume, offline] == original
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("design_id", str(UUID(int=999))),
+        ("analysis_id", str(UUID(int=999))),
+        ("view", str(UUID(int=999))),
+        ("report_id", str(UUID(int=999))),
+        ("result_payload_sha256", "0" * 64),
+        ("view_sha256", "0" * 64),
+        ("report_sha256", "0" * 64),
+    ],
+)
+def test_second_install_rsm_must_match_exact_initial_source(field: str, value) -> None:
+    first, second = valid_evidence("resume"), valid_evidence("resume")
+    second["doe_rsm_receipt"][field] = value
+    with pytest.raises(ValueError, match="RSM restart changed"):
+        VERIFY.require_rsm_roundtrip(
+            valid_evidence("initial"), [first, second], valid_evidence("offline")
+        )
+
+
+@pytest.mark.parametrize(
+    "field,value", [("report_id", str(UUID(int=999))), ("report_sha256", "0" * 64)]
+)
+def test_offline_rsm_report_must_match_initial_export(field: str, value) -> None:
+    offline = valid_evidence("offline")
+    offline["doe_rsm_receipt"][field] = value
+    with pytest.raises(ValueError, match="Offline RSM report differs"):
+        VERIFY.require_rsm_roundtrip(
+            valid_evidence("initial"), [valid_evidence("resume"), valid_evidence("resume")], offline
+        )
+
+
+@pytest.mark.parametrize("phase", ["resume", "offline"])
+def test_each_remaining_archive_phase_requires_rsm_receipt(phase: str) -> None:
+    evidence = valid_evidence(phase)
+    del evidence["doe_rsm_receipt"]
+    with pytest.raises(ValueError, match="RSM restart/offline"):
+        VERIFY.require_browser_evidence(evidence, PHASE_FILES[phase])
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("analysis_post_count", 1),
+        ("analysis_post_count", False),
+        ("visible_saved_view_restored", False),
+        ("report_bytes_unchanged", False),
+    ],
+)
+def test_rsm_restore_evidence_requires_visible_immutable_saved_view(field: str, value) -> None:
+    evidence = valid_evidence("resume")
+    evidence["doe_rsm_receipt"][field] = value
+    with pytest.raises(ValueError, match="without refitting"):
+        VERIFY.require_browser_evidence(evidence, "resume-smoke.json")
+
+
+def test_offline_rsm_evidence_requires_visible_geometry() -> None:
+    evidence = valid_evidence("offline")
+    evidence["doe_rsm_receipt"]["visible_stored_geometry"] = False
+    with pytest.raises(ValueError, match="stored geometry"):
+        VERIFY.require_browser_evidence(evidence, "offline-smoke.json")
+
+
+def valid_fractional_receipt() -> dict:
+    locales = {}
+    aliases = {
+        "factor_3:factor_4": "factor_1:factor_2",
+        "factor_2:factor_4": "factor_1:factor_3",
+        "factor_2:factor_3": "factor_1:factor_4",
+    }
+    for index, locale in enumerate(("ko", "en")):
+        offset = 100 + index * 20
+
+        def report(number: int, base_offset: int = offset) -> dict:
+            return {
+                "analysis_id": str(UUID(int=base_offset + number)),
+                "asset_id": str(UUID(int=base_offset + number + 1)),
+                "analysis_sha256": HASH,
+                "report_sha256": HASH,
+                "report_svg_count": 2,
+                "source_unchanged": True,
+                "restore_without_analysis": True,
+                "standalone_network_blocked": True,
+            }
+
+        locales[locale] = {
+            "five_factor_design_id": str(UUID(int=offset)),
+            "five_factor_design_sha256": HASH,
+            "saturated_analysis_id": str(UUID(int=offset + 1)),
+            "four_factor_design_id": str(UUID(int=offset + 2)),
+            "four_factor_design_sha256": HASH,
+            "preflight_rank": 16,
+            "saturated_residual_df": 0,
+            "pooled_term_ids": [
+                "factor_1:factor_2",
+                "factor_1:factor_3",
+                "factor_2:factor_3",
+                "factor_4:factor_5",
+            ],
+            "alias_representatives": {
+                term: {
+                    "term_id": term,
+                    "representative_term_id": representative,
+                    "reason": "complete_alias",
+                    "sign": 1,
+                }
+                for term, representative in aliases.items()
+            },
+            "backward": report(3),
+            "four_factor": report(5),
+        }
+    return {
+        "schema_version": 1,
+        "status": "succeeded",
+        "fixture": "synthetic",
+        "locales": locales,
+    }
+
+
+def valid_zoom_receipt() -> dict:
+    rsm = valid_doe_receipt()
+    return {
+        "schema_version": 1,
+        "status": "passed",
+        "fixture": "synthetic saved RSM analysis",
+        "mechanism": "chrome.tabs.setZoom/getZoom",
+        "deviceScaleFactor_override": False,
+        "fractional_zoom": "not_exercised_by_this_fixture",
+        "design_id": rsm["design_id"],
+        "analysis_id": rsm["analysis_id"],
+        "analysis_sha256": HASH,
+        "analysis_post_count": 0,
+        "source_unchanged": True,
+        "draft_preserved": True,
+        "plot_coordinates_unchanged": True,
+        "committed_result_dom_preserved": True,
+        "steps": [
+            {
+                "locale": locale,
+                "browserZoom": factor,
+                "viewport": {"width": 1440 / factor, "height": 1000 / factor},
+                "scrollWidth": 1440 / factor,
+                "devicePixelRatio": factor,
+                "compactCount": 10,
+                "columns": [3],
+                "summary": [{"label": "Synthetic test summary"}],
+                "charts": [{"svg": {"width": 200, "height": 120}}],
+            }
+            for locale in ("ko", "en")
+            for factor in (1.0, 1.25, 1.5, 1.0)
+        ],
+    }
+
+
+@pytest.mark.parametrize("key", ["fractional_receipt", "doe_zoom_receipt"])
+def test_initial_phase_requires_fraction_and_real_zoom_receipts(key: str) -> None:
+    evidence = valid_evidence("initial")
+    del evidence[key]
+    with pytest.raises(ValueError):
+        VERIFY.require_browser_evidence(evidence, "application-smoke.json")
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("five_factor_design_sha256", None),
+        ("four_factor_design_id", "wrong"),
+        ("preflight_rank", 15),
+        ("saturated_residual_df", False),
+        ("pooled_term_ids", ["factor_1"] * 4),
+        ("alias_representatives", {}),
+        ("backward", {}),
+    ],
+)
+def test_fractional_evidence_requires_both_exact_design_cases(field: str, value) -> None:
+    receipt = valid_fractional_receipt()
+    receipt["locales"]["en"][field] = value
+    with pytest.raises(ValueError, match="Fractional"):
+        VERIFY.require_fractional_receipt(receipt)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("restore_without_analysis", False),
+        ("source_unchanged", False),
+        ("standalone_network_blocked", False),
+        ("analysis_sha256", "0"),
+        ("report_sha256", None),
+        ("report_svg_count", True),
+    ],
+)
+def test_fractional_report_receipt_cannot_omit_restore_or_visible_report(field: str, value) -> None:
+    receipt = valid_fractional_receipt()
+    receipt["locales"]["ko"]["four_factor"][field] = value
+    with pytest.raises(ValueError, match="Fractional"):
+        VERIFY.require_fractional_receipt(receipt)
+
+
+def test_fractional_alias_sign_and_distinct_ids_are_required() -> None:
+    receipt = valid_fractional_receipt()
+    aliases = receipt["locales"]["ko"]["alias_representatives"]
+    aliases["factor_3:factor_4"]["sign"] = -1
+    with pytest.raises(ValueError, match="signed alias"):
+        VERIFY.require_fractional_receipt(receipt)
+    receipt = valid_fractional_receipt()
+    receipt["locales"]["en"] = copy.deepcopy(receipt["locales"]["ko"])
+    with pytest.raises(ValueError, match="distinct"):
+        VERIFY.require_fractional_receipt(receipt)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("mechanism", "deviceScaleFactor"),
+        ("deviceScaleFactor_override", True),
+        ("analysis_id", str(UUID(int=999))),
+        ("source_unchanged", False),
+        ("analysis_post_count", 1),
+        ("plot_coordinates_unchanged", False),
+        ("draft_preserved", False),
+        ("committed_result_dom_preserved", False),
+        ("steps", []),
+    ],
+)
+def test_zoom_receipt_requires_real_tab_zoom_and_immutable_saved_source(field: str, value) -> None:
+    receipt = valid_zoom_receipt()
+    receipt[field] = value
+    with pytest.raises(ValueError, match="zoom"):
+        VERIFY.require_doe_zoom_receipt(receipt, valid_doe_receipt())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("locale", "ko"),
+        ("browserZoom", 1.0),
+        ("viewport", {"width": 1440, "height": 1000}),
+        ("scrollWidth", 2000),
+        ("compactCount", 9),
+        ("charts", []),
+        ("summary", []),
+    ],
+)
+def test_zoom_receipt_requires_all_measured_transitions(field: str, value) -> None:
+    receipt = valid_zoom_receipt()
+    receipt["steps"][6][field] = value
+    with pytest.raises(ValueError, match="zoom"):
+        VERIFY.require_doe_zoom_receipt(receipt, valid_doe_receipt())
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("schema_version", True),
+        ("status", "running"),
+        ("fixture", "user_data"),
+        ("designs", []),
+        ("analyses", []),
+        ("design_id", str(UUID(int=1))),
+        ("analysis_id", str(UUID(int=10))),
+        ("view", "unverified-view"),
+        ("report_id", None),
+        ("report_sha256", "B" * 64),
+        ("resize_content_widths", []),
+        ("browser_zoom", "passed"),
+    ],
+)
+def test_initial_phase_requires_completed_doe_ui_evidence(field: str, value) -> None:
+    evidence = valid_evidence("initial")
+    evidence["doe_rsm_receipt"][field] = value
+    with pytest.raises(ValueError, match="DOE/RSM"):
+        VERIFY.require_browser_evidence(evidence, "application-smoke.json")
+
+
+def test_initial_phase_rejects_missing_doe_receipt() -> None:
+    evidence = valid_evidence("initial")
+    del evidence["doe_rsm_receipt"]
+    with pytest.raises(ValueError, match="DOE/RSM"):
+        VERIFY.require_browser_evidence(evidence, "application-smoke.json")
+
+
+@pytest.mark.parametrize("collection", ["designs", "analyses"])
+def test_doe_receipt_rejects_duplicate_kind_or_preset(collection: str) -> None:
+    receipt = valid_doe_receipt()
+    receipt[collection][0] = copy.deepcopy(receipt[collection][1])
+    with pytest.raises(ValueError, match="DOE/RSM"):
+        VERIFY.require_doe_rsm_receipt(receipt)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("content", float("nan")), ("content", 2000), ("columns", True)]
+)
+def test_doe_receipt_rejects_invalid_resize_measurement(field: str, value) -> None:
+    receipt = valid_doe_receipt()
+    receipt["resize_content_widths"][5][field] = value
+    with pytest.raises(ValueError, match="DOE/RSM"):
+        VERIFY.require_doe_rsm_receipt(receipt)
 
 
 PHASE_FILES = {

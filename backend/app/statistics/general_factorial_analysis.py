@@ -397,33 +397,27 @@ def _pure_error(runs: Sequence[GeneralFactorialAnalysisRun]) -> dict[str, Any]:
 
 
 def _lack_of_fit(sse: float, df_residual: int, pure_error: dict[str, Any]) -> dict[str, Any]:
+    from app.statistics.doe_lack_of_fit import decompose_lack_of_fit
+
     pure_df = int(pure_error["df"])
-    pure_ms = pure_error["mean_square"]
-    df = df_residual - pure_df
-    if pure_df <= 0 or df <= 0 or pure_ms is None or float(pure_ms) <= 0:
-        return {
-            "available": False,
-            "reason": (
-                "Repeated factor combinations are insufficient to separate pure error "
-                "and lack of fit."
-            ),
-            "df": max(df, 0),
-            "sum_squares": None,
-            "mean_square": None,
-            "f_statistic": None,
-            "p_value": None,
-        }
-    ss = max(0.0, sse - float(pure_error["sum_squares"]))
-    ms = ss / df
-    statistic = ms / float(pure_ms)
+    decomposition = decompose_lack_of_fit(
+        sse=sse,
+        pure_error_ss=float(pure_error["sum_squares"]),
+        pure_error_df=pure_df,
+        lack_of_fit_df=df_residual - pure_df,
+    )
     return {
-        "available": True,
-        "reason": None,
-        "df": df,
-        "sum_squares": ss,
-        "mean_square": ms,
-        "f_statistic": statistic,
-        "p_value": float(stats.f.sf(statistic, df, pure_df)),
+        **decomposition["lack_of_fit"],
+        **{
+            key: decomposition[key]
+            for key in (
+                "available",
+                "reason",
+                "decomposition_available",
+                "replication_grouping_policy",
+                "decomposition_tolerance",
+            )
+        },
     }
 
 

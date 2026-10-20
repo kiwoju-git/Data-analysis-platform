@@ -7,6 +7,7 @@ import errno
 import hashlib
 import ipaddress
 import json
+import math
 import os
 import platform
 import re
@@ -21,13 +22,20 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import zipfile
+from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
+from uuid import UUID
 
 from network_isolated_install import run_network_blocked_install
+from validate_python_lock import validate_lock_text
 
 HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 MAX_ARCHIVE_FILES = 100_000
 MAX_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
+CONTOUR_WHEEL_NAME = (
+    "contourpy-1.3.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+)
 
 
 def file_sha256(path: Path) -> str:
@@ -36,6 +44,106 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def verify_contour_dependency(root: Path) -> dict:
+    """Cross-check packaged dependency bytes without importing its native extension."""
+    wheels = list((root / "wheels").glob("contourpy-*.whl"))
+    if len(wheels) != 1 or wheels[0].name != CONTOUR_WHEEL_NAME:
+        raise ValueError(
+            "Release must contain the locked Linux CPython 3.12 ContourPy wheel"
+        )
+    wheel = wheels[0]
+    if wheel.is_symlink() or not 0 < wheel.stat().st_size <= 16 * 1024 * 1024:
+        raise ValueError("Invalid ContourPy wheel file")
+    lock_path = root / "requirements-release.lock"
+    manifest_path = root / "FILES.sha256"
+    if (
+        lock_path.stat().st_size > 1024 * 1024
+        or manifest_path.stat().st_size > 16 * 1024 * 1024
+    ):
+        raise ValueError("Release dependency records exceed validation limits")
+    lock = validate_lock_text(
+        lock_path.read_text(encoding="ascii"),
+        {"contourpy": "1.3.2"},
+        target="py312-linux",
+        profile="runtime",
+    )
+    wheel_hash = file_sha256(wheel)
+    if lock["contourpy"]["sha256"] != wheel_hash:
+        raise ValueError("ContourPy wheel differs from the release lock")
+    manifest = {}
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+)", line)
+        if match is None:
+            raise ValueError("Invalid release file manifest record")
+        digest, name = match.groups()
+        if name in manifest:
+            raise ValueError("Duplicate release file manifest record")
+        manifest[name] = digest
+    notices = root / "THIRD_PARTY_NOTICES" / wheel.stem
+    verified_paths = [wheel, lock_path]
+    member_hashes = {}
+    with zipfile.ZipFile(wheel) as archive:
+        entries = archive.infolist()
+        names = [entry.filename for entry in entries]
+        if len(entries) > 4096 or len(set(names)) != len(names):
+            raise ValueError("Invalid ContourPy wheel member inventory")
+        for leaf in ("METADATA", "LICENSE"):
+            member = f"contourpy-1.3.2.dist-info/{leaf}"
+            if member not in names:
+                raise ValueError(f"ContourPy wheel lacks {leaf}")
+            entry = archive.getinfo(member)
+            if not 0 < entry.file_size <= 1024 * 1024:
+                raise ValueError("ContourPy metadata exceeds validation limits")
+            contents = archive.read(entry)
+            notice = notices / f"{names.index(member)}-{leaf}"
+            candidates = list(notices.glob(f"*-{leaf}"))
+            if (
+                candidates != [notice]
+                or notice.is_symlink()
+                or notice.stat().st_size != len(contents)
+                or notice.read_bytes() != contents
+            ):
+                raise ValueError(
+                    f"ContourPy {leaf} notice differs from the wheel bytes"
+                )
+            if leaf == "METADATA":
+                metadata = BytesParser().parsebytes(contents)
+                if (
+                    metadata.get_all("Name") != ["contourpy"]
+                    or metadata.get_all("Version") != ["1.3.2"]
+                    or metadata.get_all("Requires-Python") != [">=3.10"]
+                ):
+                    raise ValueError("Unexpected ContourPy package metadata")
+            elif contents.splitlines()[0].strip() != b"BSD 3-Clause License":
+                raise ValueError("Unexpected ContourPy license")
+            verified_paths.append(notice)
+            member_hashes[leaf.lower() + "_sha256"] = hashlib.sha256(
+                contents
+            ).hexdigest()
+    checked = {}
+    for path in verified_paths:
+        name = path.relative_to(root).as_posix()
+        actual = file_sha256(path)
+        if manifest.get(name) != actual:
+            raise ValueError(
+                f"ContourPy dependency file differs from FILES.sha256: {name}"
+            )
+        checked[name] = actual
+    return {
+        "status": "verified",
+        "name": "contourpy",
+        "version": "1.3.2",
+        "python_target": "3.12",
+        "wheel": wheel.name,
+        "wheel_sha256": wheel_hash,
+        "license": "BSD-3-Clause",
+        **member_hashes,
+        "release_lock_sha256": file_sha256(lock_path),
+        "release_manifest_sha256": file_sha256(manifest_path),
+        "verified_file_sha256": checked,
+    }
 
 
 def interface_ipv4() -> str:
@@ -252,6 +360,7 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
             or evidence["analysis_post_count"] != 0
         ):
             raise ValueError("Restore journey must not resubmit an analysis")
+        require_rsm_phase_receipt(evidence.get("doe_rsm_receipt"), "resume")
     elif filename == "offline-smoke.json":
         reports = evidence.get("reports")
         if (
@@ -270,6 +379,7 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
             }
         ):
             raise ValueError("Server-stopped offline report evidence is incomplete")
+        require_rsm_phase_receipt(evidence.get("doe_rsm_receipt"), "offline")
     elif filename == "application-smoke.json":
         checks = evidence.get("network_guard_checks")
         if (
@@ -281,8 +391,350 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
             or len(set(checks)) != 9
         ):
             raise ValueError("Initial application journey evidence is incomplete")
+        require_doe_rsm_receipt(evidence.get("doe_rsm_receipt"))
+        require_fractional_receipt(evidence.get("fractional_receipt"))
+        require_doe_zoom_receipt(
+            evidence.get("doe_zoom_receipt"), evidence["doe_rsm_receipt"]
+        )
     else:
         raise ValueError("Unknown browser evidence phase")
+
+
+def _receipt_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return str(UUID(value)) == value
+    except ValueError:
+        return False
+
+
+def _receipt_sha256(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def _receipt_number(value: object) -> bool:
+    return type(value) in {int, float} and math.isfinite(value)
+
+
+def require_doe_zoom_receipt(receipt: object, rsm: dict) -> None:
+    if (
+        not isinstance(receipt, dict)
+        or type(receipt.get("schema_version")) is not int
+        or receipt["schema_version"] != 1
+        or receipt.get("status") != "passed"
+        or receipt.get("fixture") != "synthetic saved RSM analysis"
+        or receipt.get("mechanism") != "chrome.tabs.setZoom/getZoom"
+        or receipt.get("deviceScaleFactor_override") is not False
+        or receipt.get("fractional_zoom") != "not_exercised_by_this_fixture"
+        or receipt.get("design_id") != rsm["design_id"]
+        or receipt.get("analysis_id") != rsm["analysis_id"]
+        or not _receipt_sha256(receipt.get("analysis_sha256"))
+        or receipt.get("analysis_sha256") != rsm["result_payload_sha256"]
+        or type(receipt.get("analysis_post_count")) is not int
+        or receipt["analysis_post_count"] != 0
+        or any(
+            receipt.get(field) is not True
+            for field in (
+                "source_unchanged",
+                "draft_preserved",
+                "plot_coordinates_unchanged",
+                "committed_result_dom_preserved",
+            )
+        )
+    ):
+        raise ValueError("Actual saved DOE browser zoom evidence is incomplete")
+    steps = receipt.get("steps")
+    expected = [
+        (locale, factor) for locale in ("ko", "en") for factor in (1.0, 1.25, 1.5, 1.0)
+    ]
+    if not isinstance(steps, list) or len(steps) != len(expected):
+        raise ValueError(
+            "DOE zoom must exercise 100/125/150/100 percent in both locales"
+        )
+    for step, (locale, factor) in zip(steps, expected, strict=True):
+        if (
+            not isinstance(step, dict)
+            or step.get("locale") != locale
+            or not _receipt_number(step.get("browserZoom"))
+            or abs(step["browserZoom"] - factor) >= 1e-9
+            or not isinstance(step.get("viewport"), dict)
+            or not _receipt_number(step["viewport"].get("width"))
+            or abs(step["viewport"]["width"] - 1440 / factor) > 2
+            or not _receipt_number(step.get("scrollWidth"))
+            or not 0 < step["scrollWidth"] <= step["viewport"]["width"] + 1
+            or not _receipt_number(step.get("devicePixelRatio"))
+            or step["devicePixelRatio"] <= 0
+            or type(step.get("compactCount")) is not int
+            or step["compactCount"] != 10
+            or not isinstance(step.get("columns"), list)
+            or not step["columns"]
+            or any(
+                type(count) is not int or count not in {1, 2, 3, 4}
+                for count in step["columns"]
+            )
+            or any(
+                not isinstance(step.get(field), list)
+                or not step[field]
+                or any(not isinstance(item, dict) for item in step[field])
+                for field in ("summary", "charts")
+            )
+        ):
+            raise ValueError("DOE browser zoom measured layout evidence is incomplete")
+
+
+def require_fractional_receipt(receipt: object) -> None:
+    if (
+        not isinstance(receipt, dict)
+        or type(receipt.get("schema_version")) is not int
+        or receipt["schema_version"] != 1
+        or receipt.get("status") != "succeeded"
+        or receipt.get("fixture") != "synthetic"
+        or not isinstance(receipt.get("locales"), dict)
+        or set(receipt["locales"]) != {"ko", "en"}
+    ):
+        raise ValueError("Fractional-design UI evidence is missing or incomplete")
+    expected_aliases = {
+        "factor_3:factor_4": "factor_1:factor_2",
+        "factor_2:factor_4": "factor_1:factor_3",
+        "factor_2:factor_3": "factor_1:factor_4",
+    }
+    identifiers = []
+    for item in receipt["locales"].values():
+        if (
+            not isinstance(item, dict)
+            or any(
+                not _receipt_uuid(item.get(key))
+                for key in (
+                    "five_factor_design_id",
+                    "saturated_analysis_id",
+                    "four_factor_design_id",
+                )
+            )
+            or any(
+                not _receipt_sha256(item.get(key))
+                for key in ("five_factor_design_sha256", "four_factor_design_sha256")
+            )
+            or type(item.get("preflight_rank")) is not int
+            or item["preflight_rank"] != 16
+            or type(item.get("saturated_residual_df")) is not int
+            or item["saturated_residual_df"] != 0
+            or not isinstance(item.get("pooled_term_ids"), list)
+            or len(item["pooled_term_ids"]) != 4
+            or any(
+                not isinstance(term, str)
+                or re.fullmatch(r"factor_[1-5](?::factor_[1-5])?", term) is None
+                for term in item["pooled_term_ids"]
+            )
+            or len(set(item["pooled_term_ids"])) != 4
+        ):
+            raise ValueError(
+                "Fractional-design rank or initial pooling evidence is incomplete"
+            )
+        aliases = item.get("alias_representatives")
+        if (
+            not isinstance(aliases, dict)
+            or set(aliases) != set(expected_aliases)
+            or any(
+                not isinstance(aliases[term], dict)
+                or aliases[term].get("term_id") != term
+                or aliases[term].get("representative_term_id") != representative
+                or aliases[term].get("reason") != "complete_alias"
+                or type(aliases[term].get("sign")) is not int
+                or aliases[term]["sign"] != 1
+                for term, representative in expected_aliases.items()
+            )
+        ):
+            raise ValueError("Fractional-design signed alias evidence is incomplete")
+        identifiers.extend(
+            item[key]
+            for key in (
+                "five_factor_design_id",
+                "saturated_analysis_id",
+                "four_factor_design_id",
+            )
+        )
+        for key in ("backward", "four_factor"):
+            report = item.get(key)
+            if (
+                not isinstance(report, dict)
+                or any(
+                    not _receipt_uuid(report.get(field))
+                    for field in ("analysis_id", "asset_id")
+                )
+                or any(
+                    not _receipt_sha256(report.get(field))
+                    for field in ("analysis_sha256", "report_sha256")
+                )
+                or type(report.get("report_svg_count")) is not int
+                or report["report_svg_count"] <= 0
+                or any(
+                    report.get(field) is not True
+                    for field in (
+                        "source_unchanged",
+                        "restore_without_analysis",
+                        "standalone_network_blocked",
+                    )
+                )
+            ):
+                raise ValueError(
+                    "Fractional-design report or restore evidence is incomplete"
+                )
+            identifiers.extend((report["analysis_id"], report["asset_id"]))
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError(
+            "Fractional-design journeys did not create distinct owners and reports"
+        )
+
+
+def require_doe_rsm_receipt(receipt: object) -> None:
+    """Require the initial real UI journey; this does not claim DOE restart coverage."""
+    if (
+        not isinstance(receipt, dict)
+        or type(receipt.get("schema_version")) is not int
+        or receipt["schema_version"] != 1
+        or receipt.get("status") != "succeeded"
+        or receipt.get("fixture") != "synthetic"
+    ):
+        raise ValueError("DOE/RSM browser receipt is missing or incomplete")
+
+    designs, analyses = receipt.get("designs"), receipt.get("analyses")
+    if (
+        not isinstance(designs, list)
+        or len(designs) != 3
+        or any(
+            not isinstance(item, dict)
+            or not _receipt_uuid(item.get("id"))
+            or not _receipt_sha256(item.get("sha256"))
+            or not isinstance(item.get("coding"), dict)
+            or len(item["coding"]) != 4
+            for item in designs
+        )
+        or {item.get("kind") for item in designs}
+        != {"inscribed", "face_centered", "circumscribed"}
+        or len({item["id"] for item in designs}) != 3
+        or not isinstance(analyses, list)
+        or len(analyses) != 4
+        or any(
+            not isinstance(item, dict) or not _receipt_uuid(item.get("id"))
+            for item in analyses
+        )
+        or {item.get("preset") for item in analyses}
+        != {"linear", "linear_squares", "linear_interactions", "full_quadratic"}
+        or len({item["id"] for item in analyses}) != 4
+        or any(
+            not _receipt_uuid(receipt.get(key))
+            for key in ("design_id", "analysis_id", "view", "report_id")
+        )
+        or receipt["design_id"]
+        != next(item["id"] for item in designs if item["kind"] == "circumscribed")
+        or receipt["analysis_id"] in {item["id"] for item in analyses}
+        or not _receipt_sha256(receipt.get("report_sha256"))
+        or not _receipt_sha256(receipt.get("result_payload_sha256"))
+        or not _receipt_sha256(receipt.get("view_sha256"))
+        or not isinstance(receipt.get("report_path"), str)
+        or not Path(receipt["report_path"]).is_absolute()
+    ):
+        raise ValueError(
+            "DOE/RSM design, model, saved view, or report coverage is incomplete"
+        )
+    dimensions = receipt.get("resize_content_widths")
+    if (
+        not isinstance(dimensions, list)
+        or len(dimensions) != 7
+        or any(
+            not isinstance(item, dict)
+            or type(item.get("viewport")) is not int
+            or type(item.get("content")) not in {int, float}
+            or not math.isfinite(item["content"])
+            or not 0 < item["content"] <= item["viewport"] + 1
+            or type(item.get("columns")) is not int
+            or item["columns"] not in {1, 2, 3, 4}
+            for item in dimensions
+        )
+        or [item["viewport"] for item in dimensions]
+        != [1920, 1440, 1280, 1024, 900, 768, 1440]
+        or receipt.get("browser_zoom") != "not exercised by this fixture"
+    ):
+        raise ValueError(
+            "DOE/RSM resize evidence or browser zoom limitation is incomplete"
+        )
+
+
+def require_rsm_phase_receipt(receipt: object, phase: str) -> None:
+    if (
+        not isinstance(receipt, dict)
+        or type(receipt.get("schema_version")) is not int
+        or receipt["schema_version"] != 1
+        or receipt.get("status") != "succeeded"
+        or phase not in {"resume", "offline"}
+        or receipt.get("phase") != phase
+        or not _receipt_uuid(receipt.get("report_id"))
+        or not _receipt_sha256(receipt.get("report_sha256"))
+    ):
+        raise ValueError("RSM restart/offline evidence is incomplete")
+    if phase == "offline":
+        if receipt.get("visible_stored_geometry") is not True:
+            raise ValueError("Offline RSM report must display its stored geometry")
+        return
+    if (
+        any(
+            not _receipt_uuid(receipt.get(key))
+            for key in ("design_id", "analysis_id", "view")
+        )
+        or any(
+            not _receipt_sha256(receipt.get(key))
+            for key in ("result_payload_sha256", "view_sha256")
+        )
+        or type(receipt.get("analysis_post_count")) is not int
+        or receipt["analysis_post_count"] != 0
+        or receipt.get("visible_saved_view_restored") is not True
+        or receipt.get("report_bytes_unchanged") is not True
+    ):
+        raise ValueError(
+            "RSM restart must restore the saved view/report without refitting"
+        )
+
+
+def require_rsm_roundtrip(smoke: dict, restarts: list[dict], offline: dict) -> dict:
+    require_browser_evidence(smoke, "application-smoke.json")
+    require_browser_evidence(offline, "offline-smoke.json")
+    initial = smoke.get("doe_rsm_receipt")
+    require_doe_rsm_receipt(initial)
+    assert isinstance(initial, dict)
+    expected = {
+        key: initial[key]
+        for key in (
+            "design_id",
+            "analysis_id",
+            "view",
+            "report_id",
+            "result_payload_sha256",
+            "view_sha256",
+            "report_sha256",
+        )
+    }
+    if len(restarts) != 2:
+        raise ValueError(
+            "RSM requires both same-install and second-install restart evidence"
+        )
+    for restart in restarts:
+        require_browser_evidence(restart, "resume-smoke.json")
+        restored = restart.get("doe_rsm_receipt")
+        require_rsm_phase_receipt(restored, "resume")
+        if any(restored[key] != value for key, value in expected.items()):
+            raise ValueError("RSM restart changed its exact owner or stored bytes")
+    stopped = offline.get("doe_rsm_receipt")
+    require_rsm_phase_receipt(stopped, "offline")
+    if any(stopped[key] != expected[key] for key in ("report_id", "report_sha256")):
+        raise ValueError("Offline RSM report differs from the original saved export")
+    return {
+        **expected,
+        "restart_count": 2,
+        "restored_saved_view_visible": True,
+        "report_bytes_unchanged": True,
+        "server_stopped_stored_geometry_visible": True,
+    }
 
 
 def verify_installed_refusal_probes(
@@ -712,6 +1164,7 @@ def main() -> int:
         workspace = temp / "external workspace 검증"
         smoke = None
         installations = []
+        contour_dependencies = []
         isolated_installs = []
         restarts = []
         refusal_probes = []
@@ -735,6 +1188,7 @@ def main() -> int:
             require_expected_identity(
                 payload, args.expected_source_commit, args.expected_release_version
             )
+            contour_dependencies.append(verify_contour_dependency(root))
             expected = json.loads(
                 (root / "BUILD_INFO.json").read_text(encoding="utf-8")
             )
@@ -851,6 +1305,8 @@ def main() -> int:
                     require_unchanged_artifacts(workspace, artifact_hashes)
         if (
             len(installations) != 2
+            or len(contour_dependencies) != 2
+            or contour_dependencies[0] != contour_dependencies[1]
             or len(isolated_installs) != 3
             or len(restarts) != 2
             or live_install_refusal is None
@@ -861,6 +1317,7 @@ def main() -> int:
         if file_sha256(archive) != archive_sha256:
             raise ValueError("Archive bytes changed during validation")
         pilot_checks = require_pilot_receipts(smoke, restarts, offline)
+        rsm_checks = require_rsm_roundtrip(smoke, restarts, offline)
         report = {
             "schema_version": 2,
             "status": "passed",
@@ -875,6 +1332,7 @@ def main() -> int:
             "offline_reinstallations": 1,
             "network_blocked_installations": isolated_installs,
             "installed_identities": installations,
+            "contour_dependency_checks": contour_dependencies,
             "mixed_install_refusal_probes": refusal_probes,
             "live_installation_refusal": live_install_refusal,
             "same_install_restart_restore": True,
@@ -892,6 +1350,7 @@ def main() -> int:
             "company_peer_or_firewall_tested": False,
             "application": smoke,
             "pilot_checks": pilot_checks,
+            "doe_rsm_checks": rsm_checks,
             "pilot_legacy_provisioning": legacy_seed,
         }
         (output / "validation-report.json").write_text(

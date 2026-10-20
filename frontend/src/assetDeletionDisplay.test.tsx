@@ -18,10 +18,10 @@ afterEach(() => { vi.unstubAllGlobals(); setCurrentLocale("en"); });
 describe("asset deletion display boundary", () => {
   it("renders each stored notice with the current locale without changing its counts", () => {
     const notices: Array<ComponentProps<typeof AssetDeletionNotice>["notice"]> = [
-      { kind: "factorial_analysis", predictionCount: 2, reportCount: 3 },
+      { kind: "factorial_analysis", predictionCount: 2, reportCount: 3, plotViewCount: 1 },
       { kind: "factorial_asset" },
       { kind: "analysis_run", fileCount: 7 },
-      { kind: "doe_design", analysisCount: 4, predictionCount: 5, reportCount: 6, versionCount: 2, runCount: 32, revisionCount: 3 },
+      { kind: "doe_design", analysisCount: 4, predictionCount: 5, reportCount: 6, plotViewCount: 1, versionCount: 2, runCount: 32, revisionCount: 3 },
       { kind: "bayesian_study", trialCount: 12 },
     ];
     for (const notice of notices) {
@@ -37,7 +37,7 @@ describe("asset deletion display boundary", () => {
   });
 
   it("keeps DOE dependency counts distinct and retains the zero count", () => {
-    const notice = { kind: "doe_design", analysisCount: 4, predictionCount: 0, reportCount: 6, versionCount: 2, runCount: 32, revisionCount: 3 } as const;
+    const notice = { kind: "doe_design", analysisCount: 4, predictionCount: 0, reportCount: 6, plotViewCount: 0, versionCount: 2, runCount: 32, revisionCount: 3 } as const;
     const html = markup(<AssetDeletionNotice notice={notice} />, "en");
     expect(html).toContain(`${t("doe.report.prediction", {}, "en")}: 0`);
     expect(html).toContain(t("assets.delete.designSummary", { versions: 2, runs: 32, revisions: 3, analyses: 4 }, "en"));

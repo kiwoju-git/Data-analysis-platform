@@ -15,3 +15,35 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.doe-selection-description {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px 24px;
+  margin: 0;
+}
+
+.doe-selection-description > div,
+.factorial-selection-results .doe-term-summary > div {
+  min-inline-size: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+
+.doe-selection-description-wide { grid-column: 1 / -1; }
+
+.doe-selection-description dd,
+.factorial-selection-results .doe-term-summary dd,
+.factorial-selection-results .doe-term-summary summary {
+  margin: 0;
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.factorial-equation textarea {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 100px;
+}

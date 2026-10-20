@@ -1,5 +1,21 @@
 # Managed Report Storage Contract
 
+## RSM Plot Views (Metadata 23)
+
+Migration 23 extends the existing DOE analysis asset kind constraint with
+`plot_view` schema 1, preserving every existing row and BLOB byte. It does not
+add a second general report store. A saved view is tied to the verified analysis,
+design version/hash, response revision/hash and final-result hash. It stores
+bounded numeric geometry, not caller-provided HTML or an arbitrary model.
+Listing returns descriptors; opening verifies and reads one selected view.
+
+An optional RSM `plot_view` source reference selects an exact asset ID/hash.
+Managed HTML validates this reference and uses its saved geometry without model
+evaluation, fitting, raw-row loading or contour regeneration. Source
+canonicalization omits the absent optional field for old source references so
+their original hashes remain valid. Deletion checks include view/report
+dependencies and owner cascade; code rollback must account for metadata 23.
+
 ## Ownership and Compatibility
 
 Metadata schema 21 adds `managed_report_artifacts` plus three composite owner

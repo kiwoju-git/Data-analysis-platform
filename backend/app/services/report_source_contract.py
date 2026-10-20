@@ -12,9 +12,17 @@ from app.services.report_contract import ReportBody, ReportDefinition
 
 
 def canonical_report_source_json(source: ReportSourceRef) -> str:
-    return json.dumps(
-        source.model_dump(mode="json"), ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    )
+    payload = source.model_dump(mode="json")
+    # Preserve historical source hashes, including nested DOE prediction sources.
+    if source.kind == "doe_analysis" and source.plot_view is None:
+        payload.pop("plot_view")
+    if (
+        source.kind == "regression_prediction"
+        and source.prediction.storage == "doe_prediction"
+        and source.prediction.source.plot_view is None
+    ):
+        payload["prediction"]["source"].pop("plot_view")
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def report_source_sha256(source: ReportSourceRef) -> str:

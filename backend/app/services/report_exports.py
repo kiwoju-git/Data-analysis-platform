@@ -41,6 +41,7 @@ from app.services.report_source_contract import (
 from app.services.report_sources import prepare_report_source, report_capability, source_error
 from app.services.stored_report_primitives import report_table
 from app.storage.factorial_analysis_assets import (
+    AssetKind,
     FactorialAnalysisAsset,
     delete_asset,
     get_asset,
@@ -131,6 +132,7 @@ def create_report(
     elif verified.storage_kind == "doe":
         source_analysis_sha = _doe_source_sha(request.source)
         dependency_asset = None
+        dependency_kind: AssetKind = "prediction"
         if (
             request.source.kind == "regression_prediction"
             and request.source.prediction.storage == "doe_prediction"
@@ -139,6 +141,12 @@ def create_report(
                 str(request.source.prediction.prediction_id),
                 request.source.prediction.expected_source_sha256,
             )
+        if request.source.kind == "doe_analysis" and request.source.plot_view is not None:
+            dependency_asset = (
+                str(request.source.plot_view.plot_view_id),
+                request.source.plot_view.expected_sha256,
+            )
+            dependency_kind = "plot_view"
         insert_asset(
             settings.workspace_root,
             FactorialAnalysisAsset(
@@ -155,6 +163,7 @@ def create_report(
             ),
             content,
             dependency_asset=dependency_asset,
+            dependency_kind=dependency_kind,
         )
     else:
         if not isinstance(request.source, LhsDesignReportSource | BayesianHistoryReportSource):

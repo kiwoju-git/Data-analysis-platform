@@ -40,6 +40,9 @@ export interface ChartBand {
   points: ReadonlyArray<{ x: number; lower: number; upper: number }>;
 }
 export interface InteractiveScatterChartProps {
+  layout?: import("./chartLayout").ChartLayout;
+  axisTickCount?: number;
+  collapsibleDetails?: boolean;
   annotations: string[]; chartId: string; compact?: boolean;
   connectPoints?: "line" | "step";
   description: string; emptyLabel: string; formatValue?: AxisSpec["formatTick"];
@@ -57,6 +60,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
   description, emptyLabel, formatValue, points, referenceLines = [], square = false, title,
   xLabel, xRange, yLabel, yRange, xUnit, yUnit, xTicks, yTicks, xFormatValue, yFormatValue, series = [], intervals = [], bands = [],
   selectedPointId, onPointSelect, onPointActivate, onSelectionClear, sourceKey,
+  layout: requestedLayout, axisTickCount, collapsibleDetails,
 }: InteractiveScatterChartProps) {
   const arrowId = `chart-arrow-${useId().replace(/:/g, "")}`;
   const counts = new Map<string, number>();
@@ -70,7 +74,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
   const interaction = useChartPointInteraction(validPoints.map((point) => point.id), {
     sourceKey, selectedId: selectedPointId, onSelect: onPointSelect, onActivate: onPointActivate, onClear: onSelectionClear,
   });
-  const layout = square ? SQUARE_CHART_LAYOUT : STANDARD_CHART_LAYOUT;
+  const layout = requestedLayout ?? (square ? SQUARE_CHART_LAYOUT : STANDARD_CHART_LAYOUT);
   const { plot } = layout;
   const xDomain = expandNumericRange(xRange, [...validPoints.map((point) => point.x), ...validLines.flatMap((line) => [line.x1, line.x2]), ...validBands.flatMap((band) => band.points.map((point) => point.x))]);
   const yDomain = expandNumericRange(yRange, [...validPoints.map((point) => point.y), ...validLines.flatMap((line) => [line.y1, line.y2]), ...validIntervals.flatMap((interval) => [interval.lower, interval.upper]), ...validBands.flatMap((band) => band.points.flatMap((point) => [point.lower, point.upper]))]);
@@ -96,7 +100,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
   return <ChartFrame chartId={chartId} title={title}
     description={`${description}; ${axisTitle(xLabel, xUnit)}; ${axisTitle(yLabel, yUnit)}`}
     layout={layout} className={compact ? "chart-frame-compact" : ""}
-    axes={<ChartAxes layout={layout} x={{ label: xLabel, unit: xUnit, range: xDomain, ticks: xTicks, formatTick: xFormatValue ?? formatValue }} y={{ label: yLabel, unit: yUnit, range: yDomain, ticks: yTicks, formatTick: yFormatValue ?? formatValue }} />}
+    axes={<ChartAxes layout={layout} x={{ label: xLabel, unit: xUnit, range: xDomain, ticks: xTicks, formatTick: xFormatValue ?? formatValue, tickCount: axisTickCount }} y={{ label: yLabel, unit: yUnit, range: yDomain, ticks: yTicks, formatTick: yFormatValue ?? formatValue, tickCount: axisTickCount }} />}
     overlay={labels.map(({ point, text, left, top }) => <text key={point.id} className="chart-vector-label" x={left} y={top + 12}
       textAnchor="start"><title>{point.label}</title>{text}</text>)}
     footer={<>
@@ -117,7 +121,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
       </ul>}
       {invalidCount > 0 && <p className="notice-box notice-warning">{t("charts.invalidData", { count: invalidCount })}</p>}
       <div className="chart-annotations">{annotations.map((annotation) => <span key={annotation}>{annotation}</span>)}</div>
-      <ChartItemFeedback interaction={interaction} items={validPoints} />
+      <ChartItemFeedback interaction={interaction} items={validPoints} collapsible={collapsibleDetails} />
     </>}>
     <defs><marker id={arrowId} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={5} markerHeight={5} orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
     {validBands.map((band) => <path key={band.id} className={`chart-interval-band ${band.className}`} d={`${band.points.map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.x)} ${y(point.upper)}`).join(" ")} ${[...band.points].reverse().map((point) => `L ${x(point.x)} ${y(point.lower)}`).join(" ")} Z`}><title>{band.label}</title></path>)}

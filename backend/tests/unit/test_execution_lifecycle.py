@@ -445,7 +445,7 @@ def test_migration22_rolls_back_column_if_migration_record_cannot_be_written(tmp
         assert connection.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 21
     metadata.initialize_metadata_store(tmp_path)
     with closing(original(path)) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == metadata.SCHEMA_VERSION
 
 
 def test_history_count_shares_page_read_snapshot_during_concurrent_delete(tmp_path, monkeypatch):

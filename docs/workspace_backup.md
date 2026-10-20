@@ -1,5 +1,12 @@
 # Offline Workspace Backup And Restore
 
+The DOE contour expansion adds metadata schema 23 to the supported offline
+backup versions. Saved RSM plot-view BLOBs and their managed report dependencies
+are included through the existing DOE asset storage, not separate unmanaged
+files. Migration 23 preserves existing bytes and hashes. Restoring a verified
+pre-migration backup to a new empty path is the rollback route for code that
+only supports metadata 22; never delete or overwrite the migrated workspace.
+
 ## Scope And Preconditions
 
 This is an explicit offline operation for one cooperating local owner. Stop the

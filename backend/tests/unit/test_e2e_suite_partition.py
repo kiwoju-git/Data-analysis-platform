@@ -31,6 +31,9 @@ STAGE_CALLS = {
     "analysis_completion": "verify_analysis_completion",
     "report_center_context": "verify_report_center_context",
     "rsm_context": "verify_rsm_context",
+    "doe_rsm_completion": "verify_doe_rsm_completion",
+    "doe_browser_zoom": "verify_doe_browser_zoom",
+    "fractional_completion": "verify_fractional_completion",
     "api_translation": "verify_api_translation_boundary",
     "dataset_context": "verify_dataset_context",
     "gp_prediction_context": "verify_gp_prediction_context",
@@ -70,6 +73,9 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "pilot_ingestion",
         "pilot_prediction",
         "pilot_groups",
+        "fractional_completion",
+        "doe_rsm_completion",
+        "doe_browser_zoom",
         "desktop_resize",
         "localization_shell",
         "legacy_workflow",
@@ -122,6 +128,8 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
             calls.append(_stage)
             if _stage == "localization_shell":
                 raise LegacyBoundary()
+            if _stage == "doe_rsm_completion":
+                return {"design_id": "synthetic-design", "analysis_id": "synthetic-analysis"}
 
         monkeypatch.setattr(driver, name, invoke)
     diagnostics = SimpleNamespace(root=tmp_path, step=lambda _label: None)

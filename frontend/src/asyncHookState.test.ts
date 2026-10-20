@@ -1176,7 +1176,7 @@ function runtimeInfo(
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: 25,
-    metadata_schema_version: 22,
+    metadata_schema_version: 23,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,

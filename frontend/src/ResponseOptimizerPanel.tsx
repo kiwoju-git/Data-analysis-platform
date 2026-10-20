@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { t } from "./i18n/translate";
 
 import {
   createResponseOptimizer,
@@ -644,7 +645,7 @@ function ResponseOptimizerResultView({ optimization }: { optimization: ResponseO
         </div>
       ) : null}
       {result.warnings.map((warning) => (
-        <div className="notice-box notice-warning" key={warning}>{warning}</div>
+        <div className="notice-box notice-warning" key={warning}>{warning === "response_optimizer_post_selection_inference_exploratory" ? t("doe.selection.exploratory") : warning}</div>
       ))}
       {result.source_model_eligibility.issues.map((issue) => (
         <div className="notice-box" key={`${issue.source_analysis_id ?? "optimizer"}-${issue.code}`}>

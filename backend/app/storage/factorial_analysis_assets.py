@@ -13,7 +13,7 @@ from app.storage.metadata import WorkspaceAssetStorageConflict, metadata_db_path
 
 MAX_ASSET_BYTES = 16 * 1024 * 1024
 MAX_ASSETS_PER_ANALYSIS = 100
-AssetKind = Literal["prediction", "html_report"]
+AssetKind = Literal["prediction", "html_report", "plot_view"]
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,7 @@ def insert_asset(
     content: bytes,
     *,
     dependency_asset: tuple[str, str] | None = None,
+    dependency_kind: AssetKind = "prediction",
 ) -> None:
     if not 0 < len(content) <= MAX_ASSET_BYTES or len(content) != record.size_bytes:
         raise WorkspaceAssetStorageConflict("doe_analysis_asset_size_invalid")
@@ -63,8 +64,8 @@ def insert_asset(
         if dependency_asset is not None:
             dependency = connection.execute(
                 "SELECT sha256,content FROM experiment_design_analysis_assets "
-                "WHERE analysis_id=? AND asset_id=? AND kind='prediction'",
-                (record.analysis_id, dependency_asset[0]),
+                "WHERE analysis_id=? AND asset_id=? AND kind=?",
+                (record.analysis_id, dependency_asset[0], dependency_kind),
             ).fetchone()
             if (
                 dependency is None
@@ -141,14 +142,14 @@ def delete_asset(root: Path, analysis_id: str, asset_id: str, expected_sha256: s
     return True
 
 
-def analysis_deletion_snapshot(root: Path, analysis_id: str) -> tuple[str, int, int] | None:
+def analysis_deletion_snapshot(root: Path, analysis_id: str) -> tuple[str, int, int, int] | None:
     with sqlite3.connect(metadata_db_path(root)) as connection:
         return _deletion_snapshot(connection, analysis_id)
 
 
 def _deletion_snapshot(
     connection: sqlite3.Connection, analysis_id: str
-) -> tuple[str, int, int] | None:
+) -> tuple[str, int, int, int] | None:
     analysis = connection.execute(
         "SELECT result_sha256 FROM experiment_design_analyses WHERE analysis_id=?", (analysis_id,)
     ).fetchone()
@@ -166,10 +167,13 @@ def _deletion_snapshot(
         manifest,
         sum(row[1] == "prediction" for row in assets),
         sum(row[1] == "html_report" for row in assets),
+        sum(row[1] == "plot_view" for row in assets),
     )
 
 
-def delete_analysis(root: Path, analysis_id: str, expected_manifest: str) -> tuple[str, int, int]:
+def delete_analysis(
+    root: Path, analysis_id: str, expected_manifest: str
+) -> tuple[str, int, int, int]:
     with sqlite3.connect(metadata_db_path(root)) as connection:
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("BEGIN IMMEDIATE")

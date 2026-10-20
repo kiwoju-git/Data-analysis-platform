@@ -8,6 +8,7 @@ export interface DoeAnalysisReportSource {
   family: "factorial" | "general_factorial" | "response_surface";
   design_id: string; design_version_id: string; design_sha256: string;
   analysis_id: string; expected_source_sha256: string; response_revision: ResponseRevisionRef;
+  plot_view?: { plot_view_id: string; expected_sha256: string } | null;
 }
 export interface CompletedPredictionRef {
   storage: "completed_prediction"; family: "pls" | "gaussian_process";

@@ -66,6 +66,47 @@ class ModelSelectionTermBlock:
     kind: str = "main_effect"
     coefficient_labels: tuple[str, ...] = ()
     default_disposition: Literal["candidate", "forced", "excluded"] = "candidate"
+    depends_on: tuple[str, ...] | None = None
+
+
+def term_dependencies(
+    blocks: Sequence[ModelSelectionTermBlock],
+) -> dict[str, tuple[str, ...]]:
+    """Validate explicit dependencies; preserve factorial subset rules as the fallback."""
+    by_id = {block.block_id: block for block in blocks}
+    if len(by_id) != len(blocks):
+        raise TermBlockSelectionError("doe_selection_dependencies_invalid")
+    dependencies = {
+        block.block_id: block.depends_on
+        if block.depends_on is not None
+        else tuple(
+            parent.block_id
+            for parent in blocks
+            if block.hierarchy_role == parent.hierarchy_role == "factorial_term"
+            and set(parent.factor_ids) < set(block.factor_ids)
+        )
+        for block in blocks
+    }
+    visited: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(term_id: str) -> None:
+        if term_id in visiting:
+            raise TermBlockSelectionError("doe_selection_dependencies_invalid")
+        if term_id in visited:
+            return
+        parents = dependencies[term_id]
+        if len(set(parents)) != len(parents) or not set(parents).issubset(by_id):
+            raise TermBlockSelectionError("doe_selection_dependencies_invalid")
+        visiting.add(term_id)
+        for parent in parents:
+            visit(parent)
+        visiting.remove(term_id)
+        visited.add(term_id)
+
+    for term_id in dependencies:
+        visit(term_id)
+    return dependencies
 
 
 @dataclass(frozen=True)
@@ -84,20 +125,22 @@ def pooling_target(term_count: int) -> int:
 def term_is_removable(
     term: ModelSelectionTermBlock, active: Sequence[ModelSelectionTermBlock]
 ) -> bool:
+    return _removable(term, term_dependencies(active))
+
+
+def _removable(
+    term: ModelSelectionTermBlock,
+    dependencies: dict[str, tuple[str, ...]],
+) -> bool:
     if term.fixed or term.hierarchy_role == "structural_term":
         return False
-    if term.hierarchy_role == "independent_term":
-        return True
-    return not any(
-        set(term.factor_ids) < set(other.factor_ids)
-        for other in active
-        if other.hierarchy_role == "factorial_term"
-    )
+    return not any(term.block_id in parents for parents in dependencies.values())
 
 
 def term_catalog(
     blocks: Sequence[ModelSelectionTermBlock], matrix: np.ndarray | None = None
 ) -> list[dict[str, Any]]:
+    dependencies = term_dependencies(blocks)
     nonestimable: set[int] = set()
     if matrix is not None:
         with threadpool_limits(limits=1):
@@ -112,14 +155,9 @@ def term_catalog(
             "label": block.label,
             "kind": block.kind,
             "hierarchy_role": block.hierarchy_role,
-            "order": len(block.factor_ids) if block.hierarchy_role == "factorial_term" else 0,
+            "order": _term_order(block) if block.hierarchy_role == "factorial_term" else 0,
             "factor_ids": list(block.factor_ids),
-            "hierarchy_dependencies": [
-                parent.block_id
-                for parent in blocks
-                if block.hierarchy_role == parent.hierarchy_role == "factorial_term"
-                and set(parent.factor_ids) < set(block.factor_ids)
-            ],
+            "hierarchy_dependencies": list(dependencies[block.block_id]),
             "default_disposition": "forced" if block.fixed else block.default_disposition,
             "df": len(block.column_indices),
             "estimable": not nonestimable.intersection(block.column_indices),
@@ -131,6 +169,7 @@ def term_catalog(
 def resolve_term_policies(
     blocks: Sequence[ModelSelectionTermBlock], options: DoeSelectionOptions
 ) -> list[ModelSelectionTermBlock]:
+    dependencies = term_dependencies(blocks)
     policies = {policy.term_id: policy.disposition for policy in options.term_policies}
     if (
         len(policies) != len(options.term_policies)
@@ -147,13 +186,17 @@ def resolve_term_policies(
             raise TermBlockSelectionError("doe_factorial_structural_term_policy_invalid")
         if disposition != "excluded":
             active.append(replace(block, fixed=disposition == "forced"))
+    active_ids = {block.block_id for block in active}
+    for block in active:
+        if not set(dependencies[block.block_id]).issubset(active_ids):
+            raise TermBlockSelectionError("doe_factorial_selection_hierarchy_invalid")
     factor_sets = {
         frozenset(block.factor_ids)
         for block in active
         if block.hierarchy_role == "factorial_term" and block.factor_ids
     }
     for block in active:
-        if block.hierarchy_role != "factorial_term":
+        if block.hierarchy_role != "factorial_term" or block.depends_on is not None:
             continue
         for order in range(1, len(block.factor_ids)):
             if any(
@@ -321,7 +364,11 @@ def _select(
         "term_catalog": term_catalog(blocks),
         "candidate_term_ids": candidate_ids,
         "initially_excluded_term_ids": excluded_ids,
-        "tie_break_policy": "within_1e-12_interaction_independent_main_later_order_stable_id",
+        "tie_break_policy": (
+            "within_1e-12_quadratic_or_interaction_then_main_later_order_stable_id"
+            if any(block.kind == "quadratic" for block in blocks)
+            else "within_1e-12_interaction_independent_main_later_order_stable_id"
+        ),
         "initial_model_saturated": saturated,
         "initial_parameter_count": len(initial_fit.columns),
         "initial_residual_df": initial_fit.residual_df,
@@ -342,10 +389,13 @@ def _nonstructural(block: ModelSelectionTermBlock) -> bool:
 
 
 def _tie_key(block: ModelSelectionTermBlock, order: dict[str, int]) -> tuple[int, int, int, str]:
-    priority = (
-        2 if len(block.factor_ids) > 1 else (1 if block.hierarchy_role == "independent_term" else 0)
-    )
-    return priority, len(block.factor_ids), order[block.block_id], block.block_id
+    term_order = _term_order(block)
+    priority = 2 if term_order > 1 else (1 if block.hierarchy_role == "independent_term" else 0)
+    return priority, term_order, order[block.block_id], block.block_id
+
+
+def _term_order(block: ModelSelectionTermBlock) -> int:
+    return 2 if block.kind == "quadratic" else len(block.factor_ids)
 
 
 def _candidates(
@@ -357,8 +407,9 @@ def _candidates(
     rank_tolerance: float | None,
 ) -> list[tuple[ModelSelectionTermBlock, _Fit, float, int]]:
     candidates = []
+    dependencies = term_dependencies(active)
     for block in active:
-        if not term_is_removable(block, active):
+        if not _removable(block, dependencies):
             continue
         reduced = _fit(
             matrix,
@@ -407,6 +458,7 @@ def _fit(
     else:
         covariance = None
     positions = {column: index for index, column in enumerate(columns)}
+    dependencies = term_dependencies(blocks) if term_details else {}
     for block in blocks if term_details else []:
         indexes = [positions[column] for column in block.column_indices]
         beta = coefficients[indexes]
@@ -422,7 +474,7 @@ def _fit(
                 "status": "forced"
                 if block.fixed
                 else (
-                    "retained_for_hierarchy" if not term_is_removable(block, blocks) else "active"
+                    "retained_for_hierarchy" if not _removable(block, dependencies) else "active"
                 ),
                 "coefficient": float(beta[0]) if len(indexes) == 1 else None,
                 "df": len(indexes),

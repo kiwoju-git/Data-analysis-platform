@@ -14,6 +14,8 @@ from app.statistics.doe_factor_domain import (
     DoeFactorDomainError,
     validate_factor_domain,
 )
+from app.statistics.rsm_coding import RsmFactorCoding, actual_to_coded
+from app.statistics.rsm_model_basis import predict_rsm_basis
 
 RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION: Final[Literal[2]] = 2
 MIN_OPTIMIZER_OBJECTIVES = 1
@@ -38,6 +40,7 @@ class OptimizerFactor:
     domain_kind: Literal["continuous", "discrete_numeric"] = "continuous"
     step: float | None = None
     display_decimals: int | None = None
+    coding: RsmFactorCoding | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +58,7 @@ class OptimizerModel:
     factors: tuple[OptimizerFactor, ...]
     terms: tuple[OptimizerTerm, ...]
     source_warnings: tuple[str, ...] = ()
+    powers: tuple[tuple[int, ...], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -344,6 +348,11 @@ def calculate_response_optimizer(
     ]
     if any(objective.model.source_warnings for objective in objective_tuple):
         warnings.append("response_optimizer_source_model_has_warnings")
+    if any(
+        "doe_rsm_post_selection_inference_exploratory" in objective.model.source_warnings
+        for objective in objective_tuple
+    ):
+        warnings.append("response_optimizer_post_selection_inference_exploratory")
     if termination_reason != "search_completed":
         warnings.append(f"response_optimizer_{termination_reason}_reached")
     if best.composite <= 0.0:
@@ -519,6 +528,7 @@ def _validate_inputs(
             source.low != expected.low
             or source.high != expected.high
             or source.alpha != expected.alpha
+            or source.coding != expected.coding
             or source.domain_kind != expected.domain_kind
             or source.step != expected.step
             for source, expected in zip(objective.model.factors, factors, strict=True)
@@ -830,6 +840,15 @@ def _constraint_violation(
 
 def _predict(model: OptimizerModel, actual: dict[str, float]) -> float:
     coded = {factor.name: _actual_to_coded(factor, actual[factor.name]) for factor in model.factors}
+    if model.powers is not None:
+        try:
+            return predict_rsm_basis(
+                [coded[factor.name] for factor in model.factors],
+                model.powers,
+                [term.coefficient for term in model.terms],
+            )
+        except ValueError as exc:
+            raise ResponseOptimizerError("response_optimizer_prediction_not_finite") from exc
     prediction = 0.0
     for term in model.terms:
         if term.kind == "intercept":
@@ -847,6 +866,8 @@ def _predict(model: OptimizerModel, actual: dict[str, float]) -> float:
 
 
 def _actual_to_coded(factor: OptimizerFactor, actual: float) -> float:
+    if factor.coding is not None:
+        return actual_to_coded(factor.coding, actual)
     midpoint = (factor.low + factor.high) / 2.0
     half_range = (factor.high - factor.low) / 2.0
     return float(factor.alpha * (actual - midpoint) / half_range)

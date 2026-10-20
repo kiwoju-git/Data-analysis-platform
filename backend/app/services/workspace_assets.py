@@ -128,7 +128,24 @@ def _open_target(record: WorkspaceAssetCatalogRecord) -> WorkspaceAssetOpenTarge
         return WorkspaceAssetOpenTarget(
             path=f"/reports?report_id={record.asset_id}", label="Open stored report"
         )
-    if record.asset_type in {"doe_analysis", "doe_prediction", "doe_analysis_report"}:
+    if record.asset_type in {
+        "doe_analysis",
+        "doe_prediction",
+        "doe_analysis_report",
+        "doe_plot_view",
+    }:
+        if record.method_id == "doe.response_surface":
+            return WorkspaceAssetOpenTarget(
+                path=(
+                    f"/reports?report_id={record.asset_id}"
+                    if record.asset_type == "doe_analysis_report"
+                    else "/reports?source_kind=doe_analysis"
+                )
+                + f"&design_id={record.source_design_id}&analysis_id={record.source_analysis_id}",
+                label="Open stored report"
+                if record.asset_type == "doe_analysis_report"
+                else "Open DOE source catalog",
+            )
         design_kind = (
             "general" if record.method_id == "doe.general_factorial_design" else "two_level"
         )

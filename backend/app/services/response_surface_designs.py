@@ -19,6 +19,7 @@ from app.api.v1.schemas.doe import (
     ResponseSurfaceDesignOptionsResponse,
     ResponseSurfaceDesignResponse,
     ResponseSurfaceDesignRunResponse,
+    RsmFactorCodingResponse,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -37,6 +38,7 @@ from app.statistics.response_surface import (
     response_surface_factor_payload,
     response_surface_options_payload,
 )
+from app.statistics.rsm_coding import RsmCodingError, factor_coding, resolve_ccd_type
 from app.storage.metadata import (
     ExperimentDesignRecord,
     ExperimentDesignVersionRecord,
@@ -82,11 +84,15 @@ def create_response_surface_design(
         center_points=body.center_points,
         randomize=body.randomize,
         randomization_seed=body.randomization_seed,
+        ccd_type=body.ccd_type,
+        center_point_mode=body.center_point_mode if body.ccd_type is not None else None,
     )
     try:
         generated = generate_central_composite_design(factors, options)
-    except ResponseSurfaceError as exc:
-        raise _response_surface_api_error(exc.code) from exc
+    except (ResponseSurfaceError, RsmCodingError) as exc:
+        raise _response_surface_api_error(
+            exc.code if isinstance(exc, ResponseSurfaceError) else str(exc)
+        ) from exc
 
     design_id = uuid4()
     design_version_id = uuid4()
@@ -106,6 +112,10 @@ def create_response_surface_design(
     options_payload = response_surface_options_payload(generated.options)
     options_payload["design_schema_version"] = generated.schema_version
     options_payload["alpha"] = generated.alpha
+    if generated.coding is not None:
+        options_payload["coding"] = {
+            name: item.payload() for name, item in generated.coding.items()
+        }
     version_record = ExperimentDesignVersionRecord(
         design_version_id=str(design_version_id),
         design_id=str(design_id),
@@ -245,13 +255,15 @@ def _design_response(
                 RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION,
             )
         )
-        design_schema_version: Literal[1, 2]
+        design_schema_version: Literal[1, 2, 3]
         family: Literal["central_composite", "central_composite_inscribed"]
         if stored_schema_version == RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION:
             design_schema_version = RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION
             family = RESPONSE_SURFACE_LEGACY_FAMILY
-        elif stored_schema_version == RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION:
-            design_schema_version = RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION
+        elif stored_schema_version in {2, RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION}:
+            design_schema_version = (
+                2 if stored_schema_version == 2 else RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION
+            )
             family = RESPONSE_SURFACE_FAMILY
         else:
             raise _metadata_error("doe_rsm_design_family_mismatch")
@@ -265,8 +277,23 @@ def _design_response(
             center_points=int(options_payload["center_points"]),
             randomize=bool(options_payload["randomize"]),
             randomization_seed=int(options_payload["randomization_seed"]),
+            ccd_type=options_payload.get("ccd_type") if stored_schema_version >= 3 else None,
+            center_point_mode=options_payload.get("center_point_mode")
+            if stored_schema_version >= 3
+            else None,
         )
         factors = [ResponseSurfaceFactor(**factor) for factor in factors_payload]
+        coding = None
+        if stored_schema_version >= 3:
+            if options.ccd_type is None:
+                raise _metadata_error("doe_rsm_design_metadata_invalid")
+            kind = resolve_ccd_type(options.alpha_mode, options.ccd_type)
+            coding = {
+                factor.name: factor_coding(factor.low, factor.high, alpha, kind).payload()
+                for factor in factors
+            }
+            if coding != options_payload.get("coding"):
+                raise _metadata_error("doe_rsm_design_coding_mismatch")
         run_specs: list[ResponseSurfaceDesignRun] = []
         run_responses: list[ResponseSurfaceDesignRunResponse] = []
         for run in runs:
@@ -333,6 +360,9 @@ def _design_response(
         run_count=version.run_count,
         design_sha256=version.design_sha256,
         runs=run_responses,
+        coding=None
+        if coding is None
+        else {name: RsmFactorCodingResponse.model_validate(item) for name, item in coding.items()},
     )
 
 

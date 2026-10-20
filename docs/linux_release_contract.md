@@ -5,6 +5,11 @@ source/CI compatibility target. Python metadata is >=3.10,<3.13. Windows keeps
 PowerShell, Python 3.10 and its existing hash lock. Numerical library pins remain
 NumPy 2.2.6, SciPy 1.15.3 and scikit-learn 1.7.2. Linux locks are generated on
 the actual target interpreter using wheel bytes, never copied Windows hashes.
+ContourPy 1.3.2 adds CPU-only serial contour geometry without Matplotlib or
+changes to those numerical pins. Its BSD-3-Clause license and wheel metadata
+are included by the existing third-party notice collector. See
+[ContourPy dependency contract](contour_dependency_contract.md) for native
+lock evidence and the separate, still-required final archive validation.
 
 ## Source Runner
 

@@ -916,6 +916,11 @@ def run_resume(base: str, output: Path, original: dict, request: RequestJson) ->
             evidence.data["pilot_receipt"] = restore_pilot(
                 page, base, output / "pilot", original["pilot_receipt"], request
             )
+            from doe_release_resume import verify_rsm_resume
+
+            evidence.data["doe_rsm_receipt"] = verify_rsm_resume(
+                browser, base, output, original["doe_rsm_receipt"]
+            )
             assert not fit_calls, fit_calls
             evidence.data["analysis_post_count"] = 0
             evidence.data["status"] = "succeeded"
@@ -987,6 +992,9 @@ def run_offline(output: Path, original: dict) -> dict:
             pilot_receipt = verify_pilot_offline(
                 page, output, original["pilot_receipt"]
             )
+            from doe_release_resume import verify_rsm_offline
+
+            rsm_receipt = verify_rsm_offline(page, output, original["doe_rsm_receipt"])
             assert not network_requests, network_requests
             return {
                 "schema_version": 2,
@@ -1001,6 +1009,7 @@ def run_offline(output: Path, original: dict) -> dict:
                 },
                 "reports": checks,
                 "pilot_receipt": pilot_receipt,
+                "doe_rsm_receipt": rsm_receipt,
                 "http_request_count": 0,
                 "browser_network_offline": True,
             }

@@ -12,7 +12,9 @@ export function isReportSourceRef(value: unknown): value is ReportSourceRef {
   if (!object(value)) return false;
   switch (value.kind) {
     case "analysis_run": return fields(value, ["analysis_id"], ["expected_source_sha256"]);
-    case "doe_analysis": return ["factorial", "general_factorial", "response_surface"].includes(String(value.family)) && fields(value, ["design_id", "design_version_id", "analysis_id"], ["design_sha256", "expected_source_sha256"]) && revision(value.response_revision);
+    case "doe_analysis": return ["factorial", "general_factorial", "response_surface"].includes(String(value.family)) && fields(value, ["design_id", "design_version_id", "analysis_id"], ["design_sha256", "expected_source_sha256"]) && revision(value.response_revision) &&
+      (value.plot_view == null || (value.family === "response_surface" && object(value.plot_view) &&
+        fields(value.plot_view, ["plot_view_id"], ["expected_sha256"])));
     case "lhs_design_revision": return fields(value, ["design_id", "design_version_id"], ["expected_source_sha256"]) && Array.isArray(value.response_revisions) && value.response_revisions.length <= 32 && value.response_revisions.every(revision) && new Set(value.response_revisions.map((item) => (item as Record<string, unknown>).response_revision_id)).size === value.response_revisions.length;
     case "bayesian_history_revision": {
       if (!fields(value, ["study_id", "study_version_id", "history_revision_id"], ["definition_sha256", "expected_source_sha256"]) || !object(value.attachment)) return false;

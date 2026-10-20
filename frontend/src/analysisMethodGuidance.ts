@@ -735,11 +735,10 @@ export const analysisMethodGuidance = {
   "doe.response_surface": {
     methodId: "doe.response_surface",
     roleRequirements: [required("요인", "2~5개 연속 요인과 실제 안전 경계"), required("반응", "각 CCD run의 숫자 반응")],
-    optionChecklist: ["rotatable CCI/face-centered CCD", "센터점", "랜덤 seed", "95% 신뢰수준", "optimizer 목표와 budget"],
+    optionChecklist: ["CCC / CCI / CCF", "센터점", "랜덤 seed", "95% 신뢰수준", "optimizer 목표와 budget"],
     preflightChecks: ["low < high 설계경계", "quadratic model rank", "pure error", "정상점/optimizer 조건의 설계영역 포함 여부"],
     resultFocus: ["full quadratic 계수", "contour grid", "정상점 분류", "optimizer 권장 조건", "lack-of-fit/잔차 진단"],
-    plainLanguage:
-      "전용 DOE API에서 Central Composite Design과 full quadratic OLS를 만들고 contour, 정상점, 잔차 진단을 계산합니다. 적합 뒤에는 같은 화면에서 설계영역 제한 Response Optimizer를 실행할 수 있으며 자동 항 선택이나 전역 최적 보장은 제공하지 않습니다.",
+    plainLanguage: translationToken("capabilityGuidance.rsm"),
   },
   "doe.bayesian_optimization": {
     methodId: "doe.bayesian_optimization",

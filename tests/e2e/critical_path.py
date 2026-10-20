@@ -50,6 +50,9 @@ from result_charts import verify_chart_interactions, verify_result_chart_models
 from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
 from rsm_context import verify_rsm_context
+from doe_rsm_completion import verify_doe_rsm_completion
+from doe_browser_zoom import verify_doe_browser_zoom
+from fractional_completion import verify_fractional_completion
 from desktop_resize import verify_desktop_resize
 from two_variances import verify_two_variances
 from pilot_feedback import verify_pilot_feedback
@@ -221,14 +224,15 @@ SUITE_STAGES = {
     "prediction": ("gp_prediction_context", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "pilot_groups", "legacy_workflow",
+        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "rsm_context", "api_translation", "dataset_context",
     "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "desktop_resize", "localization_shell", "legacy_workflow",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom",
+    "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
 
@@ -793,6 +797,18 @@ def run_browser_flow(
             if "pilot_groups" in stages and not factorial_only and not gpr_report_only:
                 diagnostics.step("verify pilot long-group analyses and reports")
                 verify_pilot_groups(browser, frontend_base_url, diagnostics.root / "pilot-groups")
+            if "fractional_completion" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify visible fractional aliases, second-order selection and reports")
+                verify_fractional_completion(browser, frontend_base_url, diagnostics.root / "fractional")
+            if "doe_rsm_completion" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify visible CCD presets, selection and saved contours")
+                rsm_receipt = verify_doe_rsm_completion(browser, frontend_base_url, diagnostics.root / "doe-rsm")
+            if "doe_browser_zoom" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("Verify actual DOE browser zoom and preserved model source")
+                verify_doe_browser_zoom(
+                    playwright, frontend_base_url, diagnostics.root,
+                    rsm_receipt["design_id"], rsm_receipt["analysis_id"],
+                )
             if "legacy_workflow" not in stages:
                 return
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
@@ -3709,7 +3725,7 @@ def verify_doe_response_surface_analysis(
         page.get_by_label(f"Run {run_order} 반응").fill(str(response))
 
     page.get_by_role("button", name="반응 저장").click()
-    analysis_button = page.get_by_role("button", name="Quadratic model 적합")
+    analysis_button = page.get_by_role("button", name="지정 RSM 모형 적합", exact=True)
     expect(analysis_button).to_be_enabled(timeout=20_000)
     with page.expect_response(
         lambda response: response.request.method == "POST"
@@ -3723,7 +3739,7 @@ def verify_doe_response_surface_analysis(
     rsm_analysis_id = rsm_analysis_payload["analysis_id"]
 
     expect(
-        page.get_by_role("heading", name="Quadratic response surface")
+        page.get_by_role("heading", name="반응표면 모형", exact=True)
     ).to_be_visible(timeout=20_000)
     contour_chart = page.locator('[data-chart-id="rsm-contour"]')
     expect(contour_chart.locator(".chart-frame-svg")).to_be_visible()
@@ -3735,7 +3751,7 @@ def verify_doe_response_surface_analysis(
     )
     expect(contour_chart.locator(".chart-color-scale")).to_be_visible()
     expect(contour_chart.locator("[data-grid-cell]")).to_have_count(
-        len(rsm_analysis_payload["result"]["contour"]["points"])
+        len(rsm_analysis_payload["result"]["plot_bundle"]["points"])
     )
     expect(page.get_by_role("columnheader", name="계수")).to_be_visible()
     expect(page.get_by_label("반응표면 적합 요약")).to_contain_text("R²")

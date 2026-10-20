@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { t } from "../i18n/translate";
 import { ChartAxes } from "./ChartAxes";
 import { ChartFrame } from "./ChartFrame";
@@ -10,11 +10,13 @@ import { useChartItemInteraction } from "./useChartItemInteraction";
 export interface GridChartCell extends ChartDetailItem { x: number; y: number; value: number }
 
 export function InteractiveGridChart({ chartId, title, description, cells, xLabel, yLabel, valueLabel,
-  xUnit, yUnit, valueUnit, xRange, yRange, sourceKey }: {
+  xUnit, yUnit, valueUnit, xRange, yRange, sourceKey, renderSurface, colorScale }: {
   chartId: string; title: string; description: string; cells: readonly GridChartCell[];
   xLabel: string; yLabel: string; valueLabel: string;
   xUnit?: string | null; yUnit?: string | null; valueUnit?: string | null;
   xRange?: NumericRange; yRange?: NumericRange; sourceKey?: string;
+  renderSurface?: (coordinates: { x: (value: number) => number; y: (value: number) => number }) => ReactNode;
+  colorScale?: ReactNode;
 }) {
   const identities = new Map<string, number>();
   const coordinates = new Map<string, number>();
@@ -56,20 +58,21 @@ export function InteractiveGridChart({ chartId, title, description, cells, xLabe
   return <ChartFrame chartId={chartId} title={title} description={description} layout={layout}
     axes={<ChartAxes layout={layout} grid={false} x={{ label: xLabel, unit: xUnit, range: xDomain }} y={{ label: yLabel, unit: yUnit, range: yDomain }} />}
     footer={<>
-      <div className="chart-color-scale"><strong>{axisTitle(valueLabel, valueUnit)}</strong>
+      {colorScale ?? <div className="chart-color-scale"><strong>{axisTitle(valueLabel, valueUnit)}</strong>
         {low === high ? <span>{t("charts.constantGrid", { value: formatChartTick(low) })}</span>
           : <><span>{formatChartTick(low)}</span><span aria-hidden="true" className="chart-color-scale-ramp" /><span>{formatChartTick(high)}</span></>}
-      </div>
+      </div>}
       {valid.length !== cells.length && <p>{t("charts.invalidData", { count: cells.length - valid.length })}</p>}
       <ChartItemFeedback interaction={interaction} items={valid} />
     </>}>
+    {renderSurface?.({ x, y })}
     {valid.map((cell) => {
       const xi = xs.indexOf(cell.x); const yi = ys.indexOf(cell.y);
       const ratio = high === low ? 0.5 : (cell.value - low) / (high - low);
       const color = [230 - 212 * ratio, 241 - 141 * ratio, 248 - 85 * ratio].map(Math.round);
       return <rect key={cell.id} data-grid-cell={cell.id} role="img" aria-label={`${xLabel} ${cell.x}; ${yLabel} ${cell.y}; ${valueLabel} ${cell.value}`}
         aria-describedby={interaction.describedBy(cell.id)} className={interaction.stateClass(cell.id)}
-        fill={`rgb(${color.join(",")})`} x={x(xb[xi])} y={y(yb[yi + 1])} width={x(xb[xi + 1]) - x(xb[xi])} height={y(yb[yi]) - y(yb[yi + 1])}
+        fill={renderSurface ? "transparent" : `rgb(${color.join(",")})`} x={x(xb[xi])} y={y(yb[yi + 1])} width={x(xb[xi + 1]) - x(xb[xi])} height={y(yb[yi]) - y(yb[yi + 1])}
         tabIndex={interaction.tabIndexFor(cell.id)} ref={(element) => interaction.itemRef(cell.id, element)}
         onFocus={() => interaction.activateItem(cell.id, "focus")} onBlur={() => interaction.clearFocus(cell.id)}
         onPointerEnter={(event) => interaction.move(cell.id, event)} onPointerMove={(event) => interaction.move(cell.id, event)} onPointerLeave={() => interaction.clearHover(cell.id)}

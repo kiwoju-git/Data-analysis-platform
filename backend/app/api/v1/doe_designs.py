@@ -1,3 +1,4 @@
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request, Response, status
@@ -31,6 +32,14 @@ from app.api.v1.schemas.doe import (
     ResponseSurfaceDesignResponse,
 )
 from app.api.v1.schemas.doe_model_workflow import DoeAnalysisTermCatalog, DoeTermPreflightRequest
+from app.api.v1.schemas.rsm_plots import (
+    RsmPlotSource,
+    RsmPlotViewDescriptor,
+    RsmPlotViewRequest,
+    RsmPlotViewResponse,
+    RsmPlotViewSaveRequest,
+    RsmSavedPlotView,
+)
 from app.services.doe_design_retention import (
     delete_doe_design,
     get_doe_design_deletion_preflight,
@@ -52,6 +61,7 @@ from app.services.doe_response_revisions import (
 from app.services.doe_response_surface_analysis import (
     create_response_surface_analysis,
     get_response_surface_analysis,
+    get_response_surface_term_catalog,
 )
 from app.services.doe_term_catalog import get_analysis_term_catalog
 from app.services.general_factorial_designs import (
@@ -80,9 +90,105 @@ from app.services.response_surface_designs import (
     list_response_surface_responses,
     save_response_surface_responses,
 )
+from app.services.rsm_plot_views import (
+    create_rsm_plot_view,
+    delete_rsm_plot_view,
+    list_rsm_plot_views,
+    plot_source,
+    read_rsm_plot_view,
+    save_rsm_plot_view,
+)
 
 router = APIRouter(prefix="/doe-designs", tags=["doe-designs"])
 router.include_router(workflow_router)
+
+
+@router.get(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-source", response_model=RsmPlotSource
+)
+def get_rsm_plot_source_route(
+    request: Request, design_id: UUID, analysis_id: UUID
+) -> RsmPlotSource:
+    return plot_source(request.app.state.settings, design_id, analysis_id)
+
+
+@router.post(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-view",
+    response_model=RsmPlotViewResponse,
+)
+def create_rsm_plot_view_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+    body: RsmPlotViewRequest,
+) -> RsmPlotViewResponse:
+    return create_rsm_plot_view(request.app.state.settings, design_id, analysis_id, body)
+
+
+@router.post(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-views",
+    response_model=RsmSavedPlotView,
+    status_code=201,
+)
+def save_rsm_plot_view_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+    body: RsmPlotViewSaveRequest,
+) -> RsmSavedPlotView:
+    return save_rsm_plot_view(request.app.state.settings, design_id, analysis_id, body)
+
+
+@router.get(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-views",
+    response_model=list[RsmPlotViewDescriptor],
+)
+def list_rsm_plot_views_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+) -> list[RsmPlotViewDescriptor]:
+    return list_rsm_plot_views(request.app.state.settings, design_id, analysis_id)
+
+
+@router.get(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-views/{asset_id}",
+    response_model=RsmSavedPlotView,
+)
+def read_rsm_plot_view_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+    asset_id: UUID,
+) -> RsmSavedPlotView:
+    return read_rsm_plot_view(request.app.state.settings, design_id, analysis_id, asset_id)
+
+
+@router.delete(
+    "/{design_id}/response-surface-analyses/{analysis_id}/plot-views/{asset_id}", status_code=204
+)
+def delete_rsm_plot_view_route(
+    request: Request,
+    design_id: UUID,
+    analysis_id: UUID,
+    asset_id: UUID,
+    expected_sha256: str = Query(pattern=r"^[0-9a-f]{64}$"),
+) -> Response:
+    delete_rsm_plot_view(
+        request.app.state.settings, design_id, analysis_id, asset_id, expected_sha256
+    )
+    return Response(status_code=204)
+
+
+@router.get("/response-surface/{design_id}/term-catalog", response_model=DoeAnalysisTermCatalog)
+def get_response_surface_term_catalog_route(
+    request: Request,
+    design_id: UUID,
+    term_preset: Literal[
+        "linear", "linear_squares", "linear_interactions", "full_quadratic"
+    ] = "full_quadratic",
+) -> DoeAnalysisTermCatalog:
+    return get_response_surface_term_catalog(request.app.state.settings, design_id, term_preset)
 
 
 @router.get("/{design_id}/analysis-term-catalog", response_model=DoeAnalysisTermCatalog)

@@ -485,10 +485,15 @@ def test_response_optimizer_api_requires_and_records_source_warning_acknowledgme
 ) -> None:
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         design, analysis = _create_source_analysis(client)
+
+        def set_small_residual_df(result: dict) -> None:
+            result["sample"]["df_residual"] = 4
+            result["final_basis"]["residual_df"] = 4
+
         _replace_source_result(
             tmp_path,
             analysis["analysis_id"],
-            lambda result: result["sample"].__setitem__("df_residual", 4),
+            set_small_residual_df,
         )
         missing_ack = client.post(
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
@@ -528,6 +533,34 @@ def test_response_optimizer_api_requires_and_records_source_warning_acknowledgme
         for issue in eligibility["issues"]
     )
     assert json.loads(config_json)["request"]["acknowledged_source_warning_codes"] == acknowledged
+
+
+def test_response_optimizer_rejects_inconsistent_source_residual_df(tmp_path) -> None:
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        design, analysis = _create_source_analysis(client)
+        _replace_source_result(
+            tmp_path,
+            analysis["analysis_id"],
+            lambda result: result["sample"].__setitem__("df_residual", 4),
+        )
+        restored = client.get(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}"
+            f"/analyses/{analysis['analysis_id']}"
+        )
+        request = _optimizer_request(analysis["analysis_id"])
+        request["acknowledged_source_warning_codes"] = [
+            "response_optimizer_source_residual_df_small"
+        ]
+        response = client.post(
+            f"/api/v1/doe-designs/response-surface/{design['design_id']}/optimizations",
+            json=request,
+        )
+
+    assert restored.status_code == 409
+    assert restored.json()["error"]["code"] == "doe_rsm_analysis_metadata_invalid"
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "response_optimizer_source_model_ineligible"
+    assert "recommendation" not in response.text
 
 
 def test_response_optimizer_api_rejects_source_checksum_mismatch_without_path_exposure(

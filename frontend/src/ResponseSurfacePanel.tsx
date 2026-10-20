@@ -1,11 +1,16 @@
 import { ResponseSurfaceGrid } from "./charts/ResponseSurfaceGrid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { RsmPlotOptions } from "./doe/RsmPlotOptions";
+import { DoeLackOfFitNotice } from "./doe/DoeLackOfFitNotice";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   createDoeResponseRevision,
   createResponseSurfaceAnalysis,
   createResponseSurfaceDesign,
   fetchDoeResponseRevisions,
+  fetchDoeResponseRevision,
+  fetchResponseSurfaceDesign,
+  fetchResponseSurfaceAnalysis,
   saveResponseSurfaceResponses,
   type DoeResponseRevisionHistoryResponse,
   type DoeResponseSurfaceAnalysisResponse,
@@ -31,6 +36,14 @@ import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
 import { parseRsmResponseDraft } from "./doe/rsmResponseDraft";
 import { createRsmRequestContext } from "./doe/rsmRequestContext";
 import { t } from "./i18n/translate";
+import { recommendedCenterPoints, strictRsmInteger, type CcdType } from "./doe/rsmDesignDraft";
+import { parseDoeResponseNumber } from "./doe/doeResponsePaste";
+import { RsmModelTerms, useRsmTermCatalog } from "./doe/RsmModelTerms";
+import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
+import { RsmModelSelectionResults } from "./doe/RsmModelSelectionResults";
+import type { RsmTermPreset } from "./api/types/doe";
+import type { DoeModelSelectionOptions } from "./api/types/doeModelWorkflow";
+import { CcdBoundsPreview } from "./doe/CcdBoundsPreview";
 
 interface FactorDraft extends DoeFactorDomainDraft {
   id: number;
@@ -48,7 +61,9 @@ export function ResponseSurfacePanel() {
     { id: 1, name: "Temperature", low: "60", high: "80", unit: "C", ...continuousFactorDomainDraft },
     { id: 2, name: "Pressure", low: "5", high: "15", unit: "bar", ...continuousFactorDomainDraft },
   ]);
-  const [alphaMode, setAlphaMode] = useState<"rotatable" | "face_centered">("rotatable");
+  const [ccdType, setCcdType] = useState<CcdType>("inscribed");
+  const [axialConfirmed, setAxialConfirmed] = useState(false);
+  const [centerMode, setCenterMode] = useState<"recommended" | "custom">("recommended");
   const [centerPoints, setCenterPoints] = useState("5");
   const [randomizationSeed, setRandomizationSeed] = useState("20260714");
   const [randomize, setRandomize] = useState(true);
@@ -71,7 +86,107 @@ export function ResponseSurfacePanel() {
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [requests] = useState(createRsmRequestContext);
+  const [termPreset, setTermPreset] = useState<RsmTermPreset>("full_quadratic");
+  const [selection, setSelection] = useState<DoeModelSelectionOptions>({
+    method: "none", alpha_to_remove: 0.05, hierarchy_policy: "strong",
+    saturated_start_policy: "pool_smallest_adjusted_ss", display_step_details: true, term_policies: [],
+  });
+  const [confidence, setConfidence] = useState(0.95);
+  const termState = useRsmTermCatalog(design?.design_id ?? null, termPreset, selection);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [historicalRevision, setHistoricalRevision] = useState(false);
   const nextFactorId = useRef(3);
+  const [savedRoute, setSavedRoute] = useState(() =>
+    typeof window === "undefined" ? "" : window.location.search);
+
+  useEffect(() => {
+    const update = () => setSavedRoute(window.location.search);
+    window.addEventListener("popstate", update);
+    return () => window.removeEventListener("popstate", update);
+  }, []);
+
+  useEffect(() => {
+    requests.invalidate();
+    setIsRestoring(false);
+    setIsCreating(false);
+    setIsSaving(false);
+    setIsAnalyzing(false);
+    setIsLoadingHistory(false);
+    setError(null);
+    const query = new URLSearchParams(savedRoute);
+    const designId = query.get("design_id");
+    const analysisId = query.get("analysis_id");
+    if (!designId || !analysisId) return;
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuid.test(designId) || !uuid.test(analysisId)) {
+      setAnalysis(null);
+      setError("doe_rsm_analysis_link_invalid");
+      return;
+    }
+    const pending = requests.begin("restore", { designId, analysisId });
+    setAnalysis(null); setIsCreating(false); setIsSaving(false);
+    setIsAnalyzing(false); setIsLoadingHistory(false);
+    setIsRestoring(true);
+    void (async () => {
+      try {
+        const source = await fetchResponseSurfaceDesign(designId);
+        const stored = await fetchResponseSurfaceAnalysis(designId, analysisId);
+        const revision = await fetchDoeResponseRevision(designId, stored.response_revision_id);
+        if (!requests.isCurrent(pending)) return;
+        if (stored.design_id !== source.design_id || stored.design_sha256 !== source.design_sha256 ||
+          stored.design_version_id !== source.design_version_id || revision.state !== "completed" ||
+          revision.design_version_id !== source.design_version_id ||
+          revision.response_revision_sha256 !== stored.response_revision_sha256) {
+          throw new Error("doe_rsm_analysis_dependency_mismatch");
+        }
+        setDesign(source); setAnalysis(stored); setName(source.name);
+        setFactors(source.factors.map((factor, index) => ({
+          id: index + 1, name: factor.name, low: String(factor.low), high: String(factor.high),
+          unit: factor.unit ?? "", domainKind: factor.domain_kind ?? "continuous",
+          step: factor.step == null ? "" : String(factor.step),
+          displayDecimals: factor.display_decimals == null ? "" : String(factor.display_decimals),
+        })));
+        nextFactorId.current = source.factors.length + 1;
+        setCcdType(source.options.ccd_type ??
+          (source.options.alpha_mode === "face_centered" ? "face_centered" : "inscribed"));
+        setAxialConfirmed(source.options.ccd_type === "circumscribed");
+        setCenterMode("custom"); setCenterPoints(String(source.options.center_points));
+        setRandomize(source.options.randomize); setRandomizationSeed(String(source.options.randomization_seed));
+        setResponseName(revision.response_name); setResponseUnit(revision.unit ?? "");
+        setResponseValues(Object.fromEntries(revision.values.map((row) => [row.run_order, String(row.value)])));
+        setResponseRevisionId(revision.response_revision_id);
+        setResponseRevisionNumber(revision.revision_number);
+        setResponseRevisionSha256(revision.response_revision_sha256);
+        setResponsesSaved(true); setHistoricalRevision(true); setCorrectionMode(false);
+        setTermPreset(stored.result.term_preset ?? "full_quadratic");
+        if (stored.result.model_selection) {
+          const chosen = stored.result.model_selection;
+          setSelection({ method: chosen.method, alpha_to_remove: chosen.alpha_to_remove,
+            hierarchy_policy: chosen.hierarchy_policy, saturated_start_policy: "pool_smallest_adjusted_ss",
+            display_step_details: chosen.display_step_details, term_policies: chosen.term_policies });
+        } else {
+          setSelection({
+            method: "none", alpha_to_remove: 0.05, hierarchy_policy: "strong",
+            saturated_start_policy: "pool_smallest_adjusted_ss",
+            display_step_details: true, term_policies: [],
+          });
+        }
+        setConfidence(stored.result.terms.find((term) => term.confidence_interval)?.confidence_interval?.level ?? 0.95);
+        setError(null);
+        try {
+          const history = await fetchDoeResponseRevisions(designId, revision.response_name);
+          if (requests.isCurrent(pending)) { setRevisionHistory(history); setHistoryError(null); }
+        } catch (caught) {
+          if (requests.isCurrent(pending)) setHistoryError(errorCode(caught));
+        }
+      } catch (caught) {
+        if (requests.isCurrent(pending)) setError(errorCode(caught));
+      } finally {
+        if (requests.isCurrent(pending)) setIsRestoring(false);
+      }
+    })();
+    return () => requests.invalidateLane("restore");
+  }, [savedRoute, requests]);
 
   useEffect(
     () => () => requests.invalidate(),
@@ -84,6 +199,7 @@ export function ResponseSurfacePanel() {
     setIsSaving(false);
     setIsAnalyzing(false);
     setIsLoadingHistory(false);
+    setIsRestoring(false);
     setError(null);
     setHistoryError(null);
     if (responseChanged) {
@@ -93,12 +209,14 @@ export function ResponseSurfacePanel() {
   }
 
   const estimatedRunCount = useMemo(() => {
-    const center = Number.parseInt(centerPoints, 10);
-    return Number.isInteger(center) ? 2 ** factors.length + 2 * factors.length + center : 0;
+    const center = strictRsmInteger(centerPoints);
+    return center !== null ? 2 ** factors.length + 2 * factors.length + center : 0;
   }, [centerPoints, factors.length]);
 
   function resizeFactors(count: number) {
     invalidateSource();
+    setAxialConfirmed(false);
+    if (centerMode === "recommended") setCenterPoints(String(recommendedCenterPoints(count) ?? ""));
     setFactors((current) => {
       if (count <= current.length) return current.slice(0, count);
       const next = [...current];
@@ -119,6 +237,7 @@ export function ResponseSurfacePanel() {
 
   function changeFactor(id: number, key: keyof Omit<FactorDraft, "id">, value: string) {
     invalidateSource();
+    setAxialConfirmed(false);
     updateFactor(setFactors, id, key, value);
   }
 
@@ -126,8 +245,10 @@ export function ResponseSurfacePanel() {
     const request = designRequest({
       name,
       factors,
-      alphaMode,
+      ccdType,
+      axialConfirmed,
       centerPoints,
+      centerMode,
       randomize,
       randomizationSeed,
     });
@@ -152,6 +273,8 @@ export function ResponseSurfacePanel() {
       setResponseRevisionSha256(null);
       setRevisionHistory(null);
       setCorrectionMode(false);
+      setHistoricalRevision(false);
+      setSelection((current) => ({ ...current, term_policies: [] }));
       setResponseValues(Object.fromEntries(created.runs.map((run) => [run.run_order, ""])));
     } catch (caught) {
       if (requests.isCurrent(pending)) setError(errorCode(caught));
@@ -241,7 +364,11 @@ export function ResponseSurfacePanel() {
   };
 
   const runAnalysis = async () => {
-    if (design === null || !responsesSaved) return;
+    if (design === null || !responsesSaved || !termState.ready) return;
+    if (!(confidence > 0 && confidence < 1) || !(selection.alpha_to_remove > 0 && selection.alpha_to_remove < 1)) {
+      setError("doe_rsm_confidence_or_selection_invalid");
+      return;
+    }
     const pending = requests.begin("analyze", {
       designId: design.design_id,
       designVersionId: design.design_version_id,
@@ -250,9 +377,11 @@ export function ResponseSurfacePanel() {
       payload: {
         response_name: responseName.trim(),
         response_revision_id: responseRevisionId,
-        confidence_level: 0.95,
+        confidence_level: confidence,
         point_limit: 256,
         contour_grid_size: 21,
+        term_preset: termPreset,
+        model_selection: { ...termState.options, saturated_start_policy: "require_positive_residual_df" as const },
       },
     });
     setIsAnalyzing(true);
@@ -270,6 +399,42 @@ export function ResponseSurfacePanel() {
       if (requests.isCurrent(pending)) setIsAnalyzing(false);
     }
   };
+
+  function changeModel() {
+    invalidateSource();
+    setAnalysis(null);
+  }
+
+  async function restoreRevision(revisionId: string) {
+    if (!design) return;
+    invalidateSource(true);
+    const pending = requests.begin("restore", {
+      designId: design.design_id, designVersionId: design.design_version_id,
+      designSha256: design.design_sha256, revisionId,
+    });
+    setIsRestoring(true);
+    try {
+      const restored = await fetchDoeResponseRevision(pending.snapshot.designId, pending.snapshot.revisionId);
+      if (!requests.isCurrent(pending)) return;
+      if (restored.design_version_id !== pending.snapshot.designVersionId || restored.state !== "completed") {
+        setError("doe_rsm_response_revision_invalid");
+        return;
+      }
+      setResponseName(restored.response_name);
+      setResponseUnit(restored.unit ?? "");
+      setResponseValues(Object.fromEntries(restored.values.map((row) => [row.run_order, String(row.value)])));
+      setResponseRevisionId(restored.response_revision_id);
+      setResponseRevisionNumber(restored.revision_number);
+      setResponseRevisionSha256(restored.response_revision_sha256);
+      setResponsesSaved(true);
+      setCorrectionMode(false);
+      setHistoricalRevision(true);
+    } catch (caught) {
+      if (requests.isCurrent(pending)) setError(errorCode(caught));
+    } finally {
+      if (requests.isCurrent(pending)) setIsRestoring(false);
+    }
+  }
 
   return (
     <section className="analysis-run-panel" aria-label="반응표면법 설계와 분석 입력">
@@ -299,14 +464,16 @@ export function ResponseSurfacePanel() {
               control: (
                 <select
                   id="rsm-alpha-mode"
-                  value={alphaMode}
+                  value={ccdType}
                   onChange={(event) => {
                     invalidateSource();
-                    setAlphaMode(event.currentTarget.value as "rotatable" | "face_centered");
+                    setCcdType(event.currentTarget.value as CcdType);
+                    setAxialConfirmed(false);
                   }}
                 >
-                  <option value="rotatable">Rotatable CCI</option>
-                  <option value="face_centered">Face-centered CCD</option>
+                  <option value="inscribed">CCI — Inscribed</option>
+                  <option value="circumscribed">CCC — Circumscribed</option>
+                  <option value="face_centered">CCF — Face-centered</option>
                 </select>
               ),
             },
@@ -319,12 +486,25 @@ export function ResponseSurfacePanel() {
                   id="rsm-center-points"
                   inputMode="numeric"
                   value={centerPoints}
-                  onChange={(event) => { invalidateSource(); setCenterPoints(event.currentTarget.value); }}
+                  onChange={(event) => { invalidateSource(); setCenterMode("custom"); setCenterPoints(event.currentTarget.value); }}
                 />
               ),
             },
           ]}
         />
+        <div className="button-row">
+          <label><span>{t("doe.rsm.centerMode")}</span><select value={centerMode} onChange={(event) => {
+            invalidateSource();
+            const mode = event.currentTarget.value as "recommended" | "custom";
+            setCenterMode(mode);
+            if (mode === "recommended") setCenterPoints(String(recommendedCenterPoints(factors.length) ?? ""));
+          }}><option value="recommended">{t("doe.rsm.recommended")}</option><option value="custom">{t("doe.rsm.custom")}</option></select></label>
+          <button type="button" className="secondary-button" onClick={() => {
+            invalidateSource(); setCenterMode("recommended");
+            setCenterPoints(String(recommendedCenterPoints(factors.length) ?? ""));
+          }}>{t("doe.rsm.applyCenters")}</button>
+        </div>
+        <p className="field-help">{t("doe.rsm.centerPolicy", { count: recommendedCenterPoints(factors.length) ?? "-" })}</p>
         <DoeAdvancedSettings
           summaryText={`seed ${randomizationSeed} · ${randomize ? "실행 순서 무작위화" : "표준 순서"}`}
         >
@@ -497,6 +677,8 @@ export function ResponseSurfacePanel() {
                     disabled={factors.length <= 2}
                     onClick={() => {
                       invalidateSource();
+                      setAxialConfirmed(false);
+                      if (centerMode === "recommended") setCenterPoints(String(recommendedCenterPoints(factors.length - 1) ?? ""));
                       setFactors((current) => current.filter((item) => item.id !== factor.id));
                     }}
                   >
@@ -509,11 +691,16 @@ export function ResponseSurfacePanel() {
         </table>
       </div>
       </DoeFactorEditor>
+      <p className="field-help">{t(ccdType === "circumscribed" ? "doe.rsm.cccBounds" : "doe.rsm.axialBounds")}</p>
+      <CcdBoundsPreview factors={factors} ccdType={ccdType} />
+      {ccdType === "circumscribed" ? <label className="doe-table-toggle"><input type="checkbox"
+        checked={axialConfirmed} onChange={(event) => { invalidateSource(); setAxialConfirmed(event.currentTarget.checked); }} />
+        <span>{t("doe.rsm.confirmAxial")}</span></label> : null}
       <DoeActionBar summary={`예상 실험 ${estimatedRunCount}개`}>
         <button
           type="button"
           className="primary-button"
-          disabled={isCreating}
+          disabled={isCreating || (ccdType === "circumscribed" && !axialConfirmed)}
           onClick={() => void createDesign()}
         >
           {isCreating ? "생성 중" : "CCD 생성"}
@@ -525,7 +712,7 @@ export function ResponseSurfacePanel() {
         <span>요인 수</span>
         <strong>{factors.length}</strong>
         <span>모형 정책</span>
-        <strong>Full quadratic, no automatic selection</strong>
+        <strong>{t(`doe.rsm.preset.${termPreset}`)}</strong>
       </div>
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
 
@@ -545,6 +732,18 @@ export function ResponseSurfacePanel() {
           correctionMode={correctionMode}
           isSaving={isSaving}
           isAnalyzing={isAnalyzing}
+          canAnalyze={termState.ready && !isRestoring}
+          historicalRevision={historicalRevision}
+          onSelectRevision={(id) => void restoreRevision(id)}
+          isRestoring={isRestoring}
+          modelSettings={<>
+            <RsmModelTerms preset={termPreset} state={termState} options={selection}
+              onPresetChange={(preset) => { changeModel(); setTermPreset(preset); setSelection((current) => ({ ...current, term_policies: [] })); }}
+              onOptionsChange={(options) => { changeModel(); setSelection(options); }} />
+            <DoeModelSelectionSettings modelKind="rsm" value={selection} confidence={confidence}
+              onChange={(options) => { changeModel(); setSelection(options); }}
+              onConfidenceChange={(value) => { changeModel(); setConfidence(value); }} />
+          </>}
           onResponseNameChange={(value) => {
             invalidateSource(true);
             setResponseName(value);
@@ -560,6 +759,7 @@ export function ResponseSurfacePanel() {
           onStartCorrection={() => {
             invalidateSource(true);
             setCorrectionMode(true);
+            setHistoricalRevision(false);
             void loadHistory();
           }}
           onSave={() => void saveResponses()}
@@ -568,7 +768,7 @@ export function ResponseSurfacePanel() {
       ) : null}
       {analysis !== null && design !== null ? (
         <>
-          <ResponseSurfaceResult analysis={analysis} />
+          <ResponseSurfaceResult analysis={analysis} design={design} />
           <ResponseOptimizerPanel design={design} analysis={analysis} />
         </>
       ) : null}
@@ -597,6 +797,11 @@ interface ResponseEntryProps {
   onStartCorrection: () => void;
   onSave: () => void;
   onAnalyze: () => void;
+  modelSettings?: ReactNode;
+  canAnalyze?: boolean;
+  historicalRevision?: boolean;
+  isRestoring?: boolean;
+  onSelectRevision?: (revisionId: string) => void;
 }
 
 export function ResponseSurfaceResponseEntry({
@@ -620,8 +825,9 @@ export function ResponseSurfaceResponseEntry({
   onStartCorrection,
   onSave,
   onAnalyze,
+  modelSettings, canAnalyze = true, historicalRevision = false, isRestoring = false, onSelectRevision,
 }: ResponseEntryProps) {
-  const responsesLocked = design.status === "analyzed" && !correctionMode;
+  const responsesLocked = (design.status === "analyzed" || historicalRevision) && !correctionMode;
   return (
     <section className="analysis-result-section" aria-labelledby="rsm-response-title" data-rsm-response-entry>
       <div className="panel-heading compact-heading">
@@ -637,7 +843,9 @@ export function ResponseSurfaceResponseEntry({
         <span>Axial distance</span>
         <strong>{formatNumber(design.options.alpha)}</strong>
         <span>설계 경계</span>
-        <strong>Axial points = declared low/high</strong>
+        <strong>{t(design.options.ccd_type === "circumscribed" ? "doe.rsm.storedCubeBounds" : "doe.rsm.storedAxialBounds")}</strong>
+        <span>{t("doe.rsm.centerMode")}</span>
+        <strong>{design.options.center_points} ({t(design.options.center_point_mode === "recommended" ? "doe.rsm.recommended" : "doe.rsm.custom")})</strong>
         <span>Response revision</span>
         <strong>{responseRevisionNumber === null ? "-" : `r${responseRevisionNumber}`}</strong>
         <span>Revision SHA</span>
@@ -713,6 +921,7 @@ export function ResponseSurfaceResponseEntry({
           분석을 실행하면 현재 설계의 반응값이 잠깁니다. 여러 response를 사용할 계획이면 먼저 모두 저장하세요.
         </div>
       )}
+      {modelSettings}
       <div className="button-row">
         <button
           type="button"
@@ -722,7 +931,7 @@ export function ResponseSurfaceResponseEntry({
         >
           {isSaving ? "저장 중" : correctionMode ? "새 revision 저장" : "반응 저장"}
         </button>
-        {design.status === "analyzed" && !correctionMode ? (
+        {(design.status === "analyzed" || historicalRevision) && !correctionMode ? (
           <button type="button" className="secondary-button" onClick={onStartCorrection}>
             새 revision으로 수정
           </button>
@@ -730,10 +939,10 @@ export function ResponseSurfaceResponseEntry({
         <button
           type="button"
           className="primary-button"
-          disabled={!responsesSaved || isAnalyzing || responsesLocked}
+          disabled={!responsesSaved || isAnalyzing || !canAnalyze}
           onClick={onAnalyze}
         >
-          {isAnalyzing ? "분석 중" : "Quadratic model 적합"}
+          {isAnalyzing ? "분석 중" : t("doe.rsm.fitModel")}
         </button>
       </div>
       {historyError !== null ? (
@@ -760,7 +969,10 @@ export function ResponseSurfaceResponseEntry({
             <tbody>
               {revisionHistory.items.map((revision) => (
                 <tr key={revision.response_revision_id}>
-                  <td>r{revision.revision_number}</td>
+                  <td>{onSelectRevision ? <button type="button" className="secondary-button"
+                    disabled={isRestoring || revision.state !== "completed"}
+                    onClick={() => onSelectRevision(revision.response_revision_id)}>
+                    r{revision.revision_number}</button> : `r${revision.revision_number}`}</td>
                   <td>{revision.state}</td>
                   <td>{revision.is_current ? "current" : "history"}</td>
                   <td>{revision.closed_at ?? "-"}</td>
@@ -775,18 +987,21 @@ export function ResponseSurfaceResponseEntry({
   );
 }
 
-function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnalysisResponse }) {
+function ResponseSurfaceResult({ analysis, design }: {
+  analysis: DoeResponseSurfaceAnalysisResponse; design: ResponseSurfaceDesignResponse;
+}) {
   const { result } = analysis;
   const stationary = result.stationary_point;
   return (
     <section className="analysis-result-section" aria-labelledby="rsm-result-title">
       <div className="panel-heading compact-heading">
         <div>
-          <h4 id="rsm-result-title">Quadratic response surface</h4>
+          <h4 id="rsm-result-title">{t("doe.rsm.resultTitle")}</h4>
           <p>{analysis.method_id} v{analysis.method_version}</p>
         </div>
         <span className="status-pill status-ready">검증 저장됨</span>
       </div>
+      {result.model_selection ? <RsmModelSelectionResults result={result} /> : null}
       <div className="metadata-grid" aria-label="반응표면 적합 요약">
         <span>N / residual df</span>
         <strong>{result.sample.n_observations} / {result.sample.df_residual}</strong>
@@ -812,10 +1027,11 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
             </span>
           ))}
         </div>
-      ) : null}
+      ) : <p className="notice-box">{t("doe.rsm.stationaryUnavailable")}</p>}
       <div className="chart-panel">
         <span className="chart-panel-title">예측 contour</span>
-        <ResponseSurfaceGrid analysis={analysis} />
+        {result.plot_bundle ? <RsmPlotOptions key={analysis.analysis_id} analysis={analysis} design={design} />
+          : <ResponseSurfaceGrid analysis={analysis} />}
       </div>
       <div className="table-wrap">
         <table className="result-table">
@@ -853,8 +1069,9 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
         <span>High Cook's distance</span>
         <strong>{result.diagnostics.high_cooks_distance_count}</strong>
       </div>
+      <DoeLackOfFitNotice lack={result.anova.lack_of_fit} />
       {result.warnings.map((warning) => (
-        <div className="notice-box notice-warning" key={warning}>{warning}</div>
+        <div className="notice-box notice-warning" key={warning}>{warning === "doe_rsm_post_selection_inference_exploratory" ? t("doe.selection.exploratory") : warning}</div>
       ))}
     </section>
   );
@@ -863,24 +1080,27 @@ function ResponseSurfaceResult({ analysis }: { analysis: DoeResponseSurfaceAnaly
 function designRequest(input: {
   name: string;
   factors: FactorDraft[];
-  alphaMode: "rotatable" | "face_centered";
+  ccdType: CcdType;
+  axialConfirmed: boolean;
   centerPoints: string;
+  centerMode: "recommended" | "custom";
   randomize: boolean;
   randomizationSeed: string;
 }): ResponseSurfaceDesignCreateRequest | string {
-  const centerPoints = Number.parseInt(input.centerPoints, 10);
-  const seed = Number.parseInt(input.randomizationSeed, 10);
-  if (!Number.isInteger(centerPoints) || centerPoints < 1 || centerPoints > 32) {
+  const centerPoints = strictRsmInteger(input.centerPoints);
+  const seed = strictRsmInteger(input.randomizationSeed);
+  if (centerPoints === null || centerPoints < 1 || centerPoints > 32) {
     return "doe_rsm_center_points_invalid";
   }
-  if (!Number.isInteger(seed) || seed < 0) return "doe_rsm_seed_invalid";
+  if (seed === null || seed > 2_147_483_647) return "doe_rsm_seed_invalid";
+  if (input.ccdType === "circumscribed" && !input.axialConfirmed) return "doe_rsm_axial_confirmation_required";
   const names = input.factors.map((factor) => factor.name.trim().toLocaleLowerCase());
   if (names.some((name) => name.length === 0) || new Set(names).size !== names.length) {
     return "doe_rsm_factor_names_not_unique";
   }
   const factors = input.factors.map((factor) => {
-    const low = Number(factor.low);
-    const high = Number(factor.high);
+    const low = parseDoeResponseNumber(factor.low) ?? NaN;
+    const high = parseDoeResponseNumber(factor.high) ?? NaN;
     const domain = parseDoeFactorDomainDraft(factor, low, high);
     return {
       name: factor.name.trim(),
@@ -907,10 +1127,13 @@ function designRequest(input: {
       step: factor.step,
       display_decimals: factor.display_decimals,
     })),
-    alpha_mode: input.alphaMode,
+    alpha_mode: input.ccdType === "face_centered" ? "face_centered" : "rotatable",
+    ccd_type: input.ccdType,
+    axial_points_confirmed: input.axialConfirmed,
     factorial_replicates: 1,
     axial_replicates: 1,
     center_points: centerPoints,
+    center_point_mode: input.centerMode,
     randomize: input.randomize,
     randomization_seed: seed,
   };

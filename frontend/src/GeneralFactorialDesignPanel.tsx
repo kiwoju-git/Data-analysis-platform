@@ -26,6 +26,7 @@ import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
 import { DoeTermSelection, useDoeTermCatalog } from "./doe/DoeTermSelection";
 import { defaultDoeSelection, interactionOrderLabel, factorialWorkflowMessage } from "./doe/factorialWorkflowPresentation";
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
+import { DoeLackOfFitNotice } from "./doe/DoeLackOfFitNotice";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
 import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
 import { ChartSourceContext } from "./charts/chartSourceContext";
@@ -635,15 +636,39 @@ function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, 
     {correctionMode ? <p className="notice-box notice-warning">{t("doe.response.draft")}</p> : null}
     {analysisSettings}
     <DoeActionBar summary="반응 저장 후 범주형 term-block ANOVA를 실행합니다."><button className="secondary-button" disabled={pending !== null || locked} onClick={onSave} type="button">{pending === "save" ? "저장 중" : "반응 저장"}</button><button className="primary-button" disabled={pending !== null || !canAnalyze} onClick={onAnalyze} type="button">{pending === "analysis" ? "분석 중" : "일반 완전요인 ANOVA"}</button></DoeActionBar>
-    {analysis?.result.final_model && analysis.result.model_selection ? <FactorialModelSelectionResults selection={analysis.result.model_selection} model={analysis.result.final_model} fit={analysis.result.fit} n={analysis.result.sample.n_observations} /> : null}
+    {analysis?.result.final_model && analysis.result.model_selection ? <FactorialModelSelectionResults selection={analysis.result.model_selection} model={analysis.result.final_model} fit={analysis.result.fit} n={analysis.result.sample.n_observations} factorNames={design.factors.map((factor) => factor.name)} /> : null}
     {analysis !== null ? <GeneralFactorialAnalysisView analysis={analysis} /> : null}
-    {analysis?.result.final_model ? <ChartSourceContext.Provider value={analysis.analysis_id}><FactorialResidualPlots plots={analysis.result.final_model.residual_plots} /><FactorialPlotsPanel model={analysis.result.final_model} design={design} /></ChartSourceContext.Provider> : null}
+    {analysis ? <DoeLackOfFitNotice lack={analysis.result.anova.lack_of_fit} /> : null}
+    {analysis?.result.final_model ? <ChartSourceContext.Provider value={analysis.analysis_id}><FactorialResidualPlots plots={analysis.result.final_model.residual_plots} /><FactorialPlotsPanel model={analysis.result.final_model} design={design} selection={analysis.result.model_selection} responseUnit={analysis.result.response?.unit} /></ChartSourceContext.Provider> : null}
     {analysis ? <FactorialStoredModelWorkflow design={design} analysisId={analysis.analysis_id} model={analysis.result.final_model} /> : null}
   </section>;
 }
 
 function GeneralFactorialAnalysisView({ analysis }: { analysis: GeneralFactorialAnalysisResponse }) {
-  return <section className="result-section"><h3>분산분석</h3><div className="metadata-grid"><span>R²</span><strong>{(analysis.result.fit.r_squared * 100).toFixed(2)}%</strong><span>Adjusted R²</span><strong>{analysis.result.fit.adjusted_r_squared === null ? "-" : `${(analysis.result.fit.adjusted_r_squared * 100).toFixed(2)}%`}</strong><span>Residual DF</span><strong>{analysis.result.sample.df_residual}</strong><span>Coding</span><strong>Treatment</strong></div><div className="table-wrap"><table className="result-table"><thead><tr><th>Source</th><th>DF</th><th>Adj SS</th><th>Adj MS</th><th>F</th><th>P</th></tr></thead><tbody>{analysis.result.anova.rows.map((row) => <tr key={row.term_id}><td>{row.source}</td><td>{row.df}</td><td>{formatNumber(row.adjusted_sum_squares)}</td><td>{formatNumber(row.adjusted_mean_square)}</td><td>{formatNumber(row.f_statistic)}</td><td>{formatNumber(row.p_value)}</td></tr>)}</tbody></table></div>{analysis.result.warnings.map((warning) => <div className="notice-box notice-warning" key={warning}>{factorialWorkflowMessage(warning)}</div>)}</section>;
+  const { result } = analysis;
+  return <section className="result-section"><h3>분산분석</h3>
+    <div className="metadata-grid">
+      <span>R²</span><strong>{(result.fit.r_squared * 100).toFixed(2)}%</strong>
+      <span>Adjusted R²</span><strong>{result.fit.adjusted_r_squared === null ? "-" : `${(result.fit.adjusted_r_squared * 100).toFixed(2)}%`}</strong>
+      <span>Residual DF</span><strong>{result.sample.df_residual}</strong><span>Coding</span><strong>Treatment</strong>
+    </div>
+    <div className="table-wrap"><table className="result-table">
+      <thead><tr><th>Source</th><th>DF</th><th>Adj SS</th><th>Adj MS</th><th>F</th><th>P</th></tr></thead>
+      <tbody>{result.anova.rows.map((row) => <tr key={row.term_id}>
+        <td>{row.source}</td><td>{row.df}</td><td>{formatNumber(row.adjusted_sum_squares)}</td>
+        <td>{formatNumber(row.adjusted_mean_square)}</td><td>{formatNumber(row.f_statistic)}</td><td>{formatNumber(row.p_value)}</td>
+      </tr>)}
+        {([
+          ["Residual", result.anova.residual], ["Pure error", result.anova.pure_error],
+          ["Lack of fit", result.anova.lack_of_fit],
+        ] as const).map(([label, row]) => row?.df !== undefined ? <tr key={label}>
+          <td>{translateSystemText(label)}</td><td>{row.df}</td><td>{formatNumber(row.sum_squares ?? null)}</td>
+          <td>{formatNumber(row.mean_square ?? null)}</td><td>{formatNumber(row.f_statistic ?? null)}</td><td>{formatNumber(row.p_value ?? null)}</td>
+        </tr> : null)}
+      </tbody>
+    </table></div>
+    {result.warnings.map((warning) => <div className="notice-box notice-warning" key={warning}>{factorialWorkflowMessage(warning)}</div>)}
+  </section>;
 }
 
 function updateGeneralFactor(

@@ -67,7 +67,8 @@ export interface DoeModelSelectionStep {
   predicted_r_squared: number | null;
 }
 
-export interface DoeModelSelectionResult extends DoeModelSelectionOptions {
+export interface DoeModelSelectionResult extends Omit<DoeModelSelectionOptions, "saturated_start_policy"> {
+  saturated_start_policy: "pool_smallest_adjusted_ss" | "require_positive_residual_df";
   tie_break_policy: string;
   initial_model_saturated: boolean;
   initial_parameter_count: number;
@@ -178,11 +179,11 @@ export interface DoePredictionResponse {
   warnings: string[];
 }
 export interface DoeAnalysisAssetDescriptor {
-  asset_id: string; analysis_id: string; kind: "prediction" | "html_report"; schema_version: 1 | 2;
+  asset_id: string; analysis_id: string; kind: "prediction" | "html_report" | "plot_view"; schema_version: 1 | 2;
   locale: "en" | "ko" | null; source_analysis_sha256: string; sha256: string; media_type: string;
   size_bytes: number; created_at: string;
 }
 export interface DoeAnalysisAssetList { analysis_id: string; items: DoeAnalysisAssetDescriptor[] }
 export interface DoeAnalysisDeletionPreflight {
-  analysis_id: string; prediction_count: number; report_count: number; deletion_manifest_sha256: string;
+  analysis_id: string; prediction_count: number; report_count: number; plot_view_count?: number; deletion_manifest_sha256: string;
 }

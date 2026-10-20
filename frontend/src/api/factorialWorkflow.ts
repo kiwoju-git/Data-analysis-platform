@@ -1,7 +1,7 @@
 import { apiErrorCode, fetchApi, filenameFromContentDisposition, triggerBrowserDownload } from "./client";
 import { apiRoutes } from "./routes";
 import { downloadSha256 } from "./downloadDigest";
-import type { DoeFactorialAnalysisResponse, GeneralFactorialAnalysisResponse } from "./types/doe";
+import type { DoeFactorialAnalysisResponse, GeneralFactorialAnalysisResponse, RsmTermPreset } from "./types/doe";
 import type { DoeAnalysisTermCatalog, DoeAnalysisAssetDescriptor, DoeAnalysisAssetList, DoeAnalysisDeletionPreflight, DoePredictionPreflightRequest, DoePredictionPreflightResponse, DoePredictionResponse } from "./types/doeModelWorkflow";
 import type { DoeModelSelectionOptions } from "./types/doeModelWorkflow";
 
@@ -16,6 +16,8 @@ export const preflightFactorialPrediction = (design: string, analysis: string, b
   workflowJson<DoePredictionPreflightResponse>(apiRoutes.factorialPredictionPreflight(design, analysis), "POST", body);
 export const fetchDoeTermCatalog = (design: string, order: number) =>
   workflowJson<DoeAnalysisTermCatalog>(apiRoutes.factorialTermCatalog(design, order));
+export const fetchRsmTermCatalog = (design: string, preset: RsmTermPreset) =>
+  workflowJson<DoeAnalysisTermCatalog>(apiRoutes.rsmTermCatalog(design, preset));
 export const preflightDoeTerms = (design: string, order: number, options: DoeModelSelectionOptions) =>
   workflowJson<DoeAnalysisTermCatalog>(apiRoutes.factorialTermPreflight(design), "POST", {
     max_interaction_order: order, model_selection: options,

@@ -35,6 +35,11 @@ class ResponseRevisionRef(ReportModel):
     response_revision_sha256: Sha256
 
 
+class RsmPlotViewRef(ReportModel):
+    plot_view_id: UUID
+    expected_sha256: Sha256
+
+
 class DoeAnalysisReportSource(ReportModel):
     kind: Literal["doe_analysis"] = "doe_analysis"
     family: Literal["factorial", "general_factorial", "response_surface"]
@@ -44,6 +49,13 @@ class DoeAnalysisReportSource(ReportModel):
     analysis_id: UUID
     expected_source_sha256: Sha256
     response_revision: ResponseRevisionRef
+    plot_view: RsmPlotViewRef | None = None
+
+    @model_validator(mode="after")
+    def validate_plot_family(self) -> DoeAnalysisReportSource:
+        if self.plot_view is not None and self.family != "response_surface":
+            raise ValueError("report_plot_view_family_invalid")
+        return self
 
 
 class DoeOptimizerDependency(ReportModel):

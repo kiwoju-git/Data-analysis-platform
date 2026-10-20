@@ -1,0 +1,49 @@
+.doe-compact-scope {
+  container-type: inline-size;
+  container-name: doe-plots;
+  min-inline-size: 0;
+}
+.doe-compact-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+@container doe-plots (min-width: 520px) {
+  .doe-compact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container doe-plots (min-width: 780px) {
+  .doe-compact-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container doe-plots (min-width: 1040px) {
+  .doe-compact-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.doe-compact-plot {
+  min-inline-size: 0;
+  padding: 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+.doe-compact-plot[data-expanded="true"] { grid-column: 1 / -1; }
+.doe-compact-plot[data-term-status="backward_removed"],
+.doe-compact-plot[data-term-status="pooled"] { background: var(--surface-app); }
+.doe-compact-heading { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.doe-compact-heading h5 { margin: 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.doe-compact-heading button { flex: 0 0 28px; inline-size: 28px; block-size: 28px; padding: 4px; }
+.doe-plot-status { margin: 4px 0; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.doe-plot-status span { font-weight: 600; }
+.doe-compact-plot .chart-series-legend { font-size: 12px; gap: 4px 8px; }
+.doe-compact-plot .chart-selected-detail { min-block-size: 0; overflow-wrap: anywhere; }
+.doe-compact-plot .chart-axis-label,
+.doe-compact-plot .chart-visible-axis-title,
+.doe-compact-plot .chart-tick-label { font-size: 12px; }
+.doe-compact-plot .chart-frame { border: 0; padding: 0; }
+.rsm-plot-options { min-inline-size: 0; }
+.rsm-plot-options .action-row,
+.rsm-plot-options .checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
+.rsm-plot-options label { min-inline-size: 0; overflow-wrap: anywhere; }
+.rsm-plot-options .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+.rsm-contour-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; }
+.rsm-contour-legend strong { flex-basis: 100%; }
+.rsm-contour-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.rsm-contour-legend i { inline-size: 14px; block-size: 14px; border: 1px solid var(--border-default); }

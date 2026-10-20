@@ -5,7 +5,7 @@ Last updated: 2026-07-31
 ## Scope
 
 `doe.response_optimizer` v0.3.0 optimizes one or more checksum-validated
-`doe.response_surface` full-quadratic models over their shared declared factor
+`doe.response_surface` saved final models over their shared declared factor
 region. It is catalog-available with `execution_mode=dedicated` through both
 the RSM panel and `/analysis/doe/doe.response_optimizer`. It does
 not execute through generic `POST /api/v1/analysis-runs`.
@@ -106,6 +106,15 @@ do not expose workspace paths or unrelated response values.
 
 ## Source-Model Eligibility
 
+New RSM method 0.4.0 results carry an explicit final exponent basis and stored
+coding center/scale. Optimization evaluates precisely that selected basis,
+including linear or reduced quadratic models, rather than rebuilding a full
+quadratic or parsing term labels. Legacy CCI sources retain their original
+alpha/low/high transformation. Source eligibility and acknowledgment gates
+remain enforced. A non-unique stationary point does not by itself prohibit
+bounded optimization. The declared bounding box is not claimed to equal the
+observed design convex hull; confirmation and extrapolation warnings remain.
+
 Eligibility is evaluated from the checksum-validated RSM result before search
 and recomputed during restore.
 
@@ -143,7 +152,8 @@ range and zero outside it.
 
 ## Region, Constraints, And Search
 
-Default search bounds equal the RSM declared axial actual bounds. User bounds
+Default search bounds equal the RSM declared input actual bounds (CCI axial,
+CCC factorial cube, CCF both). User bounds
 may only narrow that region. Linear constraints are evaluated in actual factor
 units and must contain at least one nonzero finite coefficient.
 

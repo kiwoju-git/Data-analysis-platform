@@ -14,6 +14,7 @@ from app.api.v1.schemas.doe import (
     DoeResponseSurfaceAnalysisResponse,
     DoeResponseSurfaceAnalysisResult,
 )
+from app.api.v1.schemas.doe_model_workflow import DoeAnalysisTermCatalog
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
@@ -27,12 +28,21 @@ from app.services.response_surface_designs import (
     get_response_surface_design,
     response_surface_point_type,
 )
+from app.services.rsm_plot_builder import (
+    build_rsm_plot_bundle,
+    default_rsm_overview_settings,
+    default_rsm_plot_settings,
+)
 from app.statistics.response_surface import (
     ResponseSurfaceAnalysisRun,
     ResponseSurfaceError,
     ResponseSurfaceFactor,
     calculate_response_surface_analysis,
 )
+from app.statistics.rsm_coding import RsmFactorCoding, factor_coding, resolve_ccd_type
+from app.statistics.rsm_model_basis import RsmTermPreset, rsm_basis_terms
+from app.statistics.rsm_model_workflow import rsm_term_catalog
+from app.statistics.term_block_model_selection import selection_options_from_payload
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     ExperimentRunRecord,
@@ -42,8 +52,32 @@ from app.storage.metadata import (
     insert_experiment_design_analysis_record,
 )
 
-DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 2
-DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 2
+DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 3
+DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 3
+# These methods share the immutable revision-based envelope and config contract.
+SUPPORTED_RSM_METHOD_SCHEMAS = {
+    "0.3.0": (2, 1, 2),
+    "0.3.1": (2, 1, 2),
+    "0.4.0": (3, 2, 3),
+}
+
+
+def get_response_surface_term_catalog(
+    settings: Settings,
+    design_id: UUID,
+    preset: RsmTermPreset,
+) -> DoeAnalysisTermCatalog:
+    design = get_response_surface_design(settings, design_id)
+    return DoeAnalysisTermCatalog.model_validate(
+        {
+            "design_id": design_id,
+            "max_interaction_order": 2,
+            "terms": rsm_term_catalog(
+                rsm_basis_terms([factor.name for factor in design.factors], preset)
+            ),
+            "selection_supported": True,
+        }
+    )
 
 
 def create_response_surface_analysis(
@@ -78,9 +112,26 @@ def create_response_surface_analysis(
             )
         )
     factors = [
-        ResponseSurfaceFactor(factor.name, factor.low, factor.high, factor.unit)
+        ResponseSurfaceFactor(
+            factor.name,
+            factor.low,
+            factor.high,
+            factor.unit,
+            factor.domain_kind,
+            factor.step,
+            factor.display_decimals,
+        )
         for factor in design.factors
     ]
+    kind = resolve_ccd_type(design.options.alpha_mode, design.options.ccd_type)
+    coding = {
+        factor.name: (
+            RsmFactorCoding(**design.coding[factor.name].model_dump())
+            if design.coding is not None
+            else factor_coding(factor.low, factor.high, alpha, kind)
+        )
+        for factor in factors
+    }
     try:
         result_payload = calculate_response_surface_analysis(
             calculation_runs,
@@ -91,8 +142,31 @@ def create_response_surface_analysis(
             confidence_level=float(body.confidence_level),
             point_limit=body.point_limit,
             contour_grid_size=body.contour_grid_size,
+            coding_by_name=coding,
+            term_preset=body.term_preset,
+            model_selection=selection_options_from_payload(
+                body.model_selection.model_dump(exclude={"saturated_start_policy"}),
+            ),
         )
         result = DoeResponseSurfaceAnalysisResult.model_validate(result_payload)
+        if result.final_basis is not None:
+            result.plot_bundle = build_rsm_plot_bundle(
+                design,
+                result.final_basis,
+                default_rsm_plot_settings(design),
+                response_name=response_name,
+                response_unit=unit,
+            )
+            result.plot_overview = [
+                build_rsm_plot_bundle(
+                    design,
+                    result.final_basis,
+                    view,
+                    response_name=response_name,
+                    response_unit=unit,
+                )
+                for view in default_rsm_overview_settings(design)
+            ]
     except ResponseSurfaceError as exc:
         raise _analysis_api_error(exc.code) from exc
     except ValidationError as exc:
@@ -195,7 +269,7 @@ def _validated_analysis_response(
     design = get_response_surface_design(settings, design_id)
     if (
         record.method_id != DOE_RESPONSE_SURFACE_METHOD_ID
-        or record.method_version != METHOD_VERSIONS[DOE_RESPONSE_SURFACE_METHOD_ID]
+        or record.method_version not in SUPPORTED_RSM_METHOD_SCHEMAS
     ):
         raise _metadata_error("doe_rsm_analysis_method_mismatch")
     actual_result_sha = hashlib.sha256(record.result_json.encode("utf-8")).hexdigest()
@@ -208,8 +282,77 @@ def _validated_analysis_response(
         raise _metadata_error("doe_rsm_analysis_metadata_invalid") from exc
     if not isinstance(config, dict):
         raise _metadata_error("doe_rsm_analysis_metadata_invalid")
+    envelope_schema, result_schema, config_schema = SUPPORTED_RSM_METHOD_SCHEMAS[
+        record.method_version
+    ]
+    if (
+        response.analysis_schema_version != envelope_schema
+        or response.result.schema_version != result_schema
+    ):
+        raise _metadata_error("doe_rsm_analysis_metadata_invalid")
+    if result_schema >= 2:
+        kind = resolve_ccd_type(design.options.alpha_mode, design.options.ccd_type)
+        expected_coding = {
+            factor.name: factor_coding(
+                factor.low,
+                factor.high,
+                design.options.alpha,
+                kind,
+            ).payload()
+            for factor in design.factors
+        }
+        actual_coding = response.result.coding.factors
+        if (
+            actual_coding is None
+            or {name: item.model_dump() for name, item in actual_coding.items()} != expected_coding
+        ):
+            raise _metadata_error("doe_rsm_analysis_coding_mismatch")
+        basis = response.result.final_basis
+        selection = response.result.model_selection
+        if basis is None or selection is None or response.result.term_preset is None:
+            raise _metadata_error("doe_rsm_analysis_basis_mismatch")
+        terms_by_id = {
+            term.term_id: term
+            for term in rsm_basis_terms(response.result.factor_names, response.result.term_preset)
+        }
+        if (
+            config.get("term_preset") != response.result.term_preset
+            or config.get("model_selection")
+            != {
+                key: getattr(selection, key)
+                for key in (
+                    "method",
+                    "alpha_to_remove",
+                    "hierarchy_policy",
+                    "saturated_start_policy",
+                    "display_step_details",
+                )
+            }
+            | {"term_policies": [policy.model_dump() for policy in selection.term_policies]}
+            or any(
+                term_id not in terms_by_id or list(terms_by_id[term_id].powers) != powers
+                for term_id, powers in zip(basis.term_ids, basis.powers, strict=True)
+            )
+        ):
+            raise _metadata_error("doe_rsm_analysis_basis_mismatch")
+        default_plot = response.result.plot_bundle
+        overview = response.result.plot_overview
+        expected_views = default_rsm_overview_settings(design)
+        if (
+            default_plot is None
+            or overview is None
+            or default_plot.settings != default_rsm_plot_settings(design)
+            or [item.settings for item in overview] != expected_views
+            or any(
+                item.final_term_ids != basis.term_ids
+                or item.response_name != response.response_name
+                or item.response_unit != response.result.response.unit
+                for item in [default_plot, *overview]
+            )
+        ):
+            raise _metadata_error("doe_rsm_analysis_plot_mismatch")
     expected_config = {
-        "schema_version": DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION,
+        "schema_version": config_schema,
         "design_id": str(design.design_id),
         "design_version_id": str(design.design_version_id),
         "design_sha256": design.design_sha256,
@@ -285,7 +428,16 @@ def _analysis_api_error(code: str) -> ApiError:
         "doe_rsm_point_type_invalid": "CCD point type이 올바르지 않습니다.",
         "doe_rsm_coded_levels_invalid": "CCD coded level이 올바르지 않습니다.",
         "doe_rsm_response_variance_zero": "반응값 변동이 없어 모형을 적합할 수 없습니다.",
-        "doe_rsm_model_rank_deficient": "full quadratic 모형 행렬이 rank deficient입니다.",
+        "doe_rsm_model_rank_deficient": (
+            "요청한 RSM 모형 행렬의 항을 독립적으로 추정할 수 없습니다."
+        ),
+        "doe_rsm_selection_requires_residual_df": (
+            "RSM backward는 초기 잔차 자유도가 양수여야 합니다. " "항을 줄이거나 실험을 추가하세요."
+        ),
+        "doe_factorial_selection_hierarchy_invalid": (
+            "제곱항과 교호작용에 필요한 주효과를 제외할 수 없습니다."
+        ),
+        "doe_factorial_term_policy_invalid": "현재 RSM preset에 없는 항 또는 중복된 항 정책입니다.",
     }
     return ApiError(
         code=code,

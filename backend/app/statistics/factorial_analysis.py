@@ -11,6 +11,7 @@ import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
 from app.core.doe_capabilities import FACTORIAL_AUTHORING_FACTOR_LIMIT
+from app.statistics.doe_lack_of_fit import decompose_lack_of_fit
 from app.statistics.doe_matrix_rank import doe_least_squares, doe_matrix_rank
 from app.statistics.factorial_estimability import fractional_estimability
 from app.statistics.factorial_model_workflow import FactorialFeature, final_model_workflow
@@ -205,32 +206,28 @@ def calculate_factorial_analysis(
         augmented = np.column_stack([design_matrix, center_column])
         if doe_matrix_rank(augmented, rank_tolerance) == parameter_count + 1:
             _, _, _, augmented_sse = _fit(augmented, response, rank_tolerance)
-            curvature_ss = max(0.0, sse - augmented_sse)
+            curvature_decomposition = decompose_lack_of_fit(
+                sse=sse,
+                pure_error_ss=augmented_sse,
+                pure_error_df=df_residual - 1,
+                lack_of_fit_df=1,
+            )
+            curvature_ss = curvature_decomposition["lack_of_fit"]["sum_squares"]
             pure = lack_of_fit["pure_error"]
             remainder_df = lack_of_fit["lack_of_fit"]["df"] - 1
-            remainder_ss = max(0.0, augmented_sse - pure["sum_squares"])
-            remainder_ms = remainder_ss / remainder_df if remainder_df > 0 else None
-            remainder_f = (
-                remainder_ms / pure["mean_square"]
-                if remainder_ms is not None
-                and pure["mean_square"] is not None
-                and pure["mean_square"] > 0
-                else None
+            remainder = decompose_lack_of_fit(
+                sse=augmented_sse,
+                pure_error_ss=pure["sum_squares"],
+                pure_error_df=pure["df"],
+                lack_of_fit_df=remainder_df,
             )
             lack_of_fit["curvature_in_error"] = {
                 "df": 1,
                 "sum_squares": curvature_ss,
                 "mean_square": curvature_ss,
             }
-            lack_of_fit["non_curvature_lack_of_fit"] = {
-                "df": max(0, remainder_df),
-                "sum_squares": remainder_ss,
-                "mean_square": remainder_ms,
-                "f_statistic": remainder_f,
-                "p_value": float(stats.f.sf(remainder_f, remainder_df, pure["df"]))
-                if remainder_f is not None
-                else None,
-            }
+            lack_of_fit["non_curvature_lack_of_fit"] = remainder["lack_of_fit"]
+            lack_of_fit["non_curvature_reason"] = remainder["reason"]
     diagnostics = _diagnostics(
         ordered_runs,
         design_matrix,
@@ -698,35 +695,14 @@ def _lack_of_fit(
     )
     pure_error_df = len(runs) - len(grouped)
     lack_of_fit_df = len(grouped) - parameter_count
-    lack_of_fit_ss = max(0.0, sse - pure_error_ss)
-    pure_error_ms = pure_error_ss / pure_error_df if pure_error_df > 0 else None
-    lack_of_fit_ms = lack_of_fit_ss / lack_of_fit_df if lack_of_fit_df > 0 else None
-    f_statistic = (
-        lack_of_fit_ms / pure_error_ms
-        if lack_of_fit_ms is not None and pure_error_ms is not None and pure_error_ms > 0
-        else None
-    )
-    p_value = (
-        float(stats.f.sf(f_statistic, lack_of_fit_df, pure_error_df))
-        if f_statistic is not None
-        else None
-    )
-    available = pure_error_df > 0 and lack_of_fit_df > 0 and pure_error_ms is not None
     return {
-        "available": available,
+        **decompose_lack_of_fit(
+            sse=sse,
+            pure_error_ss=pure_error_ss,
+            pure_error_df=pure_error_df,
+            lack_of_fit_df=lack_of_fit_df,
+        ),
         "unique_design_point_count": len(grouped),
-        "pure_error": {
-            "df": pure_error_df,
-            "sum_squares": pure_error_ss,
-            "mean_square": pure_error_ms,
-        },
-        "lack_of_fit": {
-            "df": max(0, lack_of_fit_df),
-            "sum_squares": lack_of_fit_ss,
-            "mean_square": lack_of_fit_ms,
-            "f_statistic": f_statistic,
-            "p_value": p_value,
-        },
         "residual_df": df_residual,
     }
 

@@ -12,7 +12,12 @@ from pathlib import Path
 
 import pytest
 
-from app.storage.metadata import MIGRATIONS, initialize_metadata_store, metadata_db_path
+from app.storage.metadata import (
+    MIGRATIONS,
+    SCHEMA_VERSION,
+    initialize_metadata_store,
+    metadata_db_path,
+)
 from app.storage.workspace_archive import DEFAULT_LIMITS, checked_path, relative_path
 from app.storage.workspace_backup import (
     WorkspaceBackupError,
@@ -135,7 +140,7 @@ def test_legacy_backup_restores_without_migration_then_upgrades(
         }
     initialize_metadata_store(restored)
     with sqlite3.connect(metadata_db_path(restored)) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert "failure_code" in {
             row[1] for row in connection.execute("PRAGMA table_info(analysis_runs)")
         }
@@ -145,7 +150,7 @@ def test_legacy_backup_restores_without_migration_then_upgrades(
     assert hashlib.sha256(archive.read_bytes()).hexdigest() == archive_sha
 
 
-@pytest.mark.parametrize("version", [19, 23])
+@pytest.mark.parametrize("version", [19, SCHEMA_VERSION + 1])
 def test_backup_rejects_unrecognized_metadata_version(tmp_path: Path, version: int) -> None:
     root = _workspace(tmp_path / "unsupported")
     with sqlite3.connect(metadata_db_path(root)) as connection:

@@ -11,6 +11,7 @@ from typing import Any
 from app.api.v1.schemas.doe import FactorialDesignResponse, GeneralFactorialDesignResponse
 from app.api.v1.schemas.doe_model_workflow import DoePredictionResponse
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.doe_lack_of_fit_report import lack_of_fit_report_notice
 from app.services.factorial_prediction import FactorialModelSource
 from app.services.fractional_alias_report import fractional_alias_report
 from app.services.regularized_model_report import _table as report_table
@@ -443,6 +444,7 @@ def render_factorial_analysis_report(
         row = anova[key]
         rows.append([name, row["df"], row["sum_squares"], row.get("mean_square"), None, None])
     lack = anova.get("lack_of_fit", {})
+    parts.append(lack_of_fit_report_notice(lack, locale))
     lack_rows = (
         [
             (label("Curvature in error", "오차에 포함된 곡률"), lack["curvature_in_error"]),
@@ -793,14 +795,57 @@ def _factorial_svgs(source: FactorialModelSource, locale: ReportLocale) -> str:
             units[two_factor.name] = two_factor.unit or ""
     parts = ['<div class="chart-grid">']
     fitted_label = report_text(locale, en="Fitted mean", ko="적합 평균")
+
+    def wrap_plot(plot: str, factor_names: list[str]) -> str:
+        term_id = ":".join(
+            name
+            if isinstance(source.design, GeneralFactorialDesignResponse)
+            else f"factor_{index + 1}"
+            for index, name in enumerate(names)
+            if name in factor_names
+        )
+        selection = source.result.get("model_selection") or {}
+        plan = source.result.get("estimability") or {}
+        label_pair = ("Historical status unavailable", "과거 항 상태 정보 없음")
+        muted = False
+        for key, en, ko, gray in (
+            ("final_term_ids", "Retained", "모형 유지", False),
+            ("removed_term_ids", "Backward removed", "Backward 제거", True),
+            ("pooled_term_ids", "Initially pooled", "초기 풀링", True),
+            ("initially_excluded_term_ids", "User excluded", "사용자 제외", False),
+        ):
+            if term_id in selection.get(key, []):
+                label_pair, muted = (en, ko), gray
+                break
+        else:
+            if any(item["term_id"] == term_id for item in plan.get("exclusions", [])):
+                label_pair = ("Alias / not independently estimable", "Alias로 독립 추정 불가")
+            elif selection.get("term_catalog") and not any(
+                item["term_id"] == term_id for item in selection["term_catalog"]
+            ):
+                label_pair = ("Not requested", "요청 범위 밖")
+        shade = ' style="background:#f2f4f6;padding:10px"' if muted else ""
+        return (
+            f'<div data-term-id="{escape(term_id, quote=True)}"{shade}><p>'
+            + escape(report_text(locale, en=label_pair[0], ko=label_pair[1]))
+            + "</p>"
+            + plot
+            + "</div>"
+        )
+
     for name in names:
         points = [
             (level, mean(cell.fitted_mean for cell in cells if cell.settings[name] == level))
             for level in levels[name]
         ]
         title = name + (f" ({units[name]})" if units[name] else "")
-        parts.append(_line_plot(title, [(name, points)], fitted_label, actual[name]))
-    for first, second in list(combinations(names, 2))[:15]:
+        parts.append(
+            wrap_plot(
+                _line_plot(title, [(name, points)], fitted_label, actual[name]),
+                [name],
+            )
+        )
+    for first, second in combinations(names, 2):
         traces = [
             (
                 f"{second}: {actual[second][trace]}",
@@ -818,7 +863,12 @@ def _factorial_svgs(source: FactorialModelSource, locale: ReportLocale) -> str:
             )
             for trace in levels[second]
         ]
-        parts.append(_line_plot(first + " * " + second, traces, fitted_label, actual[first]))
+        parts.append(
+            wrap_plot(
+                _line_plot(first + " * " + second, traces, fitted_label, actual[first]),
+                [first, second],
+            )
+        )
     parts.append("</div>")
     if (
         not isinstance(source.design, GeneralFactorialDesignResponse)

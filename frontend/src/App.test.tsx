@@ -357,7 +357,7 @@ describe("App", () => {
       "랜덤 seed",
     );
     expect(getAnalysisMethodGuidance("doe.factorial_design", "ko").plainLanguage).toContain(
-      "완전요인은 항 포함·강제 유지 및 hierarchy를 지키는 후진 제거",
+      "완전요인과 정규 부분요인은 항 정책과 계층을 지키는 후진 제거",
     );
     expect(getAnalysisMethodGuidance("doe.response_surface", "ko").plainLanguage).toContain(
       "full quadratic OLS",
@@ -1236,10 +1236,11 @@ describe("App", () => {
     const html = renderToString(<ResponseSurfacePanel />);
 
     expect(html).toContain("반응표면법");
-    expect(html).toContain("Rotatable CCI");
-    expect(html).toContain("Face-centered CCD");
+    expect(html).toContain("CCI");
+    expect(html).toContain("CCC");
+    expect(html).toContain("CCF");
     expect(html).toContain("CCD 생성");
-    expect(html).toContain("Full quadratic, no automatic selection");
+    expect(html).toContain("완전 2차");
     expect(html).toContain('class="doe-compact-section"');
     expect(html).toContain('class="result-table doe-settings-table');
     expect(html).toContain("doe-factor-editor");

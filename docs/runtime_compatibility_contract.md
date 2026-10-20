@@ -3,10 +3,14 @@
 ## DOE Expansion (API 25)
 
 API 25 adds the regular-fraction model preflight, structured alias view and
-factorial result 4/config 5 (method 0.10.0). It reserves this integrated DOE
-expansion contract for the subsequent RSM request/response additions. Metadata
-remains 22: these additions do not require a SQL migration. Legacy artifact
-readers remain explicit; runtime mismatch must still block execution.
+factorial result 4/config 5 (method 0.10.0), RSM method0.4.0 with explicit
+CCD design3/result2/config3/envelope3, term presets and stored final-basis
+plot views. Metadata23 performs the real `plot_view` DOE asset constraint
+migration, preserving existing BLOBs and checksums. Frontend and PowerShell
+require API25/metadata23; Linux reads those backend constants.
+Offline backup/restore accepts exact schemas20/21/22/23; startup, not restore,
+applies migrations. Legacy artifact readers remain explicit, and mismatches
+still block execution. Reverting code does not reverse this DB migration.
 
 ## Pilot Follow-up After 0849aaa
 
@@ -128,7 +132,7 @@ source.
 
 - service and app version;
 - `api_contract_version` (currently `23`);
-- the actual metadata schema constant (currently `22`);
+- the actual metadata schema constant (currently `23`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and

@@ -19,9 +19,26 @@ from app.statistics.doe_factor_domain import (
     factor_domain_payload,
     validate_factor_domain,
 )
+from app.statistics.rsm_coding import (
+    CcdType,
+    RsmCodingError,
+    RsmFactorCoding,
+    coded_to_actual,
+    factor_coding,
+    resolve_ccd_type,
+    rotatable_alpha,
+)
+from app.statistics.rsm_model_basis import (
+    RsmTermPreset,
+    evaluate_rsm_basis,
+    predict_rsm_basis,
+    rsm_basis_terms,
+)
+from app.statistics.rsm_model_workflow import select_rsm_terms
+from app.statistics.term_block_model_selection import DoeSelectionOptions, TermBlockSelectionError
 
 RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION: Final[Literal[1]] = 1
-RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION: Final[Literal[2]] = 2
+RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION: Final[Literal[3]] = 3
 RESPONSE_SURFACE_RESULT_SCHEMA_VERSION = 1
 RESPONSE_SURFACE_FAMILY: Final[Literal["central_composite"]] = "central_composite"
 RESPONSE_SURFACE_LEGACY_FAMILY: Final[Literal["central_composite_inscribed"]] = (
@@ -59,6 +76,8 @@ class ResponseSurfaceDesignOptions:
     center_points: int
     randomize: bool
     randomization_seed: int
+    ccd_type: CcdType | None = None
+    center_point_mode: Literal["recommended", "custom"] | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +100,7 @@ class ResponseSurfaceDesign:
     options: ResponseSurfaceDesignOptions
     runs: tuple[ResponseSurfaceDesignRun, ...]
     design_sha256: str
+    coding: dict[str, RsmFactorCoding] | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +119,7 @@ class _Term:
     kind: Literal["intercept", "main_effect", "interaction", "quadratic"]
     factor_names: tuple[str, ...]
     values: np.ndarray
+    powers: tuple[int, ...]
 
 
 def generate_central_composite_design(
@@ -107,7 +128,20 @@ def generate_central_composite_design(
 ) -> ResponseSurfaceDesign:
     _validate_design_inputs(factors, options)
     factor_count = len(factors)
-    alpha = (2**factor_count) ** 0.25 if options.alpha_mode == "rotatable" else 1.0
+    ccd_type = resolve_ccd_type(options.alpha_mode, options.ccd_type)
+    alpha = (
+        rotatable_alpha(factor_count, options.factorial_replicates, options.axial_replicates)
+        if options.alpha_mode == "rotatable" and options.ccd_type is not None
+        else (2**factor_count) ** 0.25
+        if options.alpha_mode == "rotatable"
+        else 1.0
+    )
+    coding = (
+        {factor.name: factor_coding(factor.low, factor.high, alpha, ccd_type) for factor in factors}
+        if options.ccd_type is not None
+        else None
+    )
+    schema_version = RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION if coding is not None else 2
     run_count = (
         (2**factor_count) * options.factorial_replicates
         + (2 * factor_count) * options.axial_replicates
@@ -129,6 +163,7 @@ def generate_central_composite_design(
                     replicate_index=replicate_index,
                     point_type="factorial",
                     coded_levels=coded,
+                    coding=coding,
                 )
             )
             standard_order += 1
@@ -146,6 +181,7 @@ def generate_central_composite_design(
                         replicate_index=replicate_index,
                         point_type="axial",
                         coded_levels=coded,
+                        coding=coding,
                     )
                 )
                 standard_order += 1
@@ -159,6 +195,7 @@ def generate_central_composite_design(
                 replicate_index=replicate_index,
                 point_type="center",
                 coded_levels={factor.name: 0.0 for factor in factors},
+                coding=coding,
             )
         )
         standard_order += 1
@@ -166,9 +203,10 @@ def generate_central_composite_design(
     for factor in factors:
         if factor.domain_kind != "discrete_numeric":
             continue
+        coordinates = None if coding is None else coding[factor.name]
         domain = DoeFactorDomain(
-            factor.low,
-            factor.high,
+            coordinates.axial_low if coordinates is not None else factor.low,
+            coordinates.axial_high if coordinates is not None else factor.high,
             factor.domain_kind,
             factor.step,
             factor.display_decimals,
@@ -193,6 +231,7 @@ def generate_central_composite_design(
         for run_order, run in enumerate(ordered, start=1)
     )
     payload = canonical_response_surface_design_payload(
+        schema_version=schema_version,
         family=RESPONSE_SURFACE_FAMILY,
         alpha=alpha,
         factors=factors,
@@ -203,26 +242,29 @@ def generate_central_composite_design(
         "utf-8"
     )
     return ResponseSurfaceDesign(
-        schema_version=RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION,
+        schema_version=schema_version,
         family=RESPONSE_SURFACE_FAMILY,
         alpha=alpha,
         factors=tuple(factors),
         options=options,
         runs=runs,
         design_sha256=hashlib.sha256(encoded).hexdigest(),
+        coding=coding,
     )
 
 
 def canonical_response_surface_design_payload(
     *,
-    schema_version: int = RESPONSE_SURFACE_DESIGN_SCHEMA_VERSION,
+    schema_version: int | None = None,
     family: str,
     alpha: float,
     factors: Sequence[ResponseSurfaceFactor],
     options: ResponseSurfaceDesignOptions,
     runs: Sequence[ResponseSurfaceDesignRun],
 ) -> dict[str, Any]:
-    return {
+    if schema_version is None:
+        schema_version = 3 if options.ccd_type is not None else 2
+    payload: dict[str, Any] = {
         "schema_version": schema_version,
         "family": family,
         "alpha": alpha,
@@ -233,6 +275,17 @@ def canonical_response_surface_design_payload(
             for run in sorted(runs, key=lambda item: item.run_order)
         ],
     }
+    if schema_version >= 3:
+        kind = resolve_ccd_type(options.alpha_mode, options.ccd_type)
+        payload["coding"] = {
+            factor.name: factor_coding(factor.low, factor.high, alpha, kind).payload()
+            for factor in factors
+        }
+    else:
+        # Historical checksum input must not acquire new default fields.
+        payload["options"].pop("ccd_type", None)
+        payload["options"].pop("center_point_mode", None)
+    return payload
 
 
 def response_surface_factor_payload(factor: ResponseSurfaceFactor) -> dict[str, Any]:
@@ -262,7 +315,7 @@ def response_surface_factor_payload(factor: ResponseSurfaceFactor) -> dict[str, 
 
 
 def response_surface_options_payload(options: ResponseSurfaceDesignOptions) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "alpha_mode": options.alpha_mode,
         "factorial_replicates": options.factorial_replicates,
         "axial_replicates": options.axial_replicates,
@@ -270,6 +323,10 @@ def response_surface_options_payload(options: ResponseSurfaceDesignOptions) -> d
         "randomize": options.randomize,
         "randomization_seed": options.randomization_seed,
     }
+    if options.ccd_type is not None:
+        payload["ccd_type"] = options.ccd_type
+        payload["center_point_mode"] = options.center_point_mode or "custom"
+    return payload
 
 
 def response_surface_run_payload(run: ResponseSurfaceDesignRun) -> dict[str, Any]:
@@ -294,6 +351,9 @@ def calculate_response_surface_analysis(
     confidence_level: float = 0.95,
     point_limit: int = MAX_RESPONSE_SURFACE_POINTS,
     contour_grid_size: int = DEFAULT_CONTOUR_GRID_SIZE,
+    coding_by_name: dict[str, RsmFactorCoding] | None = None,
+    term_preset: RsmTermPreset = "full_quadratic",
+    model_selection: DoeSelectionOptions | None = None,
 ) -> dict[str, object]:
     factor_names = [factor.name for factor in factors]
     _validate_analysis_inputs(
@@ -309,7 +369,42 @@ def calculate_response_surface_analysis(
     if bool(np.all(response == response[0])):
         raise ResponseSurfaceError("doe_rsm_response_variance_zero")
 
-    terms = _quadratic_terms(ordered_runs, factor_names)
+    if model_selection is not None or coding_by_name is not None or term_preset != "full_quadratic":
+        model_selection = model_selection or DoeSelectionOptions()
+        if coding_by_name is None:
+            coding_by_name = {
+                factor.name: factor_coding(factor.low, factor.high, alpha, "inscribed")
+                for factor in factors
+            }
+    basis_terms = rsm_basis_terms(factor_names, term_preset)
+    coded_matrix = np.asarray(
+        [[run.coded_levels[name] for name in factor_names] for run in ordered_runs]
+    )
+    candidate_matrix = evaluate_rsm_basis(coded_matrix, [term.powers for term in basis_terms])
+    selection = None
+    selected_columns = list(range(len(basis_terms)))
+    if model_selection is not None:
+        try:
+            selected_columns, selection = select_rsm_terms(
+                candidate_matrix,
+                response,
+                basis_terms,
+                model_selection,
+            )
+        except TermBlockSelectionError as exc:
+            raise ResponseSurfaceError(exc.code) from exc
+    terms = [
+        _Term(
+            term.term_id,
+            term.label,
+            term.kind,
+            tuple(name for name, power in zip(factor_names, term.powers, strict=True) if power),
+            candidate_matrix[:, index],
+            term.powers,
+        )
+        for index, term in enumerate(basis_terms)
+        if index in selected_columns
+    ]
     matrix = np.column_stack([term.values for term in terms])
     rank = int(np.linalg.matrix_rank(matrix))
     if rank != matrix.shape[1]:
@@ -369,13 +464,14 @@ def calculate_response_surface_analysis(
         df_residual=df_residual,
         point_limit=point_limit,
     )
-    stationary = _stationary_point(coefficients, terms, factors, alpha=alpha)
+    stationary = _stationary_point(coefficients, terms, factors, alpha=alpha, coding=coding_by_name)
     contour = _contour_grid(
         coefficients,
         terms,
         factors,
         alpha=alpha,
         grid_size=contour_grid_size,
+        coding=coding_by_name,
     )
     warnings = _analysis_warnings(
         df_residual=df_residual,
@@ -385,6 +481,8 @@ def calculate_response_surface_analysis(
         stationary=stationary,
         factor_count=len(factors),
     )
+    if selection is not None and selection["method"] != "none":
+        warnings.append("doe_rsm_post_selection_inference_exploratory")
     r_squared = model_ss / total_ss
     adjusted_r_squared = (
         1.0 - ((sse / df_residual) / (total_ss / (n_observations - 1))) if df_residual > 0 else None
@@ -393,10 +491,21 @@ def calculate_response_surface_analysis(
         point_type: sum(run.point_type == point_type for run in ordered_runs)
         for point_type in ("factorial", "axial", "center")
     }
+    q, _ = np.linalg.qr(matrix, mode="reduced")
+    one_minus_leverage = 1 - np.sum(q * q, axis=1)
+    press = (
+        float(np.sum((residuals / one_minus_leverage) ** 2))
+        if bool(np.all(one_minus_leverage > 1e-10))
+        else None
+    )
     return {
-        "schema_version": RESPONSE_SURFACE_RESULT_SCHEMA_VERSION,
+        "schema_version": 2
+        if coding_by_name is not None
+        else RESPONSE_SURFACE_RESULT_SCHEMA_VERSION,
         "summary_type": "response_surface_analysis",
-        "method": "full_quadratic_ordinary_least_squares",
+        "method": "full_quadratic_ordinary_least_squares"
+        if selection is None
+        else "hierarchical_response_surface_ordinary_least_squares",
         "response": {"name": response_name, "unit": response_unit},
         "factor_names": factor_names,
         "coding": {
@@ -404,11 +513,17 @@ def calculate_response_surface_analysis(
             "factorial_low": -1.0,
             "factorial_high": 1.0,
             "axial_distance": alpha,
-            "actual_bounds_are_axial_bounds": True,
+            "actual_bounds_are_axial_bounds": coding_by_name is None
+            or all(item.input_bounds_role != "factorial" for item in coding_by_name.values()),
+            **(
+                {"factors": {name: item.payload() for name, item in coding_by_name.items()}}
+                if coding_by_name is not None
+                else {}
+            ),
         },
         "model_policy": {
-            "full_quadratic": True,
-            "automatic_term_selection": False,
+            "full_quadratic": term_preset == "full_quadratic" and len(terms) == len(basis_terms),
+            "automatic_term_selection": selection is not None and selection["method"] != "none",
             "hierarchy_enforced": True,
             "sum_of_squares": "partial_drop_one",
             "contour_other_factors_held_at_center": True,
@@ -458,6 +573,31 @@ def calculate_response_surface_analysis(
         "contour": contour,
         "diagnostics": diagnostics,
         "warnings": warnings,
+        **(
+            {
+                "term_preset": term_preset,
+                "model_selection": selection,
+                "final_basis": {
+                    "schema_version": 1,
+                    "factor_names": factor_names,
+                    "term_ids": [term.term_id for term in terms],
+                    "powers": [list(term.powers) for term in terms],
+                    "coefficients": coefficients.tolist(),
+                    "covariance": coefficient_covariance.tolist()
+                    if coefficient_covariance is not None
+                    else None,
+                    "residual_df": df_residual,
+                    "residual_mean_square": residual_ms,
+                    "coding": {
+                        name: item.payload() for name, item in (coding_by_name or {}).items()
+                    },
+                },
+                "press": press,
+                "predicted_r_squared": 1 - press / total_ss if press is not None else None,
+            }
+            if selection is not None
+            else {}
+        ),
     }
 
 
@@ -491,6 +631,10 @@ def _validate_design_inputs(
             raise ResponseSurfaceError(exc.code) from exc
     if options.alpha_mode not in {"rotatable", "face_centered"}:
         raise ResponseSurfaceError("doe_rsm_alpha_mode_invalid")
+    try:
+        resolve_ccd_type(options.alpha_mode, options.ccd_type)
+    except RsmCodingError as exc:
+        raise ResponseSurfaceError(str(exc)) from exc
     if options.factorial_replicates < 1 or options.axial_replicates < 1:
         raise ResponseSurfaceError("doe_rsm_replicates_invalid")
     if options.center_points < 1:
@@ -507,9 +651,10 @@ def _design_run(
     replicate_index: int,
     point_type: Literal["factorial", "axial", "center"],
     coded_levels: dict[str, float],
+    coding: dict[str, RsmFactorCoding] | None = None,
 ) -> ResponseSurfaceDesignRun:
     factor_levels = {
-        factor.name: _coded_to_actual(factor, coded_levels[factor.name], alpha)
+        factor.name: _coded_to_actual(factor, coded_levels[factor.name], alpha, coding)
         for factor in factors
     }
     return ResponseSurfaceDesignRun(
@@ -523,7 +668,14 @@ def _design_run(
     )
 
 
-def _coded_to_actual(factor: ResponseSurfaceFactor, coded: float, alpha: float) -> float:
+def _coded_to_actual(
+    factor: ResponseSurfaceFactor,
+    coded: float,
+    alpha: float,
+    coding: dict[str, RsmFactorCoding] | None = None,
+) -> float:
+    if coding is not None:
+        return coded_to_actual(coding[factor.name], coded)
     midpoint = (factor.low + factor.high) / 2.0
     half_range = (factor.high - factor.low) / 2.0
     return float(midpoint + (coded / alpha) * half_range)
@@ -564,48 +716,6 @@ def _validate_analysis_inputs(
             not isfinite(value) or abs(value) > alpha + 1e-10 for value in run.coded_levels.values()
         ):
             raise ResponseSurfaceError("doe_rsm_coded_levels_invalid")
-
-
-def _quadratic_terms(
-    runs: Sequence[ResponseSurfaceAnalysisRun], factor_names: Sequence[str]
-) -> list[_Term]:
-    terms = [_Term("intercept", "Intercept", "intercept", (), np.ones(len(runs), dtype=float))]
-    for index, name in enumerate(factor_names, start=1):
-        terms.append(
-            _Term(
-                f"factor_{index}",
-                name,
-                "main_effect",
-                (name,),
-                np.asarray([run.coded_levels[name] for run in runs], dtype=float),
-            )
-        )
-    for (first_index, first), (second_index, second) in combinations(
-        enumerate(factor_names, start=1), 2
-    ):
-        terms.append(
-            _Term(
-                f"factor_{first_index}:factor_{second_index}",
-                f"{first} * {second}",
-                "interaction",
-                (first, second),
-                np.asarray(
-                    [run.coded_levels[first] * run.coded_levels[second] for run in runs],
-                    dtype=float,
-                ),
-            )
-        )
-    for index, name in enumerate(factor_names, start=1):
-        terms.append(
-            _Term(
-                f"factor_{index}^2",
-                f"{name}^2",
-                "quadratic",
-                (name,),
-                np.asarray([run.coded_levels[name] ** 2 for run in runs], dtype=float),
-            )
-        )
-    return terms
 
 
 def _fit(
@@ -694,6 +804,8 @@ def _lack_of_fit(
     df_residual: int,
     parameter_count: int,
 ) -> dict[str, Any]:
+    from app.statistics.doe_lack_of_fit import decompose_lack_of_fit
+
     grouped: dict[tuple[float, ...], list[float]] = defaultdict(list)
     for run, value in zip(runs, response, strict=True):
         grouped[tuple(run.coded_levels[name] for name in factor_names)].append(float(value))
@@ -705,34 +817,14 @@ def _lack_of_fit(
     )
     pure_error_df = len(runs) - len(grouped)
     lack_of_fit_df = len(grouped) - parameter_count
-    lack_of_fit_ss = max(0.0, sse - pure_error_ss)
-    pure_error_ms = pure_error_ss / pure_error_df if pure_error_df > 0 else None
-    lack_of_fit_ms = lack_of_fit_ss / lack_of_fit_df if lack_of_fit_df > 0 else None
-    f_statistic = (
-        lack_of_fit_ms / pure_error_ms
-        if lack_of_fit_ms is not None and pure_error_ms is not None and pure_error_ms > 0
-        else None
-    )
-    p_value = (
-        float(stats.f.sf(f_statistic, lack_of_fit_df, pure_error_df))
-        if f_statistic is not None
-        else None
-    )
     return {
-        "available": pure_error_df > 0 and lack_of_fit_df > 0,
+        **decompose_lack_of_fit(
+            sse=sse,
+            pure_error_ss=pure_error_ss,
+            pure_error_df=pure_error_df,
+            lack_of_fit_df=lack_of_fit_df,
+        ),
         "unique_design_point_count": len(grouped),
-        "pure_error": {
-            "df": pure_error_df,
-            "sum_squares": float(pure_error_ss),
-            "mean_square": pure_error_ms,
-        },
-        "lack_of_fit": {
-            "df": max(0, lack_of_fit_df),
-            "sum_squares": float(lack_of_fit_ss),
-            "mean_square": lack_of_fit_ms,
-            "f_statistic": f_statistic,
-            "p_value": p_value,
-        },
         "residual_df": df_residual,
     }
 
@@ -834,17 +926,20 @@ def _stationary_point(
     factors: Sequence[ResponseSurfaceFactor],
     *,
     alpha: float,
+    coding: dict[str, RsmFactorCoding] | None = None,
 ) -> dict[str, Any]:
     factor_names = [factor.name for factor in factors]
-    index_by_id = {term.term_id: index for index, term in enumerate(terms)}
+    coefficients_by_id = {
+        term.term_id: float(value) for term, value in zip(terms, coefficients, strict=True)
+    }
     linear = np.asarray(
-        [coefficients[index_by_id[f"factor_{index}"]] for index in range(1, len(factors) + 1)]
+        [coefficients_by_id.get(f"factor_{index}", 0.0) for index in range(1, len(factors) + 1)]
     )
     hessian = np.zeros((len(factors), len(factors)), dtype=float)
     for index in range(1, len(factors) + 1):
-        hessian[index - 1, index - 1] = 2.0 * coefficients[index_by_id[f"factor_{index}^2"]]
+        hessian[index - 1, index - 1] = 2.0 * coefficients_by_id.get(f"factor_{index}^2", 0.0)
     for first, second in combinations(range(1, len(factors) + 1), 2):
-        value = coefficients[index_by_id[f"factor_{first}:factor_{second}"]]
+        value = coefficients_by_id.get(f"factor_{first}:factor_{second}", 0.0)
         hessian[first - 1, second - 1] = value
         hessian[second - 1, first - 1] = value
     rank = int(np.linalg.matrix_rank(hessian))
@@ -852,6 +947,7 @@ def _stationary_point(
     if rank != len(factors):
         return {
             "available": False,
+            "reason": "singular_hessian",
             "classification": "indeterminate",
             "coded_coordinates": {},
             "actual_coordinates": {},
@@ -863,7 +959,7 @@ def _stationary_point(
     coded = np.linalg.solve(hessian, -linear)
     coded_coordinates = dict(zip(factor_names, (float(value) for value in coded), strict=True))
     actual_coordinates = {
-        factor.name: _coded_to_actual(factor, coded_coordinates[factor.name], alpha)
+        factor.name: _coded_to_actual(factor, coded_coordinates[factor.name], alpha, coding)
         for factor in factors
     }
     if bool(np.all(eigenvalues > 0)):
@@ -874,10 +970,11 @@ def _stationary_point(
         classification = "saddle"
     return {
         "available": True,
+        "reason": None,
         "classification": classification,
         "coded_coordinates": coded_coordinates,
         "actual_coordinates": actual_coordinates,
-        "predicted_response": _predict(coefficients, terms, coded_coordinates),
+        "predicted_response": _predict(coefficients, terms, coded_coordinates, factor_names),
         "within_axial_bounds": all(abs(value) <= alpha + 1e-10 for value in coded),
         "within_factorial_cube": all(abs(value) <= 1.0 + 1e-10 for value in coded),
         "hessian_eigenvalues": [float(value) for value in eigenvalues],
@@ -891,6 +988,7 @@ def _contour_grid(
     *,
     alpha: float,
     grid_size: int,
+    coding: dict[str, RsmFactorCoding] | None = None,
 ) -> dict[str, Any]:
     x_factor, y_factor = factors[0], factors[1]
     held = {factor.name: 0.0 for factor in factors[2:]}
@@ -905,9 +1003,11 @@ def _contour_grid(
                 {
                     "x_coded": float(x_coded),
                     "y_coded": float(y_coded),
-                    "x_actual": _coded_to_actual(x_factor, float(x_coded), alpha),
-                    "y_actual": _coded_to_actual(y_factor, float(y_coded), alpha),
-                    "predicted": _predict(coefficients, terms, coded),
+                    "x_actual": _coded_to_actual(x_factor, float(x_coded), alpha, coding),
+                    "y_actual": _coded_to_actual(y_factor, float(y_coded), alpha, coding),
+                    "predicted": _predict(
+                        coefficients, terms, coded, [factor.name for factor in factors]
+                    ),
                 }
             )
     return {
@@ -920,18 +1020,17 @@ def _contour_grid(
     }
 
 
-def _predict(coefficients: np.ndarray, terms: Sequence[_Term], coded: dict[str, float]) -> float:
-    values: list[float] = []
-    for term in terms:
-        if term.kind == "intercept":
-            values.append(1.0)
-        elif term.kind == "main_effect":
-            values.append(coded[term.factor_names[0]])
-        elif term.kind == "interaction":
-            values.append(coded[term.factor_names[0]] * coded[term.factor_names[1]])
-        else:
-            values.append(coded[term.factor_names[0]] ** 2)
-    return float(np.asarray(values) @ coefficients)
+def _predict(
+    coefficients: np.ndarray,
+    terms: Sequence[_Term],
+    coded: dict[str, float],
+    factor_names: Sequence[str],
+) -> float:
+    return predict_rsm_basis(
+        [coded[name] for name in factor_names],
+        [term.powers for term in terms],
+        coefficients,
+    )
 
 
 def _analysis_warnings(

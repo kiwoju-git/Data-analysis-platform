@@ -11,6 +11,7 @@ WorkspaceAssetType = Literal[
     "doe_analysis",
     "doe_prediction",
     "doe_analysis_report",
+    "doe_plot_view",
     "managed_report",
 ]
 

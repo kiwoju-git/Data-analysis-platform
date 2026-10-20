@@ -67,7 +67,7 @@ DOE_GENERAL_FACTORIAL_METHOD_ID: Literal["doe.general_factorial_design"] = (
     "doe.general_factorial_design"
 )
 DOE_GENERAL_FACTORIAL_METHOD_VERSION = cast(
-    Literal["0.4.0"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
+    Literal["0.4.1"], METHOD_VERSIONS[DOE_GENERAL_FACTORIAL_METHOD_ID]
 )
 
 
@@ -426,7 +426,9 @@ def _response(
         version_number=1,
         method_id=DOE_GENERAL_FACTORIAL_METHOD_ID,
         family="general_full_factorial",
-        method_version=cast(Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0"], design.method_version),
+        method_version=cast(
+            Literal["0.1.0", "0.2.0", "0.3.0", "0.4.0", "0.4.1"], design.method_version
+        ),
         name=design.name,
         status=design.status,
         created_at=design.created_at,

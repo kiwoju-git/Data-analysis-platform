@@ -39,14 +39,14 @@ not an archive validation pass.
 #### Install and Run the Linux Release
 
 Download the Linux `.tar.gz` and `SHA256SUMS` from the
-[2026.10.4 pilot prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-pilot-2026.10.4).
+[2026.10.5 DOE/RSM prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-doe-rsm-2026.10.5).
 The supported target is Ubuntu 24.04, x86_64, CPython 3.12 with `venv` and `pip`
 already installed. Python itself is not bundled. Node.js and Git are not needed.
 Verify the archive against the published checksum before extraction:
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.4-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.5-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 bash install.sh
 bash run.sh

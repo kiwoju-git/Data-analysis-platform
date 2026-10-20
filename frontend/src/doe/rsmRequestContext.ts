@@ -1,7 +1,7 @@
 import { createLatestRequestGuard } from "../latestRequest";
 import { createSourceContextGuard, type SourceContextToken } from "../sourceContextGuard";
 
-export type RsmRequestLane = "create" | "save" | "analyze" | "history" | "plot";
+export type RsmRequestLane = "create" | "save" | "analyze" | "history" | "plot" | "restore";
 interface RsmRequest<Snapshot> {
   readonly lane: RsmRequestLane;
   readonly token: symbol;
@@ -13,7 +13,7 @@ interface RsmRequest<Snapshot> {
 export function createRsmRequestContext() {
   const source = createSourceContextGuard(null);
   const lanes = Object.fromEntries(
-    (["create", "save", "analyze", "history", "plot"] as const)
+    (["create", "save", "analyze", "history", "plot", "restore"] as const)
       .map((lane) => [lane, createLatestRequestGuard()]),
   ) as Record<RsmRequestLane, ReturnType<typeof createLatestRequestGuard>>;
   return {

@@ -1310,8 +1310,18 @@ def test_response_surface_design_api_restores_legacy_v1_family_without_reinterpr
                 "randomization_seed": 17,
             },
         ).json()
-        legacy_options = dict(created["options"])
-        alpha = legacy_options.pop("alpha")
+        legacy_options = {
+            key: created["options"][key]
+            for key in (
+                "alpha_mode",
+                "factorial_replicates",
+                "axial_replicates",
+                "center_points",
+                "randomize",
+                "randomization_seed",
+            )
+        }
+        alpha = created["options"]["alpha"]
         legacy_factors = [
             {
                 "name": factor["name"],
@@ -1340,8 +1350,8 @@ def test_response_surface_design_api_restores_legacy_v1_family_without_reinterpr
         stored_options = {**legacy_options, "alpha": alpha}
         with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
             connection.execute(
-                "UPDATE experiment_designs SET family = ? WHERE design_id = ?",
-                ("central_composite_inscribed", created["design_id"]),
+                "UPDATE experiment_designs SET family = ?, method_version = ? WHERE design_id = ?",
+                ("central_composite_inscribed", "0.1.0", created["design_id"]),
             )
             connection.execute(
                 "UPDATE experiment_design_versions SET options_json = ?, design_sha256 = ? "
@@ -1360,14 +1370,25 @@ def test_response_surface_design_api_restores_legacy_v1_family_without_reinterpr
         restored_response = client.get(
             f"/api/v1/doe-designs/response-surface/{created['design_id']}"
         )
+        with sqlite3.connect(settings.workspace_root / METADATA_DB_RELATIVE_PATH) as connection:
+            persisted_options, persisted_sha = connection.execute(
+                "SELECT options_json, design_sha256 FROM experiment_design_versions "
+                "WHERE design_version_id = ?",
+                (created["design_version_id"],),
+            ).fetchone()
 
     assert restored_response.status_code == 200
     restored = restored_response.json()
     assert restored["design_schema_version"] == 1
+    assert restored["method_version"] == "0.1.0"
     assert restored["family"] == "central_composite_inscribed"
     assert restored["options"]["alpha_mode"] == "face_centered"
     assert restored["options"]["alpha"] == 1
     assert restored["design_sha256"] == legacy_sha
+    assert restored["coding"] is None
+    assert restored["runs"] == created["runs"]
+    assert json.loads(persisted_options) == stored_options
+    assert persisted_sha == legacy_sha
 
 
 def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_point(
@@ -1430,7 +1451,9 @@ def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_p
     DoeResponseSurfaceAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.response_surface"
     assert analysis["method_version"] == METHOD_VERSIONS["doe.response_surface"]
-    assert analysis["analysis_schema_version"] == 2
+    assert analysis["method_version"] == "0.4.0"
+    assert analysis["analysis_schema_version"] == 3
+    assert analysis["result"]["schema_version"] == 2
     assert analysis["response_revision_number"] == 1
     assert analysis["response_revision_sha256"] == analysis["response_sha256"]
     assert analysis["build_commit"] == "test-rsm-build"

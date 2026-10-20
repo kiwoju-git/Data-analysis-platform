@@ -821,6 +821,9 @@ browser critical path.
 - `verify pilot CSV ingestion group identity`
 - `verify pilot small-scale GP prediction and reports`
 - `verify pilot long-group analyses and reports`
+- `verify visible fractional aliases, second-order selection and reports`
+- `verify visible CCD presets, selection and saved contours`
+- `Verify actual DOE browser zoom and preserved model source`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

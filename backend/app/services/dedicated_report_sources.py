@@ -22,6 +22,7 @@ from app.api.v1.schemas.reports import (
     ReportSourceRef,
 )
 from app.core.config import Settings
+from app.core.errors import ApiError
 from app.i18n.report_text import ReportLocale
 from app.services.analysis_report_source import _safe_owned_path, load_analysis_report_source
 from app.services.dedicated_report_readers import (
@@ -46,6 +47,7 @@ from app.services.general_factorial_designs import get_general_factorial_analysi
 from app.services.regression_response_optimizer import _validate_restore_relationship
 from app.services.report_source_contract import VerifiedReportSource, report_source_sha256
 from app.services.response_optimizer import get_response_optimizer
+from app.services.rsm_plot_views import read_rsm_plot_view
 from app.storage.factorial_analysis_assets import get_asset
 from app.storage.metadata import (
     get_experiment_design_analysis_record,
@@ -315,6 +317,20 @@ def _doe_analysis(
             "source": source.model_dump(mode="json"),
         },
     }
+    if source.plot_view is not None:
+        try:
+            view = read_rsm_plot_view(
+                settings,
+                source.design_id,
+                source.analysis_id,
+                source.plot_view.plot_view_id,
+                source.plot_view.expected_sha256,
+            )
+        except ApiError as exc:
+            if exc.code == "doe_rsm_plot_view_not_found":
+                raise invalid("report_source_changed") from exc
+            raise
+        payload["plot_view"] = view.model_dump(mode="json")
     return payload, str(envelope["response_name"]), record.created_at
 
 
@@ -417,6 +433,10 @@ def _catalog_page(
             "SELECT 'doe_analysis' AS kind,analysis_id AS id,created_at,NULL AS extra "
             "FROM experiment_design_analyses WHERE method_id IN "
             "('doe.factorial_design','doe.general_factorial_design','doe.response_surface')"
+            " UNION ALL SELECT 'rsm_plot_view',a.analysis_id,v.created_at,v.asset_id "
+            "FROM experiment_design_analysis_assets v JOIN experiment_design_analyses a "
+            "ON a.analysis_id=v.analysis_id WHERE v.kind='plot_view' "
+            "AND a.method_id='doe.response_surface'"
         ),
         "doe_optimizer_result": (
             "SELECT 'rsm_optimizer' AS kind,analysis_id AS id,created_at,NULL AS extra "
@@ -455,11 +475,25 @@ def _catalog_page(
 def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> ReportSourceDescriptor:
     kind, identifier, created, extra = row["kind"], row["id"], row["created_at"], row["extra"]
     source: ReportSourceRef
-    if kind == "doe_analysis":
+    if kind in {"doe_analysis", "rsm_plot_view"}:
         source = _doe_ref(connection, identifier)
+        if kind == "rsm_plot_view":
+            asset = connection.execute(
+                "SELECT sha256 FROM experiment_design_analysis_assets "
+                "WHERE analysis_id=? AND asset_id=? AND kind='plot_view'",
+                (identifier, extra),
+            ).fetchone()
+            if asset is None:
+                raise invalid("report_source_changed")
+            source = DoeAnalysisReportSource.model_validate(
+                {
+                    **source.model_dump(),
+                    "plot_view": {"plot_view_id": extra, "expected_sha256": asset[0]},
+                }
+            )
         return _descriptor(
             source,
-            source.family,
+            source.family + (" / saved plot view" if kind == "rsm_plot_view" else ""),
             created,
             "/analysis/doe/" + {value: key for key, value in _FAMILIES.items()}[source.family],
         )
@@ -701,6 +735,18 @@ def _source_is_stale(connection: sqlite3.Connection, source: ReportSourceRef) ->
         revisions = [item.response_revision for item in source.optimizer.source_dependencies]
     elif source.kind == "doe_analysis":
         version_id, revisions = source.design_version_id, [source.response_revision]
+        if source.plot_view is not None:
+            view = connection.execute(
+                "SELECT sha256,source_analysis_sha256 FROM experiment_design_analysis_assets "
+                "WHERE analysis_id=? AND asset_id=? AND kind='plot_view'",
+                (str(source.analysis_id), str(source.plot_view.plot_view_id)),
+            ).fetchone()
+            if (
+                view is None
+                or view[0] != source.plot_view.expected_sha256
+                or view[1] != source.expected_source_sha256
+            ):
+                return True
     else:
         version_id, revisions = source.design_version_id, source.response_revisions
     version = connection.execute(
@@ -730,6 +776,14 @@ def _supported_open_target(source: ReportSourceRef, fallback: str) -> str:
         if source.family == "general_factorial":
             query["design_kind"] = "general"
         return "/analysis/doe/doe.factorial_design?" + urlencode(query)
+    if (
+        source.kind == "doe_analysis"
+        and source.family == "response_surface"
+        and source.plot_view is None
+    ):
+        return "/analysis/doe/doe.response_surface?" + urlencode(
+            {"design_id": str(source.design_id), "analysis_id": str(source.analysis_id)}
+        )
     if source.kind == "bayesian_history_revision":
         query = {"study_id": str(source.study_id)}
         if source.attachment.kind == "recommendation":

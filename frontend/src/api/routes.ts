@@ -58,6 +58,10 @@ export const apiRoutes = {
   ),
   factorialTermPreflight: (designId: string) =>
     apiUrl(`/doe-designs/${pathId(designId)}/analysis-term-preflight`),
+  rsmTermCatalog: (designId: string, preset: string) => urlWithQuery(
+    `/doe-designs/response-surface/${pathId(designId)}/term-catalog`,
+    new URLSearchParams({ term_preset: preset }),
+  ),
   workspaceAssets(
     filters: import("./types").WorkspaceAssetFilters,
     offset: number,

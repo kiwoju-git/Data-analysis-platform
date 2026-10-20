@@ -25,7 +25,7 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
         design = created.value.json()
         runs = design["runs"]
         save = page.get_by_role("button", name="반응 저장", exact=True)
-        analyze = page.get_by_role("button", name="Quadratic model 적합", exact=True)
+        analyze = page.get_by_role("button", name="지정 RSM 모형 적합", exact=True)
         response_path = (
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses"
         )

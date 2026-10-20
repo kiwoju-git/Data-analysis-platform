@@ -5,6 +5,9 @@ import { t, type TranslationKey } from "./i18n/translate";
 import { factorialNumber } from "./doe/factorialWorkflowPresentation";
 import { DoeSelectionStepMatrix } from "./doe/DoeSelectionStepMatrix";
 import { doeTermLabel } from "./doe/DoeTermSelection";
+import { copyDoeEquation } from "./doe/copyDoeEquation";
+import { compactTermLabel } from "./doe/compactTermLabel";
+import "./doe/doeAnalysisPresentation.css";
 
 const stopKeys: Record<string, TranslationKey> = {
   residual_variance_unavailable: "doe.selection.stop.residual_variance_unavailable",
@@ -18,28 +21,36 @@ const stopKeys: Record<string, TranslationKey> = {
   not_requested: "doe.selection.stop.selection_not_requested",
 };
 
-export function FactorialModelSelectionResults({ selection, model, fit, n }: {
+export function FactorialModelSelectionResults({ selection, model, fit, n, factorNames = [] }: {
   selection: DoeModelSelectionResult; model: DoeFinalModelWorkflow;
   fit: { r_squared: number; adjusted_r_squared: number | null; residual_standard_error?: number | null };
   n: number;
+  factorNames?: readonly string[];
 }) {
   const [copied, setCopied] = useState(false);
+  const [manualCopy, setManualCopy] = useState(false);
   const termLabels = new Map(selection.term_catalog?.map((term) => [term.term_id, doeTermLabel(term)]));
-  const termList = (ids: readonly string[]) => ids.map((id) => termLabels.get(id) ?? id).join(", ") || "-";
+  const compactLabels = new Map(selection.term_catalog?.map((term) => [
+    term.term_id,
+    compactTermLabel(term, model.equation.scale, factorNames) ?? doeTermLabel(term),
+  ]));
   const equation = [String(model.equation.intercept), ...model.equation.terms
     .filter((term) => term.kind !== "intercept")
     .map((term) => `${term.coefficient < 0 ? "-" : "+"} ${Math.abs(term.coefficient)} * ${term.label}`)].join(" ");
   return <>
     <section className="result-section factorial-selection-results">
       <h3>{t("doe.selection.title")}</h3>
-      <dl className="result-definition-grid">
+      <dl className="doe-selection-description">
         <div><dt>{t("doe.selection.title")}</dt><dd>{t(selection.method === "none" ? "doe.selection.none" : "doe.selection.backward")}</dd></div>
+        <div><dt>{t("doe.selection.hierarchyLabel")}</dt><dd>{t("doe.selection.hierarchy")}</dd></div>
+        <div className="doe-selection-description-wide"><dt>{t("doe.selection.stop")}</dt><dd>{stopKeys[selection.stop_reason] ? t(stopKeys[selection.stop_reason]) : selection.stop_reason}</dd></div>
+      </dl>
+      <dl className="result-definition-grid">
         {selection.method !== "none" ? <div><dt>{t("doe.selection.alpha")}</dt><dd>{selection.alpha_to_remove}</dd></div> : null}
         {([
           ["doe.selection.initial", selection.initial_term_ids.length], ["doe.selection.pooled", selection.pooled_term_ids.length],
           ["doe.selection.removed", selection.removed_term_ids.length], ["doe.selection.final", selection.final_term_ids.length],
         ] as const).map(([key, value]) => <div key={key}><dt>{t(key)}</dt><dd>{value}</dd></div>)}
-        <div><dt>{t("doe.selection.stop")}</dt><dd>{stopKeys[selection.stop_reason] ? t(stopKeys[selection.stop_reason]) : selection.stop_reason}</dd></div>
         {selection.initial_model_saturated && selection.method !== "none" ? <>
           <div><dt>{t("doe.selection.initialParameters")}</dt><dd>{selection.initial_parameter_count}</dd></div>
           <div><dt>{t("doe.selection.initialDf")}</dt><dd>{selection.initial_residual_df}</dd></div>
@@ -51,9 +62,13 @@ export function FactorialModelSelectionResults({ selection, model, fit, n }: {
         ["doe.terms.candidates", selection.candidate_term_ids ?? selection.initial_term_ids],
         ["doe.terms.userExcluded", selection.initially_excluded_term_ids ?? []],
         ["doe.terms.forced", selection.fixed_term_ids],
-        ["doe.selection.removed", [...selection.pooled_term_ids, ...selection.removed_term_ids]],
+        ["doe.selection.pooled", selection.pooled_term_ids],
+        ["doe.selection.removed", selection.removed_term_ids],
         ["doe.selection.final", selection.final_term_ids],
-      ] as const).map(([key, ids]) => <div key={key}><dt>{t(key)}</dt><dd>{termList(ids)}</dd></div>)}</dl> : null}
+      ] as const).map(([key, ids]) => <div key={key}><dt>{t(key)}</dt><dd>
+        {ids.length ? <details><summary>{ids.map((id) => compactLabels.get(id) ?? id).join(", ")}</summary>
+          <ul>{ids.map((id) => <li key={id}><strong>{compactLabels.get(id) ?? id}</strong>: {termLabels.get(id) ?? id}</li>)}</ul>
+        </details> : "-"}</dd></div>)}</dl> : null}
       {selection.initial_model_saturated && selection.method !== "none" ? <p className="notice-box notice-warning">{t("doe.selection.poolingPolicy")} {selection.pooled_term_ids.join(", ")}</p> : null}
       {selection.method !== "none" ? <p className="notice-box notice-warning">{t("doe.selection.exploratory")}</p> : null}
       {selection.method !== "none" && selection.display_step_details && selection.steps[0]?.term_statistics?.length ? <DoeSelectionStepMatrix selection={selection} multiDf={model.equation.scale === "treatment"} /> : null}
@@ -69,9 +84,12 @@ export function FactorialModelSelectionResults({ selection, model, fit, n }: {
     </section>
     <section className="result-section factorial-equation">
       <div className="panel-heading compact-heading"><h3>{t(model.equation.scale === "coded" ? "doe.equation.coded" : "doe.equation.treatment")}</h3>
-        <button type="button" className="secondary-button" onClick={() => { void navigator.clipboard.writeText(`${model.equation.response_name} = ${equation}`).then(() => setCopied(true)).catch(() => setCopied(false)); }}>
+        <button type="button" className="secondary-button" onClick={() => { void copyDoeEquation(`${model.equation.response_name} = ${equation}`).then((success) => { setCopied(success); setManualCopy(!success); }); }}>
           {t(copied ? "doe.equation.copied" : "doe.equation.copy")}</button></div>
       <p className="factorial-equation-text">{model.equation.display_equation}</p><p className="field-help">{t("doe.equation.policy")}</p>
+      {manualCopy ? <label>{t("doe.equation.manualCopy")}
+        <textarea readOnly value={`${model.equation.response_name} = ${equation}`} onFocus={(event) => event.currentTarget.select()} />
+      </label> : null}
     </section>
     <section className="result-section"><h3>{t("doe.model.summary")}</h3>
       <dl className="result-definition-grid">{[

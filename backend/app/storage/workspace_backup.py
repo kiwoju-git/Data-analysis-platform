@@ -70,7 +70,7 @@ _EXPORT_KINDS = {
     "pls_completed_prediction": "completed-prediction.json",
     "managed_source_html_report": "managed-report.html",
 }
-SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22})
+SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22, 23})
 
 
 def _check_limits(limits: BackupLimits) -> None:

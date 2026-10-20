@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 22
+SCHEMA_VERSION: Final = 23
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -256,6 +256,7 @@ class ExperimentDesignDeletionSnapshot:
     report_count: int
     analysis_assets_sha256: str
     managed_reports_sha256: str = ""
+    plot_view_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -1548,6 +1549,42 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         sql="""
         BEGIN IMMEDIATE;
         ALTER TABLE analysis_runs ADD COLUMN failure_code TEXT;
+        """,
+    ),
+    Migration(
+        version=23,
+        name="support_rsm_plot_view_assets",
+        sql="""
+        BEGIN IMMEDIATE;
+        CREATE TABLE experiment_design_analysis_assets_v23 (
+            asset_id TEXT PRIMARY KEY,
+            analysis_id TEXT NOT NULL
+                REFERENCES experiment_design_analyses(analysis_id) ON DELETE CASCADE,
+            kind TEXT NOT NULL CHECK (kind IN ('prediction', 'html_report', 'plot_view')),
+            schema_version INTEGER NOT NULL CHECK (
+                (kind IN ('prediction','plot_view') AND schema_version=1)
+                OR (kind='html_report' AND schema_version IN (1,2))
+            ),
+            locale TEXT CHECK (locale IS NULL OR locale IN ('en', 'ko')),
+            source_analysis_sha256 TEXT NOT NULL CHECK (length(source_analysis_sha256) = 64),
+            sha256 TEXT NOT NULL CHECK (length(sha256) = 64),
+            media_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 16777216),
+            content BLOB NOT NULL CHECK (typeof(content) = 'blob' AND length(content) = size_bytes),
+            created_at TEXT NOT NULL
+        );
+        INSERT INTO experiment_design_analysis_assets_v23 (
+            asset_id, analysis_id, kind, schema_version, locale, source_analysis_sha256,
+            sha256, media_type, size_bytes, content, created_at
+        ) SELECT
+            asset_id, analysis_id, kind, schema_version, locale, source_analysis_sha256,
+            sha256, media_type, size_bytes, content, created_at
+        FROM experiment_design_analysis_assets;
+        DROP TABLE experiment_design_analysis_assets;
+        ALTER TABLE experiment_design_analysis_assets_v23
+            RENAME TO experiment_design_analysis_assets;
+        CREATE INDEX idx_experiment_analysis_assets
+        ON experiment_design_analysis_assets(analysis_id, kind, created_at, asset_id);
         """,
     ),
 )
@@ -3141,7 +3178,7 @@ def list_workspace_asset_catalog_records(
         UNION ALL
 
         SELECT analysis.analysis_id, 'doe_analysis', analysis.method_id, analysis.method_id,
-            design.name || ' / ' || analysis.response_name, 'Stored factorial analysis',
+            design.name || ' / ' || analysis.response_name, 'Stored DOE analysis',
             'available', analysis.created_at, analysis.created_at, 0, NULL, NULL,
             (SELECT COUNT(*) FROM experiment_design_analysis_assets asset
                 WHERE asset.analysis_id=analysis.analysis_id), analysis.analysis_id
@@ -3149,15 +3186,19 @@ def list_workspace_asset_catalog_records(
         JOIN experiment_design_versions version
             ON version.design_version_id=analysis.design_version_id
         JOIN experiment_designs design ON design.design_id=version.design_id
-        WHERE analysis.method_id IN ('doe.factorial_design', 'doe.general_factorial_design')
+        WHERE analysis.method_id IN (
+            'doe.factorial_design', 'doe.general_factorial_design', 'doe.response_surface'
+        )
 
         UNION ALL
 
         SELECT asset.asset_id,
-            CASE WHEN asset.kind='prediction' THEN 'doe_prediction' ELSE 'doe_analysis_report' END,
+            CASE WHEN asset.kind='prediction' THEN 'doe_prediction'
+                 WHEN asset.kind='plot_view' THEN 'doe_plot_view' ELSE 'doe_analysis_report' END,
             asset.kind, analysis.method_id,
             design.name || ' / ' || analysis.response_name,
             CASE WHEN asset.kind='prediction' THEN 'Factorial prediction'
+                 WHEN asset.kind='plot_view' THEN 'Stored RSM plot view'
                  ELSE 'HTML analysis report' END,
             'available', asset.created_at, asset.created_at, 0, NULL, NULL, 0, analysis.analysis_id
         FROM experiment_design_analysis_assets asset
@@ -3222,6 +3263,7 @@ def list_workspace_asset_catalog_records(
                 "doe_analysis",
                 "doe_prediction",
                 "doe_analysis_report",
+                "doe_plot_view",
                 "managed_report",
             ),
             "models": ("regression_model",),
@@ -3482,6 +3524,7 @@ def _experiment_design_deletion_snapshot(
         response_revision_count=int(counts[3]),
         analysis_count=int(counts[4]),
         prediction_count=sum(row[1] == "prediction" for row in assets),
+        plot_view_count=sum(row[1] == "plot_view" for row in assets),
         report_count=sum(row[1] == "html_report" for row in assets) + len(reports),
         analysis_assets_sha256=hashlib.sha256(
             json.dumps(assets, separators=(",", ":")).encode("utf-8")

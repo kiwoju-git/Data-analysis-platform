@@ -2448,7 +2448,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             }
         ),
         property_consts=(("summary_type", "factorial_analysis"),),
-        property_enums=(("schema_version", frozenset({1, 2, 3})),),
+        property_enums=(("schema_version", frozenset({1, 2, 3, 4})),),
         property_any_of_refs=(
             ("model_selection", frozenset({"DoeModelSelectionResult"})),
             ("final_model", frozenset({"DoeFinalModelWorkflow"})),
@@ -2699,10 +2699,18 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("contour", "DoeResponseSurfaceContourResponse"),
         ),
         array_item_refs=(("terms", "DoeResponseSurfaceTermResponse"),),
-        property_consts=(
-            ("schema_version", 1),
-            ("summary_type", "response_surface_analysis"),
-            ("method", "full_quadratic_ordinary_least_squares"),
+        property_consts=(("summary_type", "response_surface_analysis"),),
+        property_enums=(
+            ("schema_version", frozenset({1, 2})),
+            (
+                "method",
+                frozenset(
+                    {
+                        "full_quadratic_ordinary_least_squares",
+                        "hierarchical_response_surface_ordinary_least_squares",
+                    }
+                ),
+            ),
         ),
     ),
     SchemaComponentContract(

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 24,
-  "metadata_schema_version": 22,
+  "api_contract_version": 25,
+  "metadata_schema_version": 23,
   "methods": [
     {
       "method_id": "eda.descriptive",
@@ -2302,7 +2302,7 @@
     },
     {
       "method_id": "doe.factorial_design",
-      "method_version": "0.9.0",
+      "method_version": "0.10.0",
       "module_id": "doe",
       "label_ko": "실험 계획 생성",
       "label_en": "Design of Experiments",
@@ -2327,10 +2327,11 @@
           "accepted_schemas": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "renderer_id": "dedicated_factorial",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.3.0",
           "variants": [
             {
               "variant_id": "factorial",
@@ -2373,6 +2374,14 @@
                 },
                 {
                   "section_id": "factorial_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "alias_structure",
+                  "core": false
+                },
+                {
+                  "section_id": "estimability",
                   "core": false
                 },
                 {
@@ -2431,7 +2440,7 @@
     },
     {
       "method_id": "doe.response_surface",
-      "method_version": "0.3.0",
+      "method_version": "0.4.0",
       "module_id": "doe",
       "label_ko": "반응표면법",
       "label_en": "Response Surface Method",
@@ -2454,10 +2463,11 @@
           "method_id": "doe.response_surface",
           "summary_type": "response_surface_analysis",
           "accepted_schemas": [
-            1
+            1,
+            2
           ],
           "renderer_id": "dedicated_response_surface",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.4.0",
           "variants": [
             {
               "variant_id": "response_surface",
@@ -2488,6 +2498,18 @@
                 },
                 {
                   "section_id": "surface_grid",
+                  "core": false
+                },
+                {
+                  "section_id": "conditional_plots",
+                  "core": false
+                },
+                {
+                  "section_id": "selection",
+                  "core": false
+                },
+                {
+                  "section_id": "final_basis",
                   "core": false
                 },
                 {
@@ -2595,7 +2617,7 @@
     },
     {
       "method_id": "doe.general_factorial_design",
-      "method_version": "0.4.0",
+      "method_version": "0.4.1",
       "module_id": "doe",
       "label_ko": "일반 완전요인 설계",
       "label_en": "General Full Factorial Design",
@@ -2623,7 +2645,7 @@
             3
           ],
           "renderer_id": "dedicated_general_factorial",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.2.0",
           "variants": [
             {
               "variant_id": "general_factorial",

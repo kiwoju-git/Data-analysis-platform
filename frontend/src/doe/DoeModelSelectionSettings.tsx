@@ -2,10 +2,11 @@ import { useId } from "react";
 import type { DoeModelSelectionOptions } from "../api/types/doeModelWorkflow";
 import { t } from "../i18n/translate";
 
-export function DoeModelSelectionSettings({ value, onChange, confidence, onConfidenceChange, aliased = false, selectionSupported = !aliased, disabled = false }: {
+export function DoeModelSelectionSettings({ value, onChange, confidence, onConfidenceChange, aliased = false, selectionSupported = !aliased, disabled = false, modelKind = "factorial" }: {
   value: DoeModelSelectionOptions; onChange: (value: DoeModelSelectionOptions) => void;
   confidence: number; onConfidenceChange: (value: number) => void;
   aliased?: boolean; selectionSupported?: boolean; disabled?: boolean;
+  modelKind?: "factorial" | "rsm";
 }) {
   const id = useId();
   return <fieldset className="doe-model-selection" disabled={disabled} aria-describedby={`${id}-policy`}>
@@ -27,7 +28,7 @@ export function DoeModelSelectionSettings({ value, onChange, confidence, onConfi
     </div>
     <p className="field-help" id={`${id}-policy`}>{t(!selectionSupported ? "doe.selection.aliased" : "doe.selection.hierarchy")}</p>
     {value.method === "backward_elimination" && selectionSupported ? <>
-      <p className="notice-box notice-warning">{t("doe.selection.poolingPolicy")}</p>
+      <p className="notice-box notice-warning">{t(modelKind === "rsm" ? "doe.rsm.selectionDf" : "doe.selection.poolingPolicy")}</p>
       <label className="doe-table-toggle"><input type="checkbox" checked={value.display_step_details}
         onChange={(event) => onChange({ ...value, display_step_details: event.currentTarget.checked })} />
         <span>{t("doe.selection.details")}</span></label>

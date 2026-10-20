@@ -1,46 +1,81 @@
 import { InteractiveScatterChart } from "./charts/InteractiveScatterChart";
 import { ChartFrame } from "./charts/ChartFrame";
 import { useState } from "react";
-import type { DoeFinalModelWorkflow } from "./api/types/doeModelWorkflow";
+import type { DoeFinalModelWorkflow, DoeFractionalEstimability, DoeModelSelectionResult } from "./api/types/doeModelWorkflow";
 import { ChartItemFeedback } from "./charts/ChartItemFeedback";
-import { paddedNumericRange } from "./charts/chartScale";
+import { paddedNumericRange, type NumericRange } from "./charts/chartScale";
 import { useChartItemInteraction } from "./charts/useChartItemInteraction";
 import { factorialViewFactors, isGeneralFactorial, type FactorialViewDesign, type FactorialViewFactor } from "./doe/factorialView";
 import { factorialNumber } from "./doe/factorialWorkflowPresentation";
 import { t } from "./i18n/translate";
+import { DoeCompactPlotCard, DoeCompactPlotGrid } from "./doe/DoeCompactPlotGrid";
+import { doePlotStatus, type DoePlotStatus } from "./doe/doePlotStatus";
 
 type Cell = DoeFinalModelWorkflow["factorial_plots"]["cells"][number];
 type Means = "fitted_mean" | "data_mean";
 import { factorialMarginalMean } from "./doe/factorialWorkflowPresentation";
 
-export function FactorialPlotsPanel({ model, design }: { model: DoeFinalModelWorkflow; design: FactorialViewDesign }) {
+export function FactorialPlotsPanel({ model, design, selection, estimability, responseUnit }: {
+  model: DoeFinalModelWorkflow; design: FactorialViewDesign;
+  selection?: DoeModelSelectionResult | null; estimability?: DoeFractionalEstimability | null;
+  responseUnit?: string | null;
+}) {
   const factors = factorialViewFactors(design);
-  const [means, setMeans] = useState<Means>("fitted_mean");
+  const [means, setMeans] = useState<Means | "auto">("auto");
   const [xName, setXName] = useState(factors[0].name);
   const [traceName, setTraceName] = useState(factors[1].name);
-  const [allPairs, setAllPairs] = useState(false);
+  const [allPairs, setAllPairs] = useState(true);
   const [modelPairsOnly, setModelPairsOnly] = useState(false);
+  const [sharedScale, setSharedScale] = useState(true);
+  const [pairPage, setPairPage] = useState(0);
   const [cubeNames, setCubeNames] = useState(factors.slice(0, 3).map((factor) => factor.name));
   const [fixed, setFixed] = useState<Record<string, number>>({});
   const cells = model.factorial_plots.cells;
   const xFactor = factors.find((factor) => factor.name === xName) ?? factors[0];
   const traceFactor = factors.find((factor) => factor.name === traceName && factor.name !== xFactor.name) ?? factors.find((factor) => factor.name !== xFactor.name)!;
   const candidates = allPairs ? factors.flatMap((factor, index) => factors.slice(index + 1).map((trace) => [factor, trace] as const)) : [[xFactor, traceFactor] as const];
-  const pairs = candidates.filter(([factor, trace]) => !modelPairsOnly || model.coded_coefficients.some((term) => term.kind === "interaction" && term.factor_names.includes(factor.name) && term.factor_names.includes(trace.name))).slice(0, 15);
+  const pairs = candidates.filter(([factor, trace]) => !modelPairsOnly || model.coded_coefficients.some((term) => term.kind === "interaction" && term.factor_names.includes(factor.name) && term.factor_names.includes(trace.name)));
+  function card(factor: FactorialViewFactor, trace?: FactorialViewFactor) {
+    const names = [factor.name, ...(trace ? [trace.name] : [])];
+    const termId = factors.filter((item) => names.includes(item.name)).map((item) => item.id).join(":");
+    const status = doePlotStatus(termId, selection, estimability);
+    const retained = model.coded_coefficients.some((term) => term.factor_names.length === names.length && names.every((name) => term.factor_names.includes(name)));
+    const actualMeans: Means = means === "auto" ? retained ? "fitted_mean" : "data_mean" : means;
+    return { id: termId, factor, trace, status, means: actualMeans, points: meanPoints(factor, trace, cells, actualMeans) };
+  }
+  const mainCards = factors.map((factor) => card(factor));
+  const pairCards = pairs.map(([factor, trace]) => card(factor, trace));
+  const mainRange = paddedNumericRange(mainCards.flatMap((item) => item.points.map((point) => point.y)));
+  const pairRange = paddedNumericRange(pairCards.flatMap((item) => item.points.map((point) => point.y)));
+  const page = Math.min(pairPage, Math.max(0, Math.ceil(pairCards.length / 12) - 1));
+  const visiblePairs = pairCards.slice(page * 12, (page + 1) * 12);
+  const renderCard = (item: ReturnType<typeof card>, range: NumericRange) => <FactorialMeanChart
+    key={item.id} xFactor={item.factor} traceFactor={item.trace} cells={cells} means={item.means}
+    status={item.status} yRange={sharedScale ? range : undefined} responseUnit={responseUnit} />;
   const cubeAllowed = !isGeneralFactorial(design) && !design.fractional && !design.screening;
   return <section className="result-section factorial-plots"><h3>{t("doe.plots.title")}</h3>
-    <label className="factorial-inline-select"><span>{t("doe.plots.mean")}</span><select value={means} onChange={(event) => setMeans(event.currentTarget.value as Means)}>
+    <label className="factorial-inline-select"><span>{t("doe.plots.mean")}</span><select value={means} onChange={(event) => setMeans(event.currentTarget.value as Means | "auto")}>
+      <option value="auto">{t("doe.plots.auto")}</option>
       <option value="fitted_mean">{t("doe.plots.fitted")}</option><option value="data_mean">{t("doe.plots.data")}</option>
-    </select></label><p className="field-help">{t("doe.plots.policy")}</p>
+    </select></label><p className="field-help">{t("doe.plots.autoPolicy")} {t("doe.plots.policy")}</p>
+    <p className="field-help">{model.equation.response_name}{responseUnit ? ` (${responseUnit})` : ""}</p>
+    <label className="doe-table-toggle"><input type="checkbox" checked={sharedScale} onChange={(event) => setSharedScale(event.currentTarget.checked)} /><span>{t("doe.plots.sharedScale")}</span></label>
+    <details><summary>{t("doe.alias.symbolMap")}</summary><ul>{factors.map((factor) => <li key={factor.id}><strong>{factor.symbol}</strong>: {factor.name}{factor.unit ? ` (${factor.unit})` : ""}</li>)}</ul></details>
+    {!isGeneralFactorial(design) && design.fractional ? <p className="field-help">{t("doe.plots.fractionPolicy")}</p> : null}
     {!model.factorial_plots.available ? <p className="notice-box">{t("doe.model.unavailable")}</p> : <>
-      <h4>{t("doe.plots.main")}</h4><div className="chart-grid analysis-result-grid">{factors.map((factor) => <FactorialMeanChart key={factor.name} xFactor={factor} cells={cells} means={means} />)}</div>
+      <h4>{t("doe.plots.main")}</h4><DoeCompactPlotGrid>{mainCards.map((item) => renderCard(item, mainRange))}</DoeCompactPlotGrid>
       <h4>{t("doe.plots.interaction")}</h4><div className="option-grid">
         <label><span>{t("doe.plots.x")}</span><select value={xFactor.name} onChange={(event) => setXName(event.currentTarget.value)}>{factors.map((factor) => <option key={factor.name}>{factor.name}</option>)}</select></label>
         <label><span>{t("doe.plots.trace")}</span><select value={traceFactor.name} onChange={(event) => setTraceName(event.currentTarget.value)}>{factors.filter((factor) => factor.name !== xFactor.name).map((factor) => <option key={factor.name}>{factor.name}</option>)}</select></label>
       </div><label className="doe-table-toggle"><input type="checkbox" checked={allPairs} onChange={(event) => setAllPairs(event.currentTarget.checked)} /><span>{t("doe.plots.allPairs")}</span></label>
       <label className="doe-table-toggle"><input type="checkbox" checked={modelPairsOnly} onChange={(event) => setModelPairsOnly(event.currentTarget.checked)} /><span>{t("doe.plots.modelPairs")}</span></label>
       <p className="field-help">{t("doe.plots.parallel")}</p>
-      <div className="chart-grid analysis-result-grid">{pairs.map(([factor, trace]) => <FactorialMeanChart key={`${factor.name}:${trace.name}`} xFactor={factor} traceFactor={trace} cells={cells} means={means} />)}</div>
+      <p>{t("doe.plots.pageRange", { start: pairCards.length ? page * 12 + 1 : 0, end: Math.min((page + 1) * 12, pairCards.length), total: pairCards.length })}</p>
+      {pairCards.length > 12 ? <div className="button-row">
+        <button type="button" className="secondary-button" disabled={page === 0} onClick={() => setPairPage(page - 1)}>{t("doe.plots.previous")}</button>
+        <button type="button" className="secondary-button" disabled={(page + 1) * 12 >= pairCards.length} onClick={() => setPairPage(page + 1)}>{t("doe.plots.next")}</button>
+      </div> : null}
+      <DoeCompactPlotGrid>{visiblePairs.map((item) => renderCard(item, pairRange))}</DoeCompactPlotGrid>
       <h4>{t("doe.plots.cube")}</h4>{!cubeAllowed ? <p className="field-help">{t("doe.plots.cubeUnavailable")}</p> : <>
         <div className="option-grid"><label><span>{t("doe.plots.count")}</span><select aria-label={t("doe.plots.count")} value={cubeNames.length} onChange={(event) => {
           const count = Number(event.currentTarget.value); setCubeNames([...cubeNames.slice(0, count), ...factors.filter((factor) => !cubeNames.includes(factor.name)).map((factor) => factor.name)].slice(0, count));
@@ -53,15 +88,15 @@ export function FactorialPlotsPanel({ model, design }: { model: DoeFinalModelWor
             {factor.levels.map((level) => <option value={level.code} key={level.code}>{String(level.actual)}</option>)}
           </select></label>)}</div></fieldset> : null}
         <FactorialCubeChart factors={factors.filter((factor) => cubeNames.includes(factor.name)).sort((a, b) => cubeNames.indexOf(a.name) - cubeNames.indexOf(b.name))}
-          cells={cells} means={means} fixed={Object.fromEntries(factors.filter((factor) => !cubeNames.includes(factor.name)).map((factor) => [factor.name, fixed[factor.name] ?? factor.levels[0].code]))} />
+          cells={cells} means={means === "auto" ? "fitted_mean" : means} fixed={Object.fromEntries(factors.filter((factor) => !cubeNames.includes(factor.name)).map((factor) => [factor.name, fixed[factor.name] ?? factor.levels[0].code]))} />
       </>}
     </>}
   </section>;
 }
 
-function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: FactorialViewFactor; traceFactor?: FactorialViewFactor; cells: Cell[]; means: Means }) {
+function meanPoints(xFactor: FactorialViewFactor, traceFactor: FactorialViewFactor | undefined, cells: Cell[], means: Means) {
   const traces = traceFactor?.levels ?? [{ code: 0, actual: "" }];
-  const points = traces.flatMap((trace, series) => xFactor.levels.map((level, index) => {
+  return traces.flatMap((trace, series) => xFactor.levels.map((level, index) => {
     const value = factorialMarginalMean(cells, { [xFactor.name]: level.code, ...(traceFactor ? { [traceFactor.name]: trace.code } : {}) }, means);
     const label = `${xFactor.name} = ${level.actual}${traceFactor ? `; ${traceFactor.name} = ${trace.actual}` : ""}`;
     return { id: JSON.stringify([xFactor.name, level.code, traceFactor?.name, trace.code]), seriesId: String(trace.code), x: index, y: value ?? NaN,
@@ -69,18 +104,28 @@ function FactorialMeanChart({ xFactor, traceFactor, cells, means }: { xFactor: F
       marker: series % 2 ? "diamond" as const : "circle" as const,
       details: [{ label: t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data"), value: factorialNumber(value) }] };
   }));
-  const title = `${t(traceFactor ? "doe.plots.interaction" : "doe.plots.main")}: ${xFactor.name}${traceFactor ? ` / ${traceFactor.name}` : ""}`;
+}
+
+function FactorialMeanChart({ xFactor, traceFactor, cells, means, status, yRange, responseUnit }: {
+  xFactor: FactorialViewFactor; traceFactor?: FactorialViewFactor; cells: Cell[]; means: Means;
+  status: DoePlotStatus; yRange?: NumericRange; responseUnit?: string | null;
+}) {
+  const traces = traceFactor?.levels ?? [{ code: 0, actual: "" }];
+  const points = meanPoints(xFactor, traceFactor, cells, means);
+  const title = `${xFactor.symbol}${traceFactor ? ` × ${traceFactor.symbol}` : ""}`;
   const overall = factorialMarginalMean(cells, {}, means);
+  const missingCount = points.filter((point) => !Number.isFinite(point.y)).length;
   const xRange = paddedNumericRange(points.map((point) => point.x));
-  return <div className="chart-panel"><h4>{title}</h4><InteractiveScatterChart chartId="factorial-means"
-    sourceKey={JSON.stringify([means, xFactor.name, traceFactor?.name])} title={title} description={t("doe.plots.policy")} annotations={[]}
-    points={points} emptyLabel={t("charts.noData")} xLabel={xFactor.name} xUnit={xFactor.unit}
-    yLabel={t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data")} xRange={xRange} yRange={paddedNumericRange(points.map((point) => point.y))}
-    xTicks={xFactor.levels.map((level, index) => ({ value: index, label: String(level.actual) }))}
-    series={traces.map((trace, index) => ({ id: String(trace.code), label: traceFactor ? `${traceFactor.name}: ${trace.actual}` : xFactor.name,
+  return <DoeCompactPlotCard title={title} status={status} meanLabel={t(means === "fitted_mean" ? "doe.plots.fitted" : "doe.plots.data")}>{(layout) => <InteractiveScatterChart chartId="factorial-means"
+    sourceKey={JSON.stringify([means, xFactor.name, traceFactor?.name])} title={title} description={t("doe.plots.policy")}
+    annotations={missingCount ? [t("doe.plots.missingCells", { count: missingCount })] : []}
+    layout={layout} axisTickCount={3} collapsibleDetails
+    points={points.filter((point) => Number.isFinite(point.y))} emptyLabel={t("charts.noData")} xLabel={xFactor.symbol} xUnit={xFactor.unit}
+    yLabel="Y" yUnit={responseUnit} xRange={xRange} yRange={yRange ?? paddedNumericRange(points.map((point) => point.y))}
+    xTicks={xFactor.levels.map((level, index) => ({ value: index, label: String(level.actual) })).filter((_, index, values) => index % Math.ceil(values.length / 4) === 0 || index === values.length - 1)}
+    series={traces.map((trace, index) => ({ id: String(trace.code), label: traceFactor ? `${traceFactor.symbol}: ${trace.actual}` : xFactor.symbol,
       className: `factorial-series-${index}`, pointIds: points.filter((point) => point.seriesId === String(trace.code)).map((point) => point.id), connect: "line" }))}
-    referenceLines={!traceFactor && overall !== null ? [{ label: t("doe.plots.mean"), x1: xRange.min, x2: xRange.max, y1: overall, y2: overall }] : []} />
-  </div>;
+    referenceLines={!traceFactor && overall !== null ? [{ label: t("doe.plots.mean"), x1: xRange.min, x2: xRange.max, y1: overall, y2: overall }] : []} />}</DoeCompactPlotCard>;
 }
 
 function FactorialCubeChart({ factors, cells, means, fixed }: { factors: FactorialViewFactor[]; cells: Cell[]; means: Means; fixed: Record<string, number> }) {

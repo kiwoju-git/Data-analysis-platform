@@ -47,9 +47,10 @@ export function doeTermLabel(term: Pick<DoeAnalysisTerm, "label" | "kind">): str
   return term.kind === "curvature" ? t("doe.terms.center") : term.kind === "intercept" ? t("doe.terms.intercept") : term.label;
 }
 
-export function DoeTermSelection({ state, value, onChange, disabled = false }: {
+export function DoeTermSelection({ state, value, onChange, disabled = false, autoIncludeParents = true }: {
   state: ReturnType<typeof useDoeTermCatalog>; value: DoeModelSelectionOptions;
   onChange: (options: DoeModelSelectionOptions) => void; disabled?: boolean;
+  autoIncludeParents?: boolean;
 }) {
   const id = useId();
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,6 +63,10 @@ export function DoeTermSelection({ state, value, onChange, disabled = false }: {
   function change(term: DoeAnalysisTerm, disposition: DoeTermDisposition) {
     const changes = new Map<string, DoeTermDisposition>([[term.term_id, disposition]]);
     const parents = disposition === "excluded" ? [] : term.hierarchy_dependencies.filter((parent) => dispositions.get(parent) === "excluded");
+    if (!autoIncludeParents && parents.length) {
+      setNotice(t("doe.rsm.restoreParents"));
+      return;
+    }
     parents.forEach((parent) => changes.set(parent, "candidate"));
     setNotice(parents.length ? t("doe.terms.parentsIncluded") : null);
     update(changes);

@@ -13,7 +13,7 @@ hierarchy-safe selection, explicit lack-of-fit inference availability, shared
 CCC/CCI/CCF coding, final-model-only prediction/plots/optimizer, immutable legacy
 readers, and exact-source Linux release validation. No existing workspace or
 artifact is rewritten. API 25 is reserved for the completed integrated contract;
-metadata remains 22 unless a real storage migration is required.
+metadata advances from 22 to 23 for the actual additive plot-view asset migration.
 
 Risks: response/source races; alias versus rank/saturation confusion; zero pure
 error; post-selection inference; legacy CCI coding; optimizer/model divergence;
@@ -27,14 +27,14 @@ No main push or prerelease publication until required checks succeed.
 | A response/context | Blank response uses `Number`; edits do not invalidate; history failure shares save catch | strict shared parser, source epochs/request lanes, independent history retry | 37 focused frontend tests, typecheck, targeted lint; browser pending |
 | B alias | Existing labels depend on display names | structured catalogue view, compact/full UI and HTML | focused tests passed; browser pending |
 | C fractional estimability | Historical main-only restriction confirmed | actual-matrix representative preflight, second order, backward, result4/config5 | 42 focused tests; API restore/report; browser pending |
-| D selection summary | scoped implementation planned | pending | not run |
-| E lack of fit | physical replication policy retained | pending | baseline only |
-| F compact plots | existing interaction/frame preserved | pending | not run |
-| G CCC/coding | current CCI-only transform contract reviewed | pending | baseline only |
-| H center recommendation | conditional product default specified | pending | not run |
-| I RSM terms/selection | full-quadratic-only contract reviewed | pending | baseline only |
-| J contour | official dependency API review started | pending | not run |
-| K integration/legacy/report | current ownership contracts reviewed | pending | not run |
+| D selection summary | numeric-card nowrap cause confirmed | scoped explanatory rows and clipboard fallback | unit/SSR passed; browser pending |
+| E lack of fit | zero-pure-error availability reproduced | shared decomposition and explicit reasons | unit/API/report passed |
+| F compact plots | existing interaction/frame preserved | compact shared-scale/status/pagination | unit/SSR passed; browser pending |
+| G CCC/coding | current CCI-only transform contract reviewed | shared explicit transform and optimizer | native unit/API and legacy literal hash passed |
+| H center recommendation | conditional product default specified | recommended/manual UI and metadata | unit/API passed |
+| I RSM terms/selection | full-quadratic-only contract reviewed | four exponent presets/dependencies/final basis | unit/API/reference passed |
+| J contour | official ContourPy API checked | serial geometry, source-locked views, static report | geometry/API/storage/SSR passed; browser pending |
+| K integration/legacy/report | current ownership contracts reviewed | migration23/owned views/legacy dispatch | full checks in progress |
 | L CI/main/release | no publication yet | pending | not run |
 
 ## Baseline Checks (Windows, 2026-10-20)
@@ -161,9 +161,9 @@ Both dedicated HTML paths include alias/representative information.
   checks passed. Existing Starlette deprecation warnings remain.
 - Browser and exact archive are not verified; no main push/release.
 
-## D/E In Progress
+## D/E/F Source Implementation and Verification
 
-Explanatory summary wrapping and clipboard fallback are being implemented
+Explanatory summary wrapping and clipboard fallback were implemented
 without changing global numeric cards. Actual browser bounds/zoom checks remain
 unexecuted.
 
@@ -171,3 +171,176 @@ The new lack-of-fit regression test was run against the previous calculation:
 **4 failed, 3 passed**. One failure directly reproduces `available=True` with
 zero pure-error variance; the other three require the new explicit reason
 metadata. This is calculation-path evidence, not a browser reproduction.
+
+`doe_lack_of_fit` now separates decomposition from F/p availability, records
+physical-settings/block grouping, and rejects material negative decomposition.
+Full/general factorial and RSM share this small calculation boundary. Only
+roundoff-scale negative SS is clamped. A first green attempt still failed four
+identity checks because a NumPy bool escaped; that was converted to Python bool.
+
+- LoF, center/reference, RSM/general/fraction API batch: **40 passed**.
+- LoF API, factorial selection API, managed report API: **22 passed**.
+- API contract general/RSM subset: **5 passed, 229 deselected**.
+- Frontend full suite after D/F, before G/H/I: **103 files / 880 tests passed**.
+- Focused typecheck/mypy passed at that stage, not a final full-project check.
+
+The literal no-center fixture has N16/g8/p4, residual DF12, pure-error DF8,
+LoF DF4, SSPE0.16, SSLoF64 and F800. Zero PE variance produces no F/p. The
+API test exports visible reason text and reopens stored results.
+
+DOE-only compact layouts use 280x210 units, 1040/780/520 container breakpoints,
+shared scales by default and explicit 12-pair pagination. Status comes from
+committed selection/estimability, not a p-value or draft. All pairs remain
+reachable; missing observed cells are not filled. Expansion uses the same data.
+Independent source review found two real factor-ID/name mapping problems in
+compact labels/general HTML; both were corrected. Actual browser overlap,
+zoom, focus and pagination remain unverified.
+
+## G/H Coding and Center Recommendations
+
+`rsm_coding` is shared by new design generation, result coding, stationary/grid
+actual conversion and optimizer actual-to-coded evaluation. CCC input bounds
+are cube levels; CCI bounds are axial; CCF uses alpha1. k4 low10/high20 gives
+CCC cube10/20/axial5/25; CCI cube12.5/17.5/axial10/20; CCF10/20. Explicit
+unequal-repeat rotatable alpha uses the factorial/axial repeat ratio. Old
+schema1/2 canonical payloads do not acquire new fields.
+
+Recommended centers apply only to full cube, one block, equal single repeats.
+Manual counts are not overwritten on factor edits. CCC requires acknowledgment
+of its previewed axial range. An independent review caught collapsed narrow
+range labels in the preview. It now uses interval formatting plus full-precision
+endpoint disclosures.
+
+- Coding/optimizer unit batch: **19 passed**.
+- First expanded CCD API batch: **30 passed, 3 failed** because the synthetic
+  center-only-noise fixture correctly triggered an existing severe normality
+  acknowledgment requirement. The fixture now explicitly acknowledges it.
+- CCD create/save/analyze/restore/optimizer plus LoF API: **8 passed**.
+- Independent read-only probe compared pre-expansion `fecaa16` generation with
+  current code: five legacy CCI/CCF configurations had identical hashes and
+  actual run levels. Three literal baseline hashes are now regression fixtures.
+- Narrow-range SSR first run: **2 failed, 7 passed**. The test expected more
+  displayed digits than the interval formatter promises; exact endpoint
+  disclosure and numeric checks were added. This is not a browser result.
+
+## I Final-Model Implementation (Checks in Progress)
+
+`rsm_model_basis` defines exponent vectors in canonical factor order.
+`rsm_model_workflow` connects them to the existing selection engine with explicit
+square/main and interaction/main dependencies. Factorial fallback rules are
+preserved. RSM saturated backward is rejected, never pooled. Final terms drive
+fit, diagnostics, LoF, PRESS, stationary point, grid and optimizer. Singular
+Hessians have no invented optimum. Exploratory-inference warnings persist
+through downstream optimization and HTML.
+
+Service reads dispatch supported method/envelope/result/config versions and
+verify final basis/terms/coefficients/coding/config. UI options invalidate pending
+analysis completions; historical response revision switching is guarded.
+The same completed revision may be analyzed with different presets. No old
+result/model is rewritten. Reports render saved selection and basis.
+
+- Workflow/CCD/legacy engine/RSM initial batch: **42 passed**.
+- Expanded coding/LoF/workflow/legacy engine batch: **55 passed**.
+- Later API/report batch: **24 passed, 1 failed** due to a new test omitting the
+  required randomization seed. Test input corrected; rerun pending.
+- Independent agent compared old/new selection engines on a full-factorial
+  fixture: entire none/backward selection payloads matched. No broader numeric
+  equivalence is inferred from that probe.
+- Latest frontend typecheck passed; targeted mypy found one ndarray/Sequence
+  annotation mismatch, corrected, rerun pending.
+
+## J Stored Contour Views and Integration
+
+ContourPy1.3.2 uses serial Separate lines and OuterOffset filled polygons.
+The server stores numeric paths/rings with holes, levels and `z[y][x]` orientation;
+React and inline SVG reports render that same geometry. Constant surfaces have
+one band, not invented contours. Actual/coded axes use stored factor transforms.
+Convex-hull membership uses the full coded design, including the held dimensions;
+slice clipping and projected-vs-on-slice points disclose extrapolation.
+
+`plot-view` evaluates only the verified final exponent basis. It never fits,
+selects terms, reads a raw dataset or runs CV. Explicit save validates the viewed
+hash and records an immutable owner/source-locked asset. The listing returns
+small descriptors; selected geometry is fetched separately rather than loading
+every stored grid into browser state. New results retain a default contour and
+all conditional main/interaction bundles. Reports use stored bundles, not live
+UI pagination or new calculations.
+
+Migration23 expands the existing DOE asset kind constraint to `plot_view`.
+Existing BLOB bytes and hashes are preserved. It adds no new general report
+table. View/report dependencies participate in atomic insert, delete preflight,
+owner cascade, asset catalog and offline backup. Code rollback to metadata22
+cannot simply open a migrated23 workspace; use a verified pre-migration backup
+at a new path, never delete or overwrite the current workspace.
+
+- Geometry: **5 passed** (plane, saddle, annular holes, constant, axis swap,
+  full-dimensional hull slice, invalid levels).
+- Plot view/model/storage API batch: **23 passed**; verifies saved custom view,
+  checksum preservation and export with fit/basis-evaluation/geometry disabled.
+- Migration/storage independent suite: **19 passed** before the subsequent
+  descriptor-list refinement; rerun tracked separately.
+- New frontend snapshot/contour SSR: **48 passed**, typecheck and file lint passed.
+- Whole frontend at that point: **925 passed / 7 failed**. Five failures were
+  obsolete guidance/label/runtime fixtures; two were lazy-import timeouts during
+  concurrent backend verification. Changes and reruns are recorded separately,
+  not treated as an initial clean pass.
+- Full backend mypy: **216 source files passed**; Ruff backend passed.
+- Windows reference suite: **12 passed** with NumPy2.2.6/SciPy1.15.3/sklearn1.7.2.
+- Native Linux dependency run39443793234 failed the input-declaration guard.
+  Only the four missing `.in` declarations were committed, without bypassing it.
+  Run39445525189 then passed all four Ubuntu24.04 Python3.11/3.12 runtime/dev
+  lock generation, exact wheel installation, `pip check` and contour smoke jobs.
+  Product jobs and release-ready were skipped in this tooling-only run.
+
+`rsm_context`, `doe_rsm_completion` and the existing factorial journey are wired
+to actual UI suites. Local browser execution was not completed. Final native
+product CI, exact archive verification, main and Release remain outstanding.
+
+## Integration Checkpoint (2026-10-21, Windows)
+
+These are source-checkout results, not a published archive receipt:
+
+- Frontend full run with one Vitest worker: **107 files, 932 tests passed**.
+  The earlier five obsolete fixtures were updated to the implemented contract;
+  no lazy-import timeout was increased. The later restore tests are additional.
+- Frontend typecheck, production build, localization coverage (2870 source
+  strings / 4268 keys), capability generation check and backend Ruff passed.
+  Build retains the existing large initial-chunk warning.
+- Full mypy: **216 source files passed**.
+- Whole Windows unit run: **2489 passed, 25 failed, 9 skipped** (3204.70s).
+  This run overlapped implementation and collected older fixture expectations.
+  Failures were traced to explicit method/schema expectations, incoherent
+  synthetic optimizer DF, generated capability sync and newly connected E2E
+  stage/document contracts. The 25 failed nodes' current equivalents plus three
+  related protection cases subsequently passed (**28 passed**, 60.13s).
+  This initial whole run is not recorded as a clean pass; frozen-source native
+  CI is still required. Nine skips were six Windows symlink-privilege cases
+  and three Linux/POSIX-only cases. Local Windows build was 19045, not a
+  Windows 11 device verification.
+- OpenAPI/frontend/document contract rerun: **233 passed**.
+- Full frontend lint: **0 errors, 12 Fast Refresh export warnings**.
+- Plot/source/migration/suite-partition batch: **116 passed**.
+- Updated suite partition and runtime health: **76 passed**.
+- Independent contour/asset/security/release-validator batch: **206 passed**.
+  A red test first demonstrated that stored view design version/hash were not
+  checked against the exact analysis. The reader now checks both. A deleted
+  selected view returns a managed-source conflict, while historical HTML remains
+  downloadable byte-for-byte. Direct missing-view lookup still returns 404.
+- Curve reports now disclose stored hull flags in their full point table rather
+  than promising hatching that exists only in the contour representation.
+- Deferred restore tests first reproduced a stuck busy state after a pending
+  restore was superseded by an empty/invalid route. Intent changes now clear
+  owned busy state while invalidating late completions. Saved-view selection
+  waits for verified source metadata, independently of the list response.
+- An exploratory Ruff command over all `scripts/` also reported two pre-existing
+  issues outside this task (`render_stat_dependency_record.py` unused import and
+  `validate_normality_reference.py` import placement). The repository's required
+  backend Ruff scope passes; these unrelated files were not rewritten.
+
+New native browser stages use synthetic data only: regular-fraction KO/EN,
+CCD/term presets/backward/saved custom views, and real Chromium tab zoom at
+100/125/150 percent. Archive verification requires their structured successful
+receipts, exact source IDs/hashes, source preservation and no analysis POST from
+view/resize/zoom changes. Defining or unit-testing those receipts is not evidence
+that the browser journey itself ran. Final native CI and exact-archive evidence
+must accompany the release; a failed required gate prohibits publication.

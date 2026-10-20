@@ -25,10 +25,10 @@ import { t } from "./i18n/translate";
 import { useI18n } from "./i18n/LocaleProvider";
 
 type AssetDeletionNoticeData =
-  | { kind: "factorial_analysis"; predictionCount: number; reportCount: number }
+  | { kind: "factorial_analysis"; predictionCount: number; reportCount: number; plotViewCount: number }
   | { kind: "factorial_asset" }
   | { kind: "analysis_run"; fileCount: number }
-  | { kind: "doe_design"; analysisCount: number; predictionCount: number; reportCount: number; versionCount: number; runCount: number; revisionCount: number }
+  | { kind: "doe_design"; analysisCount: number; predictionCount: number; reportCount: number; plotViewCount: number; versionCount: number; runCount: number; revisionCount: number }
   | { kind: "bayesian_study"; trialCount: number };
 
 interface PendingAssetDeletion {
@@ -298,7 +298,7 @@ export function UnifiedAssetCatalogPanel({
                             <button className="primary-button" onClick={() => pushAppLocation(item.open_target.path)} type="button">{isFactorialAnalysisAsset(item.asset_type) ? t("doe.report.analysis") : item.open_target.label}</button>
                             {isManagedDeletionType(item.asset_type) ? <button className="danger-button" disabled={deleting} onClick={() => void requestDeleteSelected()} type="button">{deleting ? "확인 중" : "삭제 영향 확인"}</button> : null}
                           </div>
-                          {isFactorialAnalysisAsset(item.asset_type) ? <FactorialAnalysisAssetsPanel designId={factorialAssetSource(item).designId} analysisId={factorialAssetSource(item).analysisId} /> : null}
+                          {isFactorialAnalysisAsset(item.asset_type) && item.method_id !== "doe.response_surface" ? <FactorialAnalysisAssetsPanel designId={factorialAssetSource(item).designId} analysisId={factorialAssetSource(item).analysisId} /> : null}
                           {item.asset_type === "dataset_version" || item.asset_type === "regression_model" ? <p className="compact-note">이름, 메모, 고정과 파일 정리 작업은 해당 자산 종류 탭의 선택 상세에서 변경합니다.</p> : null}
                           <details><summary>기술 정보</summary><dl className="asset-detail-grid"><div><dt>Asset ID</dt><dd className="technical-value">{item.asset_id}</dd></div><div><dt>Subtype</dt><dd>{item.subtype}</dd></div></dl></details>
                         </section>
@@ -339,7 +339,7 @@ export function AssetDeletionNotice({ notice }: { notice: AssetDeletionNoticeDat
     return <p>{t("assets.delete.studySummary", { trials: notice.trialCount })}</p>;
   }
   const counts = `${t("doe.report.analysis")}: ${notice.kind === "factorial_analysis" ? 1 : notice.analysisCount}; ${t("doe.report.prediction")}: ${notice.predictionCount}; ${t("doe.report.html")}: ${notice.reportCount}`;
-  return <p>{counts}{notice.kind === "doe_design" ? `. ${t("assets.delete.designSummary", {
+  return <p>{counts}; {t("rsm.plot.savedViews")}: {notice.plotViewCount}{notice.kind === "doe_design" ? `. ${t("assets.delete.designSummary", {
     versions: notice.versionCount, runs: notice.runCount,
     revisions: notice.revisionCount, analyses: notice.analysisCount,
   })}` : ""}</p>;
@@ -351,7 +351,7 @@ async function prepareDeletion(item: WorkspaceAssetDescriptor): Promise<PendingA
     if (item.asset_type === "doe_analysis") {
       const analysis = await preflightFactorialAnalysisDeletion(source.designId, source.analysisId);
       return { item, manifestSha256: analysis.deletion_manifest_sha256,
-        notice: { kind: "factorial_analysis", predictionCount: analysis.prediction_count, reportCount: analysis.report_count },
+        notice: { kind: "factorial_analysis", predictionCount: analysis.prediction_count, reportCount: analysis.report_count, plotViewCount: analysis.plot_view_count ?? 0 },
         factorial: { ...source, analysis } };
     }
     const asset = await preflightFactorialAssetDeletion(source.designId, source.analysisId, item.asset_id);
@@ -367,6 +367,7 @@ async function prepareDeletion(item: WorkspaceAssetDescriptor): Promise<PendingA
     return { item, manifestSha256: preflight.deletion_manifest_sha256, notice: {
       kind: "doe_design", analysisCount: preflight.counts.analysis_count,
       predictionCount: preflight.counts.prediction_count ?? 0, reportCount: preflight.counts.report_count ?? 0,
+      plotViewCount: preflight.counts.plot_view_count ?? 0,
       versionCount: preflight.counts.version_count, runCount: preflight.counts.run_count,
       revisionCount: preflight.counts.response_revision_count,
     } };
@@ -396,6 +397,7 @@ function assetTypeLabel(type: WorkspaceAssetDescriptor["asset_type"], subtype: s
   if (type === "doe_analysis") return t("doe.report.analysis");
   if (type === "doe_prediction") return t("doe.report.prediction");
   if (type === "doe_analysis_report") return t("doe.report.html");
+  if (type === "doe_plot_view") return t("rsm.plot.savedViews");
   if (type === "dataset_version") return systemText("데이터셋");
   if (type === "analysis_run") return subtype.includes("predict") ? systemText("예측 결과") : systemText("분석 결과");
   if (type === "regression_model") return systemText("회귀모델");
@@ -411,7 +413,7 @@ function isManagedDeletionType(type: WorkspaceAssetDescriptor["asset_type"]): bo
 }
 
 function isFactorialAnalysisAsset(type: WorkspaceAssetDescriptor["asset_type"]): boolean {
-  return type === "doe_analysis" || type === "doe_prediction" || type === "doe_analysis_report";
+  return type === "doe_analysis" || type === "doe_prediction" || type === "doe_analysis_report" || type === "doe_plot_view";
 }
 function factorialAssetSource(item: WorkspaceAssetDescriptor): { designId: string; analysisId: string } {
   const query = new URLSearchParams(item.open_target.path.split("?")[1] ?? "");

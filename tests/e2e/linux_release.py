@@ -183,6 +183,30 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
         )
     result["network_guard_checks"] = verify_network_guards(base)
     result["pilot_receipt"] = run_pilot_initial(base, output / "pilot", legacy_seed)
+    from playwright.sync_api import sync_playwright
+
+    from doe_rsm_completion import verify_doe_rsm_completion
+    from doe_browser_zoom import verify_doe_browser_zoom
+    from fractional_completion import verify_fractional_completion
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            result["fractional_receipt"] = verify_fractional_completion(
+                browser, base, output / "fractional"
+            )
+            result["doe_rsm_receipt"] = verify_doe_rsm_completion(
+                browser, base, output / "doe-rsm"
+            )
+        finally:
+            browser.close()
+        result["doe_zoom_receipt"] = verify_doe_browser_zoom(
+            playwright,
+            base,
+            output,
+            result["doe_rsm_receipt"]["design_id"],
+            result["doe_rsm_receipt"]["analysis_id"],
+        )
     result["checks"] = [
         "visible paste and parsing confirmation",
         "visible PCA/PLS/GPR execution",

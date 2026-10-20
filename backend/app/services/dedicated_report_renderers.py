@@ -6,7 +6,9 @@ from collections.abc import Mapping, Sequence
 from html import escape
 from typing import Any
 
+from app.api.v1.schemas.rsm_plots import RsmPlotBundle
 from app.i18n.report_text import ReportLocale
+from app.services.doe_lack_of_fit_report import lack_of_fit_report_notice
 from app.services.inference_report_primitives import missing, paragraph, section, text
 from app.services.report_contract import (
     ReportBody,
@@ -15,6 +17,7 @@ from app.services.report_contract import (
     ReportSectionDefinition,
     ReportVariantDefinition,
 )
+from app.services.rsm_plot_report import rsm_plot_report
 from app.services.stored_report_primitives import (
     report_grid,
     report_number,
@@ -65,7 +68,7 @@ DEFINITIONS = {
             "warnings",
         ),
         (1, 2, 3, 4),
-        "1.2.0",
+        "1.3.0",
     ),
     "general_factorial": _definition(
         "doe.general_factorial_design",
@@ -81,14 +84,24 @@ DEFINITIONS = {
             "factorial_plots",
             "warnings",
         ),
+        renderer_version="1.2.0",
     ),
     "response_surface": _definition(
         "doe.response_surface",
         "response_surface_analysis",
         "response_surface",
         ("source", "model_summary", "terms", "anova"),
-        ("diagnostics", "stationary_point", "surface_grid", "warnings"),
-        (1,),
+        (
+            "diagnostics",
+            "stationary_point",
+            "surface_grid",
+            "conditional_plots",
+            "selection",
+            "final_basis",
+            "warnings",
+        ),
+        (1, 2),
+        "1.4.0",
     ),
     "response_optimizer": _definition(
         "doe.response_optimizer",
@@ -186,6 +199,25 @@ def _warning_section(
         {
             "warnings": warnings,
             "source_warnings": source_warnings,
+            **(
+                {
+                    "post_selection_inference": text(
+                        locale,
+                        "모형 선택 후의 추론은 탐색적입니다. "
+                        "사전에 고정한 모형과 같은 추론 보장을 의미하지 않습니다.",
+                        "Inference after model selection is exploratory, "
+                        "not equivalent to inference for a prespecified model.",
+                    ),
+                }
+                if any(
+                    code in warnings
+                    for code in (
+                        "doe_rsm_post_selection_inference_exploratory",
+                        "response_optimizer_post_selection_inference_exploratory",
+                    )
+                )
+                else {}
+            ),
             "scope": text(
                 locale,
                 "저장된 결과만 표시하며 분석, 예측, 탐색을 다시 실행하지 않았습니다.",
@@ -382,11 +414,41 @@ def render_doe_analysis_body(
             locale,
         ),
         _saved("terms", "모형 항과 계수", "Model terms and coefficients", terms, locale),
-        _saved("anova", "분산분석", "ANOVA", result.get("anova"), locale),
+        section(
+            "anova",
+            "분산분석",
+            "ANOVA",
+            stored_table(result["anova"], locale)
+            + lack_of_fit_report_notice(result["anova"].get("lack_of_fit", {}), locale),
+            locale,
+        ),
         _diagnostics(result, locale),
         _warning_section(payload, result, locale),
     ]
     if family == "response_surface":
+        sections += [
+            _saved(
+                "selection",
+                "모형 선택 단계",
+                "Model-selection steps",
+                result.get("model_selection"),
+                locale,
+            ),
+            _saved(
+                "final_basis",
+                "최종 지수 모형과 예측 진단",
+                "Final exponent basis and prediction diagnostics",
+                {
+                    "term_preset": result.get("term_preset"),
+                    "final_basis": result.get("final_basis"),
+                    "press": result.get("press"),
+                    "predicted_r_squared": result.get("predicted_r_squared"),
+                }
+                if result.get("final_basis")
+                else None,
+                locale,
+            ),
+        ]
         sections.append(
             _saved(
                 "stationary_point",
@@ -397,7 +459,30 @@ def render_doe_analysis_body(
             )
         )
         contour = result.get("contour")
-        if isinstance(contour, dict) and isinstance(contour.get("points"), list):
+        selected_view = payload.get("plot_view")
+        stored_bundle = (
+            selected_view["view"]["bundle"]
+            if selected_view is not None
+            else result.get("plot_bundle")
+        )
+        if stored_bundle is not None:
+            markup = (
+                "<p>"
+                + escape(
+                    text(
+                        locale,
+                        "선택하여 저장한 custom view"
+                        if selected_view
+                        else "분석에 저장된 기본 view",
+                        "Selected saved custom view"
+                        if selected_view
+                        else "Default view stored with analysis",
+                    )
+                )
+                + "</p>"
+                + rsm_plot_report(RsmPlotBundle.model_validate(stored_bundle), locale)
+            )
+        elif isinstance(contour, dict) and isinstance(contour.get("points"), list):
             response = result.get("response", {})
             label = str(response.get("name", "Response")) + (
                 f" ({response['unit']})" if response.get("unit") else ""
@@ -432,6 +517,20 @@ def render_doe_analysis_body(
                 "surface_grid", "저장 반응표면 격자", "Stored response-surface grid", markup, locale
             )
         )
+        overview = result.get("plot_overview")
+        if isinstance(overview, list) and overview:
+            sections.append(
+                section(
+                    "conditional_plots",
+                    "저장된 조건부 주효과와 교호작용",
+                    "Stored conditional main-effect and interaction plots",
+                    "".join(
+                        rsm_plot_report(RsmPlotBundle.model_validate(item), locale)
+                        for item in overview
+                    ),
+                    locale,
+                )
+            )
     else:
         sections += [
             _saved(

@@ -10,6 +10,7 @@ export interface AxisSpec {
   range: NumericRange;
   ticks?: ReadonlyArray<{ value: number; label: string }>;
   formatTick?: ChartTickFormatter;
+  tickCount?: number;
 }
 
 export function ChartAxes({ x, y, layout, grid = true }: {
@@ -21,7 +22,7 @@ export function ChartAxes({ x, y, layout, grid = true }: {
   const yAt = (value: number) => scaleChartValue(value, y.range, plot.top + plot.height, plot.top);
   const xTitle = axisTitle(x.label, x.unit);
   const yTitle = axisTitle(y.label, y.unit);
-  const xPlan = numericAxisPlan(x.range); const yPlan = numericAxisPlan(y.range);
+  const xPlan = numericAxisPlan(x.range, x.tickCount); const yPlan = numericAxisPlan(y.range, y.tickCount);
   const xOffset = x.ticks || x.formatTick ? 0 : xPlan.offset;
   const yOffset = y.ticks || y.formatTick ? 0 : yPlan.offset;
   const xTicks = (x.ticks ?? formattedAxisTicks(xPlan, locale, x.formatTick)).filter((tick) => Number.isFinite(tick.value) && tick.value >= x.range.min && tick.value <= x.range.max);
@@ -44,7 +45,7 @@ export function ChartAxes({ x, y, layout, grid = true }: {
     <line className="chart-axis" x1={plot.left} x2={plot.left} y1={plot.top} y2={plot.top + plot.height} />
     <line className="chart-axis" x1={plot.left} x2={plot.left + plot.width} y1={plot.top + plot.height} y2={plot.top + plot.height} />
     <text className="chart-visible-axis-title" textAnchor="middle" x={plot.left + plot.width / 2} y={plot.top + plot.height + 39}>
-      <title>{xTitle}</title>{wrapAxisTitle(xTitle, 48).map((line, index) => <tspan key={index} x={plot.left + plot.width / 2} dy={index === 0 ? 0 : 14}>{line}</tspan>)}
+      <title>{xTitle}</title>{wrapAxisTitle(xTitle, Math.min(48, Math.floor(plot.width / 6))).map((line, index) => <tspan key={index} x={plot.left + plot.width / 2} dy={index === 0 ? 0 : 14}>{line}</tspan>)}
     </text>
     <text className="chart-visible-axis-title" textAnchor="middle" transform={`translate(16 ${plot.top + plot.height / 2}) rotate(-90)`}>
       <title>{yTitle}</title>{wrapAxisTitle(yTitle, Math.floor(plot.height / 6)).map((line, index) => <tspan key={index} x={0} dy={index === 0 ? 0 : 14}>{line}</tspan>)}

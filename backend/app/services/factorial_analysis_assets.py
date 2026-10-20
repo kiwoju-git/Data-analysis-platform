@@ -22,7 +22,20 @@ from app.services.factorial_prediction import (
     workflow_error,
 )
 from app.storage import factorial_analysis_assets as storage
-from app.storage.metadata import WorkspaceAssetStorageConflict
+from app.storage.metadata import (
+    WorkspaceAssetStorageConflict,
+    get_experiment_design_analysis_record,
+)
+
+
+def _asset_owner_sha(settings: Settings, design_id: UUID, analysis_id: UUID) -> str:
+    record = get_experiment_design_analysis_record(settings.workspace_root, str(analysis_id))
+    if record is not None and record.method_id == "doe.response_surface":
+        from app.services.doe_response_surface_analysis import get_response_surface_analysis
+
+        get_response_surface_analysis(settings, design_id, analysis_id)
+        return record.result_sha256
+    return load_factorial_model_source(settings, design_id, analysis_id, require_model=False).sha256
 
 
 def create_factorial_html_report(
@@ -58,7 +71,7 @@ def create_factorial_html_report(
 def list_factorial_analysis_assets(
     settings: Settings, design_id: UUID, analysis_id: UUID, kind: storage.AssetKind | None = None
 ) -> DoeAnalysisAssetList:
-    load_factorial_model_source(settings, design_id, analysis_id, require_model=False)
+    _asset_owner_sha(settings, design_id, analysis_id)
     return DoeAnalysisAssetList(
         analysis_id=analysis_id,
         items=[
@@ -71,7 +84,7 @@ def list_factorial_analysis_assets(
 def download_factorial_analysis_asset(
     settings: Settings, design_id: UUID, analysis_id: UUID, asset_id: UUID
 ) -> tuple[DoeAnalysisAssetDescriptor, bytes]:
-    source = load_factorial_model_source(settings, design_id, analysis_id, require_model=False)
+    source_sha = _asset_owner_sha(settings, design_id, analysis_id)
     try:
         stored = storage.get_asset(settings.workspace_root, str(analysis_id), str(asset_id))
     except WorkspaceAssetStorageConflict as exc:
@@ -79,7 +92,7 @@ def download_factorial_analysis_asset(
     if stored is None:
         raise workflow_error("doe_analysis_asset_not_found", 404)
     record, content = stored
-    if record.source_analysis_sha256 != source.sha256:
+    if record.source_analysis_sha256 != source_sha:
         raise workflow_error("doe_factorial_prediction_source_changed")
     return DoeAnalysisAssetDescriptor.model_validate(asdict(record)), content
 
@@ -118,7 +131,7 @@ def delete_factorial_analysis_asset(
 def factorial_analysis_deletion_preflight(
     settings: Settings, design_id: UUID, analysis_id: UUID
 ) -> DoeAnalysisDeletionPreflight:
-    load_factorial_model_source(settings, design_id, analysis_id, require_model=False)
+    _asset_owner_sha(settings, design_id, analysis_id)
     snapshot = storage.analysis_deletion_snapshot(settings.workspace_root, str(analysis_id))
     if snapshot is None:
         raise workflow_error("doe_factorial_analysis_not_found", 404)
@@ -127,6 +140,7 @@ def factorial_analysis_deletion_preflight(
         deletion_manifest_sha256=snapshot[0],
         prediction_count=snapshot[1],
         report_count=snapshot[2],
+        plot_view_count=snapshot[3],
     )
 
 

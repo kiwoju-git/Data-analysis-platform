@@ -7,7 +7,7 @@ or the executed [journey matrix](remediation_journey_matrix.md).
 
 ## Pilot Follow-up Output Versions
 
-The current pilot contract is API **24**, metadata **22**. Full group identity
+The current DOE expansion contract is API **25**, metadata **23**. Full group identity
 readers accept equal-variance schemas 1/2/3 and two-sample-t/Kruskal-Wallis
 schemas 1/2. New generic reports identify renderer **2.1.0**; completed/stored
 prediction and dedicated workflow reports identify **1.1.0**. These renderer
@@ -35,7 +35,7 @@ snapshot view is not a claim that JSON alone is a full report.
 | --- | --- | --- |
 | Completed PLS/GP prediction | Exact request rows, response/model/hash, all saved means and available latent/observation intervals, warnings | PLS has point predictions only; unsaved browser-only JSON cannot become a server source |
 | Legacy dataset/pasted regression prediction | Full saved prediction rows, actual intervals/warnings; pasted inputs | Dataset-prediction legacy inputs were not stored, so that report is summary; no raw-data reconstruction |
-| Factorial/general/RSM analysis | Source design/revision, config, model/ANOVA/coefficient/diagnostic tables, stored diagnostics and RSM grid SVG | Fitted-cell/group-mean values remain full tables; no new marginal/cube calculation or contour regeneration |
+| Factorial/general/RSM analysis | Source design/revision, config, model/ANOVA/coefficient/diagnostic tables, estimability/selection/LoF, stored diagnostics | RSM renderer 1.4.0 additionally preserves stored conditional curves and contour geometry; legacy missing sections remain unavailable |
 | RSM/regression optimizer | Exact model dependencies/objectives/constraints, saved optimum/predictions/desirability/profiles, confirmation warning | Profiles preserved as saved tables; no new optimum search |
 | LHS design/revision | Complete saved design/factor bounds/seed/settings/quality, explicit response revisions | Empty response list is design-only, not implicit latest responses |
 | BO history/recommendation/batch revision | Exact study/history observations and optional exact saved pending recommendation/batch, uncertainty/acquisition, history SVG | No live-trial overlay or fantasy values relabelled as observations |

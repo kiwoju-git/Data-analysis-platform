@@ -12,7 +12,7 @@ Verify the downloaded archive against the accompanying SHA256SUMS, then:
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.4-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.5-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 ./install.sh
 ./run.sh
@@ -58,7 +58,7 @@ refitting models or rewriting results. Restore requires a new or empty target;
 it does not merge with an existing workspace. Existing backups are never
 overwritten. Keep the original workspace. Browser downloads outside it are not
 included. Archives contain private data and are neither encrypted nor signed.
-The current backup format supports metadata schemas 20, 21 and 22 and rejects unknown
+The current backup format supports metadata schemas 20, 21, 22 and 23 and rejects unknown
 assets, incompatible schema, and incomplete recovery state. The complete source
 contract is `docs/workspace_backup.md` in the repository documentation.
 
@@ -101,7 +101,7 @@ Windows trusted-LAN development policy is unchanged.
 ## Identity and Integrity
 
 `BUILD_INFO.json` records source commit, API contract, metadata schema, Python
-target and lock hash. Release version (for example 2026.10.4) is independent of
+target and lock hash. Release version (for example 2026.10.5) is independent of
 app_version and API contract. `FILES.sha256` verifies packaged files at install
 and launch. The release-owned `release_bootstrap.py` runs with `-I -S -B` before
 importing installed app code: no current-directory/PYTHONPATH import, `.pth`
@@ -136,6 +136,12 @@ wheel hash. Installation uses `--no-index --only-binary=:all: --require-hashes`.
 It does not upgrade system Python or fetch pip from the Internet. Licenses are
 under `THIRD_PARTY_NOTICES` and in wheel metadata. Keep the packaged files intact;
 install a later archive in a new directory and point it at the external workspace.
+
+ContourPy 1.3.2 supplies CPU-only serial contour geometry. Its wheel, metadata
+and BSD-3-Clause license are packaged for offline use; no Matplotlib, compiler,
+GPU package or remote chart service is required. The existing NumPy 2.2.6,
+SciPy 1.15.3 and scikit-learn 1.7.2 pins are unchanged. See the repository's
+`docs/contour_dependency_contract.md` for the dependency review and evidence scope.
 
 ## Source Development
 

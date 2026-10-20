@@ -27,7 +27,10 @@ from app.services.analysis_run_execution import (
     runtime_build_provenance,
     utc_now,
 )
-from app.services.doe_response_surface_analysis import get_response_surface_analysis
+from app.services.doe_response_surface_analysis import (
+    SUPPORTED_RSM_METHOD_SCHEMAS,
+    get_response_surface_analysis,
+)
 from app.services.response_surface_designs import get_response_surface_design
 from app.statistics.response_optimizer import (
     RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION,
@@ -43,6 +46,7 @@ from app.statistics.response_optimizer import (
     ResponseOptimizerError,
     calculate_response_optimizer,
 )
+from app.statistics.rsm_coding import RsmFactorCoding
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     count_response_surface_analysis_catalog_records,
@@ -60,7 +64,7 @@ SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
 )
 RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[2]] = 2
 RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME = "response_optimizer"
-SUPPORTED_RESPONSE_SURFACE_METHOD_VERSIONS: Final = {"0.2.0", "0.3.0"}
+SUPPORTED_RESPONSE_SURFACE_METHOD_VERSIONS: Final = {"0.2.0", *SUPPORTED_RSM_METHOD_SCHEMAS}
 SUPPORTED_RESPONSE_OPTIMIZER_METHOD_VERSIONS: Final = {
     "doe.response_optimizer": {"0.3.0", "0.4.0"},
     "regression.response_optimizer": {"0.3.0"},
@@ -362,6 +366,11 @@ def _load_source_objectives(
             domain_kind=factor.domain_kind,
             step=factor.step,
             display_decimals=factor.display_decimals,
+            coding=(
+                RsmFactorCoding(**design.coding[factor.name].model_dump())
+                if design.coding is not None
+                else None
+            ),
         )
         for factor in design.factors
     )
@@ -407,6 +416,11 @@ def _load_source_objectives(
                 for term in source.result.terms
             ),
             source_warnings=tuple(source.result.warnings),
+            powers=(
+                tuple(tuple(row) for row in source.result.final_basis.powers)
+                if source.result.final_basis is not None
+                else None
+            ),
         )
         objectives.append(
             OptimizerObjective(

@@ -88,6 +88,7 @@ def _counts(snapshot: ExperimentDesignDeletionSnapshot) -> DoeDesignDeletionCoun
         analysis_count=snapshot.analysis_count,
         prediction_count=snapshot.prediction_count,
         report_count=snapshot.report_count,
+        plot_view_count=snapshot.plot_view_count,
     )
 
 
