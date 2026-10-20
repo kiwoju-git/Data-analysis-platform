@@ -347,8 +347,9 @@ jobs:
   windows:
     if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: windows-latest
-    # Observed backend duration reached 39m31s before frontend checks.
-    timeout-minutes: 60
+    # Run39467075706 was still advancing at 87% when the 60-minute job expired.
+    # Preserve every check; allow the native spawn-heavy suite plus frontend work.
+    timeout-minutes: 90
     env:
       DATALAB_GP_REFERENCE_MODE: independent
     steps:

@@ -562,3 +562,19 @@ in 6.51s**, backend/changed-script Ruff passed, and backend format check passed
 for 386 files. Read-only collector/publisher guard tests passed **160 in 6.50s**.
 The failed archive is not published; this correction requires a new exact-source
 archive and full gates.
+
+The native Windows job in run39467075706 reached its 60-minute job limit at
+87% of pytest. Its log continued through RSM geometry, storage, saved-view and
+security tests in the final minutes; there is no evidence of one stalled test.
+The runner interrupted pytest before a complete count or frontend checks, so
+neither that run nor its unstarted Windows E2E suites passed. The suite is kept
+intact and the Windows CI job budget is now 90 minutes; `check.ps1` reports its
+25 slowest tests for measurement. Browser assertion timeouts, statistical
+tolerances, computation limits and all mandatory gates are unchanged. This is
+an explicitly measured execution-budget adjustment, not a successful rerun or
+an explanation for the earlier browser assertion failures.
+Compared with the earlier native `ca1162b` run, backend production code is
+unchanged and collected tests increased only from 2662 to 2665. The timestamp
+interval containing `test_api_contracts` grew from 8m53s to 18m34s while progress
+continued in batches. This suggests runner-wide performance variation, not
+proof of its hardware cause; individual durations were not yet available.

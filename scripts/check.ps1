@@ -26,7 +26,7 @@ try {
     Invoke-CheckedCommand "backend ruff check" { & $Python -m ruff check .\backend }
     Invoke-CheckedCommand "backend ruff format check" { & $Python -m ruff format --check .\backend }
     Invoke-CheckedCommand "backend mypy" { & $Python -m mypy .\backend\app }
-    Invoke-CheckedCommand "backend pytest" { & $Python -m pytest .\backend\tests }
+    Invoke-CheckedCommand "backend pytest" { & $Python -m pytest .\backend\tests --durations=25 }
     Invoke-CheckedCommand "frontend localization coverage" { node .\scripts\check_frontend_localization.mjs }
     Invoke-CheckedCommand "frontend lint" { npm --prefix .\frontend run lint }
     Invoke-CheckedCommand "frontend typecheck" { npm --prefix .\frontend run typecheck }
