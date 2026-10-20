@@ -436,3 +436,13 @@ archive and is rejected by the release collector. Normal/full runs retain every
 required gate and the four Windows suites. Earlier obsolete 468dad7/6400408 runs
 were cancelled after collecting their Linux failures; their interrupted Windows
 checks are not passes. Final source requires a fresh complete native run.
+
+Diagnostic-only run39461010226 (`7678d1e`) passed the context suite. The workflows
+suite completed the Korean fractional journey, then its English locator expected
+`Maximum interaction order` while the captured DOM's existing accessible label
+was `maximum interaction order`. English design/preflight/response requests were
+successful; the child page had no page errors or failed assets. Only the fixture
+label changed. The RSM browser fixture now also enters a synthetic long Korean/
+English factor name and unit through the form before design generation, so the
+same restored model exercises them during resize and real tab zoom checks.
+This diagnostic run skipped product/release gates and produced no release.

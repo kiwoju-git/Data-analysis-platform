@@ -29,6 +29,10 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         # Four factors make the four requested parameter counts distinguishable.
         for _ in range(2):
             page.get_by_role("button", name="요인 추가", exact=True).click()
+        long_name = "합성 반응기 온도 Synthetic reactor temperature with a long factor name"
+        long_unit = "synthetic degree Celsius"
+        page.get_by_label("요인 1 이름", exact=True).fill(long_name)
+        page.get_by_label(f"{long_name} 단위", exact=True).fill(long_unit)
         expect(page.locator("#rsm-center-points")).to_have_value("7")
         for kind in ("inscribed", "face_centered", "circumscribed"):
             page.locator("#rsm-alpha-mode").select_option(kind)
@@ -47,6 +51,8 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
             design = pending.value.json()
             assert design["options"]["ccd_type"] == kind
             assert len(design["runs"]) == 31
+            assert design["factors"][0]["name"] == long_name
+            assert design["factors"][0]["unit"] == long_unit
             for factor in design["factors"]:
                 coding = design["coding"][factor["name"]]
                 half = (factor["high"] - factor["low"]) / 2

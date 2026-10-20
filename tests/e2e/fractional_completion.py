@@ -41,7 +41,7 @@ LABELS = {
         "preview": "Preview",
         "apply": "Apply to response draft",
         "save": "Save response value",
-        "order": "Maximum interaction order",
+        "order": "maximum interaction order",
         "run": "Effects and ANOVA analysis",
         "all_alias": "Include classes containing only higher-order terms",
         "estimability": "Requested model estimability",
