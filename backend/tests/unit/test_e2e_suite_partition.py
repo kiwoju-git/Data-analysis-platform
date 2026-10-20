@@ -316,7 +316,8 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
     }
     for name in ("dependency-security", "e2e", "release-ready"):
         assert jobs[name]["if"] == (
-            "always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true"
+            "always() && inputs.generate_linux_locks != true"
+            " && inputs.browser_diagnostics_only != true"
         )
     for name in (
         "security-python",

@@ -3465,9 +3465,13 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     effect_chart = page.locator('[data-chart-id="factorial-effects"]')
     expect(effect_chart.locator(".chart-frame-svg")).to_be_visible()
     expect(effect_chart).to_contain_text("절대 효과")
-    expect(page.locator(".factorial-plots .chart-grid").first.locator("svg").first).to_be_visible()
+    expect(
+        page.locator(".factorial-plots .doe-compact-grid")
+        .first.locator(".chart-frame-svg")
+        .first
+    ).to_be_visible()
     expect(page.get_by_role("columnheader", name="ANOVA source")).to_be_visible()
-    expect(page.locator(".analysis-result-section")).to_contain_text("0.9.0")
+    expect(page.locator(".analysis-result-section")).to_contain_text("0.10.0")
     expect(page.get_by_label("DOE 잔차 진단 요약")).to_be_visible()
     expect(page.get_by_label("run 1 response")).to_be_disabled()
     expect(page.get_by_role("button", name="분석 후 반응 잠금")).to_be_disabled()
@@ -3489,7 +3493,9 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
     page.get_by_role("button", name="DOE 설계 생성").click()
     expect(page.get_by_text("Resolution", exact=True)).to_be_visible(timeout=20_000)
     expect(page.get_by_text("V", exact=True).first).to_be_visible()
-    expect(page.get_by_role("columnheader", name="Alias group")).to_be_visible()
+    alias_summary = page.locator(".fractional-alias-summary")
+    expect(alias_summary.get_by_role("columnheader", name="Alias 그룹")).to_be_visible()
+    expect(alias_summary.locator("tbody td > code").first).to_have_text("I = ABCDE")
     diagnostics.capture_page(page, "fractional-factorial-alias.png")
     for run_order in range(1, 17):
         page.get_by_label(f"run {run_order} response").fill(
@@ -3500,9 +3506,21 @@ def verify_doe_factorial_analysis(page: Page, diagnostics: E2EDiagnostics) -> No
         and response.url.endswith("/responses")
     ):
         page.get_by_role("button", name="반응값 저장").click()
-    page.get_by_role("button", name="효과 및 ANOVA 분석").click()
-    expect(page.get_by_text("독립 효과가 아닙니다", exact=False)).to_be_visible(
-        timeout=20_000
+    page.get_by_label("최대 상호작용 차수", exact=True).select_option("2")
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and "/api/v1/doe-designs/" in response.url
+        and response.url.endswith("/analyses")
+    ) as fractional_analysis_info:
+        page.get_by_role("button", name="효과 및 ANOVA 분석").click()
+    fractional_response = fractional_analysis_info.value
+    assert fractional_response.status == 201, fractional_response.text()
+    fractional_result = fractional_response.json()["result"]
+    assert fractional_result["model_policy"]["effective_interaction_order"] == 2
+    assert fractional_result["estimability"]["rank"] == 16
+    expect(page.get_by_role("heading", name="Factorial 분석 결과")).to_be_visible()
+    expect(alias_summary).to_contain_text(
+        "대표 항의 계수가 다른 Alias 효과가 0임을 증명하지는 않습니다."
     )
 
     page.reload(wait_until="networkidle")

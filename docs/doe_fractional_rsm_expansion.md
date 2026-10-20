@@ -499,3 +499,28 @@ all ten compact charts, selects and four stationary coordinates. A separate
 server-free Chromium zoom-mechanism probe confirmed real 100/125/150 percent
 tab zoom changes CSS viewport width (1440/1152/960) without losing input. Neither
 probe is recorded as a live RSM or installed Linux archive pass.
+
+Full run39465367550 (`170c2e6`) passed dependency-security but its Linux product
+check stopped on Ruff E501 in the newly added workflow-condition assertion
+(`test_e2e_suite_partition.py:319`). The assertion's long literal is now split
+into adjacent Python strings without changing its value. This is a blocking
+full-check failure, not a statistical or browser failure. The independent early
+browser jobs are collected separately; this run cannot authorize a release.
+
+The same full run also stopped Windows at that lint assertion. Python3.11
+completed **2652 passed, 13 Windows-only skips in 368.88s**. The context suite
+passed. The new fractional and RSM browser journeys completed, including KO/EN
+long names, 390px containment and actual Chrome tab zoom 100/125/150/100 percent.
+The zoom receipt verifies unchanged sources, inputs and coordinates, ten charts,
+and zero analysis POSTs; fractional browser zoom remains untested. Workflows
+then failed in the older factorial journey because it still selected
+`.factorial-plots .chart-grid`; captured DOM contained two compact grids and
+13 SVGs instead. The subsequent old method-version and Alias assertions were
+also updated to the explicit new contract. The fractional assertion now checks
+the actual analysis response's effective order 2 and rank 16, as well as the
+visible interpretation, rather than obsolete main-only warning text.
+
+Local Windows checks after the lint correction: full backend Ruff and format
+checks passed (386 formatted files), mypy passed (216 source files), and the
+suite-partition/archive-validation tests passed **237 in 4.59s**. These results
+do not make the failed run release-ready; a fresh complete run is required.
