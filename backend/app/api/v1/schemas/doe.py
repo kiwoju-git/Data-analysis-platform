@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 from app.api.v1.schemas.doe_model_workflow import (
     DoeFinalModelWorkflow,
+    DoeFractionalEstimability,
     DoeModelSelectionOptions,
     DoeModelSelectionResult,
 )
@@ -197,6 +198,29 @@ class FactorialDesignOptionsResponse(BaseModel):
     design_schema_version: int = Field(default=1, ge=1)
 
 
+class FractionalAliasTermResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    factor_indices: list[int]
+    sign: Literal[-1, 1]
+    order: int = Field(ge=0, le=6)
+    compact_label: str
+    full_label: str
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> FractionalAliasTermResponse:
+        indices = self.factor_indices
+        expected = "".join(chr(65 + index) for index in indices) or "I"
+        if (
+            indices != sorted(set(indices))
+            or any(index < 0 or index > 5 for index in indices)
+            or self.order != len(indices)
+            or self.compact_label != expected
+        ):
+            raise ValueError("Alias identity must use canonical factor indices")
+        return self
+
+
 class FractionalFactorialMetadataResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -211,6 +235,27 @@ class FractionalFactorialMetadataResponse(BaseModel):
     estimable_terms: list[str]
     non_estimable_terms: list[str]
     principal_fraction: bool
+    alias_view_schema_version: Literal[1] | None = None
+    alias_classes: list[list[FractionalAliasTermResponse]] | None = None
+
+    @model_validator(mode="after")
+    def validate_alias_view(self) -> FractionalFactorialMetadataResponse:
+        if (self.alias_view_schema_version is None) != (self.alias_classes is None):
+            raise ValueError("Alias view version and classes must be provided together")
+        if self.alias_classes is not None:
+            factor_count = self.base_factor_count + self.fraction_exponent
+            identities = [
+                tuple(term.factor_indices) for group in self.alias_classes for term in group
+            ]
+            if (
+                factor_count > 6
+                or any(len(group) != 2**self.fraction_exponent for group in self.alias_classes)
+                or any(any(index >= factor_count for index in indices) for indices in identities)
+                or len(identities) != len(set(identities))
+                or len(identities) != 2**factor_count
+            ):
+                raise ValueError("Alias view must partition the complete bounded effect set")
+        return self
 
 
 class PlackettBurmanMetadataResponse(BaseModel):
@@ -614,6 +659,11 @@ class DoeFactorialModelPolicyResponse(BaseModel):
     center_curvature_removed_step: int | None = None
     block_fixed_effects_included: bool
     sum_of_squares: str
+    requested_interaction_order: int | None = None
+    effective_interaction_order: int | None = None
+    requested_term_ids: list[str] | None = None
+    estimable_representative_term_ids: list[str] | None = None
+    alias_rank_excluded_term_ids: list[str] | None = None
 
 
 class DoeFactorialSampleResponse(BaseModel):
@@ -796,7 +846,8 @@ class DoeFactorialPlotsResponse(BaseModel):
 class DoeFactorialAnalysisResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1, 2, 3]
+    schema_version: Literal[1, 2, 3, 4]
+    estimability: DoeFractionalEstimability | None = None
     model_selection: DoeModelSelectionResult | None = None
     final_model: DoeFinalModelWorkflow | None = None
     config_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
@@ -821,6 +872,20 @@ class DoeFactorialAnalysisResult(BaseModel):
     def validate_final_model(self) -> DoeFactorialAnalysisResult:
         if self.schema_version >= 2 and (self.model_selection is None or self.final_model is None):
             raise ValueError("doe_factorial_final_model_missing")
+        if self.schema_version == 4:
+            plan = self.estimability
+            policy = self.model_policy
+            if (
+                plan is None
+                or policy.requested_interaction_order not in {1, 2}
+                or policy.requested_term_ids is None
+                or policy.estimable_representative_term_ids != plan.representative_term_ids
+                or policy.alias_rank_excluded_term_ids != [item.term_id for item in plan.exclusions]
+                or plan.rank != plan.estimable_parameter_count
+                or plan.rank + plan.expected_residual_df != self.sample.n_observations
+                or plan.saturated != (plan.expected_residual_df == 0)
+            ):
+                raise ValueError("doe_fractional_estimability_contract_invalid")
         return self
 
 

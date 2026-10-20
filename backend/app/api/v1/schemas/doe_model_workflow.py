@@ -28,11 +28,40 @@ class DoeAnalysisTerm(WorkflowModel):
     estimable: bool
 
 
+class DoeAliasExclusion(WorkflowModel):
+    term_id: str
+    reason: Literal[
+        "complete_alias",
+        "structural_confounding",
+        "rank_dependency",
+        "hierarchy_dependency_unavailable",
+    ]
+    representative_term_id: str | None
+    sign: Literal[-1, 1] | None
+
+
+class DoeFractionalEstimability(WorkflowModel):
+    policy: Literal["response_independent_structural_forced_main_canonical_interaction"]
+    requested_parameter_count: int = Field(ge=1)
+    estimable_parameter_count: int = Field(ge=1)
+    rank: int = Field(ge=1)
+    expected_residual_df: int = Field(ge=0)
+    saturated: bool
+    representative_term_ids: list[str]
+    initially_excluded_term_ids: list[str]
+    exclusions: list[DoeAliasExclusion]
+    rank_tolerance: FiniteFloat = Field(gt=0)
+    rank_scaling: Literal["unit_column_norm_fixed_full_matrix_tolerance"]
+
+
 class DoeAnalysisTermCatalog(WorkflowModel):
     catalog_schema_version: Literal[1] = 1
     design_id: UUID
     max_interaction_order: int
     terms: list[DoeAnalysisTerm]
+    selection_supported: bool = True
+    reason_code: str | None = None
+    estimability: DoeFractionalEstimability | None = None
 
 
 class DoeModelSelectionOptions(WorkflowModel):
@@ -49,6 +78,11 @@ class DoeModelSelectionOptions(WorkflowModel):
         if len({policy.term_id for policy in value}) != len(value):
             raise ValueError("doe_factorial_term_policy_invalid")
         return value
+
+
+class DoeTermPreflightRequest(WorkflowModel):
+    max_interaction_order: int = Field(default=2, ge=1, le=3)
+    model_selection: DoeModelSelectionOptions = Field(default_factory=DoeModelSelectionOptions)
 
 
 class SelectionStepCoefficient(WorkflowModel):

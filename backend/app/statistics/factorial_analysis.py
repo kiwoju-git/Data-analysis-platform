@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from itertools import combinations
 from math import isfinite, sqrt
 from typing import Any
@@ -11,6 +11,8 @@ import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 
 from app.core.doe_capabilities import FACTORIAL_AUTHORING_FACTOR_LIMIT
+from app.statistics.doe_matrix_rank import doe_least_squares, doe_matrix_rank
+from app.statistics.factorial_estimability import fractional_estimability
 from app.statistics.factorial_model_workflow import FactorialFeature, final_model_workflow
 from app.statistics.term_block_model_selection import (
     DoeSelectionOptions,
@@ -24,9 +26,10 @@ MAX_FACTORIAL_ANALYSIS_POINTS = 256
 
 
 class FactorialAnalysisError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, conflicting_term_ids: tuple[str, ...] = ()) -> None:
         super().__init__(code)
         self.code = code
+        self.conflicting_term_ids = conflicting_term_ids
 
 
 @dataclass(frozen=True)
@@ -59,6 +62,7 @@ def calculate_factorial_analysis(
     confidence_level: float = 0.95,
     point_limit: int = MAX_FACTORIAL_ANALYSIS_POINTS,
     model_selection: DoeSelectionOptions | None = None,
+    regular_fraction: bool = False,
 ) -> dict[str, object]:
     _validate_inputs(
         runs,
@@ -79,23 +83,75 @@ def calculate_factorial_analysis(
         max_interaction_order=max_interaction_order,
     )
     design_matrix = np.column_stack([term.values for term in terms])
+    requested_term_ids = [term.term_id for term in terms]
+    estimability = None
+    representative_order = max_interaction_order
+    selection_options = model_selection
+    requested_catalog = None
+    rank_tolerance = None
+    if regular_fraction:
+        if max_interaction_order > 2:
+            raise FactorialAnalysisError("doe_fractional_interaction_order_unsupported")
+        selection_options = model_selection or DoeSelectionOptions()
+        try:
+            plan = fractional_estimability(
+                design_matrix, _selection_blocks(terms), selection_options
+            )
+        except TermBlockSelectionError as exc:
+            raise FactorialAnalysisError(exc.code, exc.conflicting_term_ids) from exc
+        estimability = plan.to_payload()
+        rank_tolerance = plan.rank_tolerance
+        requested_catalog = term_catalog(_selection_blocks(terms))
+        for item in requested_catalog:
+            item["estimable"] = item["term_id"] in plan.retained_term_ids
+        terms = [terms[index] for index in plan.columns]
+        representative_order = max(
+            (
+                len(term.factor_names)
+                for term in terms
+                if term.kind in {"main_effect", "interaction"}
+            ),
+            default=0,
+        )
+        design_matrix = design_matrix[:, plan.columns]
+        selection_options = replace(
+            selection_options,
+            term_policies=tuple(
+                policy
+                for policy in selection_options.term_policies
+                if policy.term_id in plan.retained_term_ids
+            ),
+        )
     selection_result = None
-    if model_selection is not None:
+    if selection_options is not None:
         selection_blocks = _selection_blocks(terms)
         try:
             columns, selection_result = select_term_blocks(
-                design_matrix, response, selection_blocks, model_selection
+                design_matrix,
+                response,
+                selection_blocks,
+                selection_options,
+                rank_tolerance=rank_tolerance,
             )
         except TermBlockSelectionError as exc:
             raise FactorialAnalysisError(exc.code) from exc
         if columns != list(range(len(terms))):
             terms = [terms[index] for index in columns]
             design_matrix = design_matrix[:, columns]
-    rank = int(np.linalg.matrix_rank(design_matrix))
+        if estimability is not None:
+            selection_result["initially_excluded_term_ids"] = estimability[
+                "initially_excluded_term_ids"
+            ]
+            selection_result["term_policies"] = [
+                asdict(policy)
+                for policy in (model_selection or DoeSelectionOptions()).term_policies
+            ]
+            selection_result["term_catalog"] = requested_catalog
+    rank = doe_matrix_rank(design_matrix, rank_tolerance)
     if rank != design_matrix.shape[1]:
         raise FactorialAnalysisError("doe_factorial_model_rank_deficient")
 
-    coefficients, fitted, residuals, sse = _fit(design_matrix, response)
+    coefficients, fitted, residuals, sse = _fit(design_matrix, response, rank_tolerance)
     n_observations = len(ordered_runs)
     parameter_count = design_matrix.shape[1]
     df_residual = n_observations - rank
@@ -130,6 +186,7 @@ def calculate_factorial_analysis(
         coefficient_covariance=coefficient_covariance,
         t_critical=t_critical,
         confidence_level=confidence_level,
+        rank_tolerance=rank_tolerance,
     )
     lack_of_fit = _lack_of_fit(
         ordered_runs,
@@ -146,8 +203,8 @@ def calculate_factorial_analysis(
     ):
         center_column = np.asarray([float(run.center_point) for run in ordered_runs])
         augmented = np.column_stack([design_matrix, center_column])
-        if np.linalg.matrix_rank(augmented) == parameter_count + 1:
-            _, _, _, augmented_sse = _fit(augmented, response)
+        if doe_matrix_rank(augmented, rank_tolerance) == parameter_count + 1:
+            _, _, _, augmented_sse = _fit(augmented, response, rank_tolerance)
             curvature_ss = max(0.0, sse - augmented_sse)
             pure = lack_of_fit["pure_error"]
             remainder_df = lack_of_fit["lack_of_fit"]["df"] - 1
@@ -199,7 +256,7 @@ def calculate_factorial_analysis(
     )
 
     result: dict[str, Any] = {
-        "schema_version": 1 if model_selection is None else 3,
+        "schema_version": 4 if regular_fraction else 1 if model_selection is None else 3,
         "summary_type": "factorial_analysis",
         "method": "hierarchical_ols_two_level_full_factorial",
         "response": {"name": response_name, "unit": response_unit},
@@ -279,6 +336,19 @@ def calculate_factorial_analysis(
         },
         "warnings": warnings,
     }
+    if estimability is not None:
+        result["estimability"] = estimability
+        result["model_policy"].update(
+            {
+                "requested_interaction_order": max_interaction_order,
+                "effective_interaction_order": representative_order,
+                "requested_term_ids": requested_term_ids,
+                "estimable_representative_term_ids": estimability["representative_term_ids"],
+                "alias_rank_excluded_term_ids": [
+                    item["term_id"] for item in estimability["exclusions"]
+                ],
+            }
+        )
     if selection_result is not None:
         center_available = any(run.center_point for run in ordered_runs)
         center_included = any(term.kind == "curvature" for term in terms)
@@ -347,6 +417,7 @@ def calculate_factorial_analysis(
             coding="coded",
             confidence_level=confidence_level,
             point_limit=point_limit,
+            rank_tolerance=rank_tolerance,
         )
         warnings.extend(result["final_model"]["warnings"])
         if selection_result["method"] != "none":
@@ -388,6 +459,27 @@ def factorial_term_catalog(
     for item in catalog:
         item["factor_ids"] = [names_to_ids[name] for name in item["factor_ids"]]
     return catalog
+
+
+def fractional_term_preflight(
+    runs: Sequence[FactorialAnalysisRun],
+    factor_names: Sequence[str],
+    max_interaction_order: int,
+    options: DoeSelectionOptions,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    if max_interaction_order not in {1, 2}:
+        raise TermBlockSelectionError("doe_fractional_interaction_order_unsupported")
+    terms = _model_terms(runs, factor_names, max_interaction_order=max_interaction_order)
+    blocks = _selection_blocks(terms)
+    plan = fractional_estimability(
+        np.column_stack([term.values for term in terms]), blocks, options
+    )
+    catalog = term_catalog(blocks)
+    names_to_ids = {name: f"factor_{index + 1}" for index, name in enumerate(factor_names)}
+    for item in catalog:
+        item["factor_ids"] = [names_to_ids[name] for name in item["factor_ids"]]
+        item["estimable"] = item["term_id"] in plan.retained_term_ids
+    return catalog, plan.to_payload()
 
 
 def _validate_inputs(
@@ -492,9 +584,11 @@ def _model_terms(
 
 
 def _fit(
-    matrix: np.ndarray, response: np.ndarray
+    matrix: np.ndarray,
+    response: np.ndarray,
+    rank_tolerance: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
-    coefficients, _, _, _ = np.linalg.lstsq(matrix, response, rcond=None)
+    coefficients, _ = doe_least_squares(matrix, response, rank_tolerance)
     fitted = matrix @ coefficients
     residuals = response - fitted
     sse = max(0.0, float(residuals @ residuals))
@@ -513,6 +607,7 @@ def _term_results(
     coefficient_covariance: np.ndarray | None,
     t_critical: float | None,
     confidence_level: float,
+    rank_tolerance: float | None = None,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for index, (term, coefficient) in enumerate(zip(terms, coefficients, strict=True)):
@@ -555,7 +650,7 @@ def _term_results(
         term_p_value = None
         if index > 0:
             reduced = np.delete(matrix, index, axis=1)
-            _, _, _, reduced_sse = _fit(reduced, response)
+            _, _, _, reduced_sse = _fit(reduced, response, rank_tolerance)
             partial_ss = max(0.0, reduced_sse - sse)
             if residual_ms is not None and residual_ms > 0:
                 f_statistic = partial_ss / residual_ms

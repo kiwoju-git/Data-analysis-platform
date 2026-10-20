@@ -59,6 +59,15 @@ class FactorialDesignOptions:
 
 
 @dataclass(frozen=True)
+class FractionalAliasTerm:
+    factor_indices: tuple[int, ...]
+    sign: Literal[-1, 1]
+    order: int
+    compact_label: str
+    full_label: str
+
+
+@dataclass(frozen=True)
 class FractionalFactorialMetadata:
     catalog_entry_id: str
     base_factor_count: int
@@ -70,6 +79,7 @@ class FractionalFactorialMetadata:
     alias_groups: tuple[tuple[str, ...], ...]
     estimable_terms: tuple[str, ...]
     non_estimable_terms: tuple[str, ...]
+    alias_classes: tuple[tuple[FractionalAliasTerm, ...], ...] = ()
     principal_fraction: bool = True
 
 
@@ -743,6 +753,29 @@ def _fractional_metadata(
         labels = tuple(_effect_label(alias, factors) for alias in aliases if alias)
         groups[key] = tuple(sorted(labels, key=lambda label: (label.count(" × "), label)))
     alias_groups = tuple(sorted(set(groups.values()), key=lambda group: group[0]))
+    # Structured classes include the identity and all orders, independently of labels.
+    # The catalogue contains positive/principal generators only.
+    remaining = {
+        frozenset(index for index in range(entry.factor_count) if mask & (1 << index))
+        for mask in range(2**entry.factor_count)
+    }
+    alias_classes: list[tuple[FractionalAliasTerm, ...]] = []
+    while remaining:
+        representative = min(remaining, key=lambda word: (len(word), tuple(sorted(word))))
+        aliases = {representative.symmetric_difference(word) for word in defining_words}
+        remaining.difference_update(aliases)
+        alias_classes.append(
+            tuple(
+                FractionalAliasTerm(
+                    factor_indices=tuple(sorted(alias)),
+                    sign=1,
+                    order=len(alias),
+                    compact_label="".join(factor_labels[index] for index in sorted(alias)) or "I",
+                    full_label=_effect_label(alias, factors),
+                )
+                for alias in sorted(aliases, key=lambda word: (len(word), tuple(sorted(word))))
+            )
+        )
     main_terms = tuple(factor.name for factor in factors)
     independently_estimable = main_terms
     aliased_terms = tuple(
@@ -767,6 +800,7 @@ def _fractional_metadata(
         alias_groups=alias_groups,
         estimable_terms=independently_estimable,
         non_estimable_terms=aliased_terms,
+        alias_classes=tuple(alias_classes),
     )
 
 

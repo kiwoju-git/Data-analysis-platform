@@ -8,10 +8,11 @@ from itertools import combinations, product
 from statistics import mean
 from typing import Any
 
-from app.api.v1.schemas.doe import GeneralFactorialDesignResponse
+from app.api.v1.schemas.doe import FactorialDesignResponse, GeneralFactorialDesignResponse
 from app.api.v1.schemas.doe_model_workflow import DoePredictionResponse
 from app.i18n.report_text import ReportLocale, report_text
 from app.services.factorial_prediction import FactorialModelSource
+from app.services.fractional_alias_report import fractional_alias_report
 from app.services.regularized_model_report import _table as report_table
 
 
@@ -164,6 +165,50 @@ def render_factorial_analysis_report(
             ],
         ),
     ]
+    if isinstance(design, FactorialDesignResponse):
+        parts.append(fractional_alias_report(design, locale))
+    plan = result.get("estimability")
+    if isinstance(plan, dict):
+        parts += [
+            heading("Independent representative basis", "독립 대표 모형"),
+            report_table(
+                titles,
+                [
+                    [
+                        label("Requested parameters", "요청 모수 수"),
+                        plan["requested_parameter_count"],
+                    ],
+                    ["Rank", plan["rank"]],
+                    [
+                        label("Initial residual DF", "초기 잔차 자유도"),
+                        plan["expected_residual_df"],
+                    ],
+                    [label("Rank tolerance", "Rank 허용오차"), plan["rank_tolerance"]],
+                ],
+            ),
+            report_table(
+                [
+                    label("Alias/rank excluded term", "Alias/rank 제외 항"),
+                    label("Reason", "사유"),
+                    label("Representative", "대표 항"),
+                    "Sign",
+                ],
+                [
+                    [row["term_id"], row["reason"], row["representative_term_id"], row["sign"]]
+                    for row in plan["exclusions"]
+                ],
+            ),
+            "<p>"
+            + escape(
+                label(
+                    "Alias exclusions precede selection; they are not backward removals. "
+                    "Inference is conditional on the representative model.",
+                    "Alias 제외는 모형 선택 이전에 결정되며 후진 제거가 아닙니다. "
+                    "추론은 선택한 대표 모형에 조건부입니다.",
+                )
+            )
+            + "</p>",
+        ]
     selection = result.get("model_selection")
     if selection is not None:
         parts += [

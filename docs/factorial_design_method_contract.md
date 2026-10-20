@@ -1,8 +1,31 @@
 # DOE Factorial Design and Analysis Contract
 
+## Structured Alias View (2026-10-20)
+
+Validated regular-fraction catalogue metadata exposes optional
+`alias_view_schema_version=1` and `alias_classes`. Each term contains canonical
+zero-based `factor_indices`, sign, order, compact label and full display label.
+The view partitions all effects, including the identity. It is derived from
+generator symmetric differences, not parsed factor names or label replacement.
+The principal-fraction catalogue currently has positive signs only.
+
+Design factors, run order, design JSON/hash and legacy `alias_groups` are
+unchanged. Legacy designs derive this view from their verified catalogue ID and
+factor order on read; no artifact is rewritten. Old result payloads without this
+view retain stored labels without reverse-parsing them. Both localized analysis
+HTML and the existing Korean design HTML include compact equations and full
+factor-name/unit correspondence.
+
+The separate 0.10.0 regular-fraction workflow supports main/two-way representative
+models and backward; see `factorial_model_selection_contract.md`. Alias display
+alone is not an estimability guarantee.
+Actual-matrix estimability/backward support is a separate implementation stage.
+
 ## Current Selectable-Term Contract (2026-09-16)
 
-New analyses use method 0.9.0/config 4/result 3. General Full uses
+New two-level analyses use method 0.10.0; regular fractions write config 5/result 4,
+while full/PB retain config 4/result 3. The historical 0.9.0 contract used
+config 4/result 3. General Full uses
 0.4.0/config 3/result 3. Center curvature defaults to an independent candidate,
 not a fixed term or an empty-set hierarchy parent. Users may exclude or force
 whole terms; structural blocks remain forced. The server-owned term catalog

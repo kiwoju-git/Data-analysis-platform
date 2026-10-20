@@ -5,6 +5,7 @@ import { paddedNumericRange } from "./charts/chartScale";
 import { formatSmallChartValue } from "./charts/chartNumberFormatting";
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { t } from "./i18n/translate";
+import { FractionalAliasSummary } from "./doe/FractionalAliasSummary";
 
 import {
   createDoeResponseRevision,
@@ -34,6 +35,7 @@ import { DoeModelSelectionSettings } from "./doe/DoeModelSelectionSettings";
 import { DoeTermSelection, useDoeTermCatalog } from "./doe/DoeTermSelection";
 import { defaultDoeSelection, interactionOrderLabel } from "./doe/factorialWorkflowPresentation";
 import { FactorialModelSelectionResults } from "./FactorialModelSelectionResults";
+import { FractionalEstimabilitySummary } from "./doe/FractionalEstimabilitySummary";
 import { FactorialResidualPlots } from "./FactorialResidualPlots";
 import { FactorialPlotsPanel } from "./FactorialPlotsPanel";
 import { ChartSourceContext } from "./charts/chartSourceContext";
@@ -649,10 +651,8 @@ export function FactorialDesignPreview({
       : Math.min(2, design.factors.length),
   );
   useEffect(() => {
-    if (design.screening !== null && design.screening !== undefined) {
-      setMaxInteractionOrder(1);
-    }
-  }, [design.screening]);
+    setMaxInteractionOrder(design.screening ? 1 : Math.min(2, design.factors.length));
+  }, [design.design_id, design.screening, design.factors.length]);
   useEffect(() => {
     revisionRequest.current += 1;
     const nextValues: Record<number, string> = {};
@@ -678,8 +678,11 @@ export function FactorialDesignPreview({
   }, [design.design_id, design.runs, firstResponse]);
   const responseValidation = validateResponseDraft(design.runs, responseName, responseUnit, responseValues);
   const matchingAnalysis = analysis?.design_id === design.design_id ? analysis : null;
-  const aliased = Boolean(design.fractional || design.screening);
-  const termCatalog = useDoeTermCatalog(design.design_id, maxInteractionOrder, modelSelection, !aliased);
+  const selectionSupported = !design.screening;
+  const termCatalog = useDoeTermCatalog(
+    design.design_id, maxInteractionOrder, modelSelection,
+    selectionSupported, Boolean(design.fractional),
+  );
   const effectiveStatus =
     matchingAnalysis !== null ? "analyzed" : (matchingResponses?.status ?? design.status);
   const responsesLocked = effectiveStatus === "analyzed" && !correctionMode;
@@ -702,34 +705,7 @@ export function FactorialDesignPreview({
         <span>SHA-256</span>
         <strong>{design.design_sha256.slice(0, 12)}</strong>
       </div>
-      {design.fractional ? (
-        <section className="result-section fractional-alias-summary">
-          <h3>부분요인 설계 구조</h3>
-          <div className="metadata-grid">
-            <span>Fraction</span><strong>{design.fractional.fraction}</strong>
-            <span>Resolution</span><strong>{formatResolution(design.fractional.resolution)}</strong>
-            <span>Generator</span><strong>{design.fractional.generators.join(", ")}</strong>
-            <span>Defining relation</span>
-            <strong>{design.fractional.defining_relation.join(" = ")}</strong>
-          </div>
-          <div className="table-wrap">
-            <table className="result-table">
-              <thead><tr><th>Alias group</th><th>해석</th></tr></thead>
-              <tbody>
-                {design.fractional.alias_groups.map((group) => (
-                  <tr key={group.join("=")}>
-                    <td>{group.join(" = ")}</td>
-                    <td>이 그룹의 항은 현재 설계에서 독립적으로 분리되지 않습니다.</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="notice-box notice-warning">
-            표시되는 효과는 alias group 전체의 contrast입니다. 개별 항의 독립 효과로 해석하지 마세요.
-          </div>
-        </section>
-      ) : null}
+      <FractionalAliasSummary design={design} />
       <div className="table-wrap">
         <table className="result-table">
           <thead>
@@ -1016,7 +992,7 @@ export function FactorialDesignPreview({
                   setMaxInteractionOrder(Number(event.currentTarget.value));
                 }}
               >
-                {Array.from({ length: Math.min(3, design.factors.length) }, (_, index) => index + 1).map(
+                {Array.from({ length: Math.min(design.fractional ? 2 : 3, design.factors.length) }, (_, index) => index + 1).map(
                   (order) => (
                     <option key={order} value={order}>
                       {interactionOrderLabel(order)}
@@ -1026,9 +1002,10 @@ export function FactorialDesignPreview({
               </select>
             </label>
           </div>
-          <DoeModelSelectionSettings value={aliased ? { ...modelSelection, method: "none" } : modelSelection}
-            onChange={setModelSelection} confidence={confidence} onConfidenceChange={setConfidence} aliased={aliased} disabled={isRunningAnalysis} />
-          {!aliased ? <DoeTermSelection state={termCatalog} value={modelSelection} onChange={setModelSelection} disabled={isRunningAnalysis} /> : null}
+          <DoeModelSelectionSettings value={!selectionSupported ? { ...modelSelection, method: "none" } : modelSelection}
+            onChange={setModelSelection} confidence={confidence} onConfidenceChange={setConfidence}
+            selectionSupported={selectionSupported} disabled={isRunningAnalysis} />
+          {selectionSupported ? <DoeTermSelection state={termCatalog} value={modelSelection} onChange={setModelSelection} disabled={isRunningAnalysis} /> : null}
           {analysisError !== null ? (
             <div className="error-box">오류 코드: {analysisError}</div>
           ) : null}
@@ -1036,7 +1013,7 @@ export function FactorialDesignPreview({
             <button
               className="primary-button"
               disabled={isRunningAnalysis || correctionMode || !termCatalog.ready || !(confidence > 0 && confidence < 1) ||
-                (!aliased && modelSelection.method === "backward_elimination" && !(modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
+                (selectionSupported && modelSelection.method === "backward_elimination" && !(modelSelection.alpha_to_remove > 0 && modelSelection.alpha_to_remove < 1))}
               onClick={() => {
                 onRunAnalysis(design.design_id, {
                   response_name: firstResponse.response_name,
@@ -1044,7 +1021,7 @@ export function FactorialDesignPreview({
                   max_interaction_order: maxInteractionOrder,
                   confidence_level: confidence,
                   point_limit: 256,
-                  model_selection: aliased ? { ...modelSelection, method: "none", term_policies: [] } : termCatalog.options,
+                  model_selection: !selectionSupported ? { ...modelSelection, method: "none", term_policies: [] } : termCatalog.options,
                 });
               }}
               type="button"
@@ -1084,6 +1061,7 @@ function FactorialAnalysisResultView({
         </div>
         <span className="status-pill status-ready">검증 저장됨</span>
       </div>
+      {result.fractional_design ? <FractionalEstimabilitySummary plan={result.estimability} terms={result.model_selection?.term_catalog} /> : null}
       {result.final_model && result.model_selection ? <FactorialModelSelectionResults
         selection={result.model_selection} model={result.final_model} fit={result.fit} n={result.sample.n_observations} /> : null}
       {!result.final_model ? <div className="metadata-grid" aria-label="DOE 분석 적합 요약">
@@ -1578,10 +1556,6 @@ function formatFactorialRunLevel(
 ): string {
   if (factor.factor_kind === "categorical") return String(value);
   return formatDoeFactorValue(Number(value), factor.display_decimals);
-}
-
-function formatResolution(value: number): string {
-  return ({ 3: "III", 4: "IV", 5: "V", 6: "VI" } as Record<number, string>)[value] ?? String(value);
 }
 
 function designLocationFromWindow(): {

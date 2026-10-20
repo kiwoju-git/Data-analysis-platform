@@ -8,6 +8,27 @@ export interface DoeAnalysisTerm {
 }
 export interface DoeAnalysisTermCatalog {
   catalog_schema_version: 1; design_id: string; max_interaction_order: number; terms: DoeAnalysisTerm[];
+  selection_supported?: boolean;
+  reason_code?: string | null;
+  estimability?: DoeFractionalEstimability | null;
+}
+export interface DoeFractionalEstimability {
+  policy: string;
+  requested_parameter_count: number;
+  estimable_parameter_count: number;
+  rank: number;
+  expected_residual_df: number;
+  saturated: boolean;
+  representative_term_ids: string[];
+  initially_excluded_term_ids: string[];
+  exclusions: Array<{
+    term_id: string;
+    reason: "complete_alias" | "structural_confounding" | "rank_dependency" | "hierarchy_dependency_unavailable";
+    representative_term_id: string | null;
+    sign: -1 | 1 | null;
+  }>;
+  rank_tolerance: number;
+  rank_scaling: string;
 }
 export interface DoeStepTermStatistic {
   term_id: string; label: string; status: "active" | "forced" | "retained_for_hierarchy" | "removed_this_step";

@@ -20,6 +20,7 @@ from app.api.v1.schemas.doe import (
     FactorialDesignOptionsResponse,
     FactorialDesignResponse,
     FactorialDesignRunResponse,
+    FractionalAliasTermResponse,
     FractionalFactorialMetadataResponse,
     PlackettBurmanMetadataResponse,
     TwoLevelCategoricalFactorResponse,
@@ -392,6 +393,20 @@ def _fractional_metadata_response(
         estimable_terms=list(metadata.estimable_terms),
         non_estimable_terms=list(metadata.non_estimable_terms),
         principal_fraction=metadata.principal_fraction,
+        alias_view_schema_version=1,
+        alias_classes=[
+            [
+                FractionalAliasTermResponse(
+                    factor_indices=list(term.factor_indices),
+                    sign=term.sign,
+                    order=term.order,
+                    compact_label=term.compact_label,
+                    full_label=term.full_label,
+                )
+                for term in group
+            ]
+            for group in metadata.alias_classes
+        ],
     )
 
 
@@ -460,6 +475,9 @@ def _factorial_design_html_report_bytes(
     responses: DoeDesignResponsesResponse,
     analysis: DoeFactorialAnalysisResponse | None,
 ) -> bytes:
+    from app.services.fractional_alias_report import fractional_alias_report
+
+    alias_markup = fractional_alias_report(design, "ko")
     factor_markup = "\n".join(
         "<tr>"
         f"<td>{_html_text(factor.name)}</td>"
@@ -543,6 +561,7 @@ def _factorial_design_html_report_bytes(
     </tbody>
   </table>
 
+{alias_markup}
   <h2>Options</h2>
   <table>
     <thead>

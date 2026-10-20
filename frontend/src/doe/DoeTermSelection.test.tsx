@@ -15,7 +15,7 @@ const terms: DoeAnalysisTerm[] = [
 it.each(["en", "ko"] as const)("shows server-owned terms, forced options and hierarchy in %s", (locale) => {
   setCurrentLocale(locale);
   const options = { ...defaultDoeSelection, method: "backward_elimination" as const, term_policies: terms.map((term) => ({ term_id: term.term_id, disposition: term.default_disposition })) };
-  const html = renderToStaticMarkup(<DoeTermSelection value={options} onChange={() => {}} state={{ ready: true, error: false, terms, options }} />);
+  const html = renderToStaticMarkup(<DoeTermSelection value={options} onChange={() => {}} state={{ ready: true, error: false, catalogReady: true, preflightError: null, estimability: null, terms, options }} />);
   expect(html).toContain('aria-label="Temperature"');
   expect(html).toContain('value="excluded" disabled');
   expect(html).toContain('value="forced"');

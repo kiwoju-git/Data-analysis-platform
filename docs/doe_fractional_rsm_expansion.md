@@ -25,8 +25,8 @@ No main push or prerelease publication until required checks succeed.
 | Stage | Code inspection | Implementation | Verification |
 | --- | --- | --- | --- |
 | A response/context | Blank response uses `Number`; edits do not invalidate; history failure shares save catch | strict shared parser, source epochs/request lanes, independent history retry | 37 focused frontend tests, typecheck, targeted lint; browser pending |
-| B alias | Existing contract reviewed | pending | not run |
-| C fractional estimability | Historical main-only restriction confirmed in contract | pending | baseline only |
+| B alias | Existing labels depend on display names | structured catalogue view, compact/full UI and HTML | focused tests passed; browser pending |
+| C fractional estimability | Historical main-only restriction confirmed | actual-matrix representative preflight, second order, backward, result4/config5 | 42 focused tests; API restore/report; browser pending |
 | D selection summary | scoped implementation planned | pending | not run |
 | E lack of fit | physical replication policy retained | pending | baseline only |
 | F compact plots | existing interaction/frame preserved | pending | not run |
@@ -103,3 +103,71 @@ and Effect Events are not applicable to this repository's React 18.3.1.
 
 No identical-data Minitab output has been provided; independent numerical
 fixtures will not be described as a Minitab binary-output comparison.
+
+## B Implementation and Checks
+
+`_fractional_metadata` derives a complete effect partition by symmetric
+difference using factor indices. New optional alias-view metadata is produced
+from the verified catalogue on read; design hash input and legacy label fields
+stay unchanged. Pydantic validates canonical term identity and bounded partition.
+`FractionalAliasSummary` provides symbol/name/unit mapping, lower-order/all-class
+selection and full-name disclosures. Both DOE HTML paths render these mappings
+with escaping, not screenshots or a model refit.
+
+- Alias/domain/design API tests: **25 passed** before the additional report
+  assertion was added.
+- Alias structure/API/report and existing factorial export tests: **10 passed**.
+- Alias SSR/adapter and existing factorial UI tests: **10 passed**.
+- Existing Starlette deprecation warnings remain; no dependency changed here.
+- Browser/layout/legacy archive checks remain unexecuted.
+
+## C Implementation and Checks
+
+`factorial_estimability` chooses a response-independent basis with a fixed,
+unit-column-scaled rank tolerance. `doe_matrix_rank` applies the same policy in
+selection, final fitting and drop-term ANOVA for new fractions only; legacy/full
+paths retain their original least-squares calls. Intercept/block, forced parents,
+main terms and canonical interactions have deterministic priority. Exact signed
+alias, structural-span confounding, other dependency and unavailable hierarchy
+are recorded separately. Forced conflicts name controlled term IDs.
+
+The design-owned POST preflight uses actual options and runs. The UI immediately
+invalidates preflight on option changes, retains an editable term catalog after
+errors, and sends the same normalized policy list to execution. PB remains
+restricted. New fraction results are method 0.10.0/result4/config5; API25 and
+metadata22. Stored results expose their committed plan, not the current draft.
+Both dedicated HTML paths include alias/representative information.
+
+- First related regression batch: **75 passed, 1 failed**. The failure asserted
+  the obsolete blanket fraction prohibition; it now distinguishes PB rejection
+  from the regular fraction's missing-response guard.
+- New rank/selection/API/report and unchanged selection-reference/engine tests:
+  **42 passed** after structural-span and shared-tolerance corrections.
+- Hand-checkable ranks: 5-factor half fraction, 16 requested/independent columns,
+  10 genuine two-way terms, zero initial residual DF; 4-factor half fraction,
+  11 requested / 8 independent; 3-factor fraction records main/two-way confounding.
+- API test creates/saves/analyzes/reopens/exports without changing design hash or
+  stored result values. HTML visibly includes `I = ABCDE` and pooling.
+- Alias/UI/term/runtime frontend batch: **17 passed**, 4 files.
+- Frontend typecheck passed before the later summary-layout changes.
+- Independent read-only agent found structural-span misclassification, missing
+  forced-term identifiers, and inconsistent rank policies. All three were
+  addressed; no bad numeric rank had been reproduced for the original bounded
+  catalogue fixture.
+- Runtime/API/startup/release-identity/web checks: **296 passed, 2 skipped**
+  (POSIX-only lock test and Windows account unable to create a symlink).
+  These run against the source checkout, not a Linux archive.
+- Final targeted mypy: **8 files passed**; staged Python Ruff and diff whitespace
+  checks passed. Existing Starlette deprecation warnings remain.
+- Browser and exact archive are not verified; no main push/release.
+
+## D/E In Progress
+
+Explanatory summary wrapping and clipboard fallback are being implemented
+without changing global numeric cards. Actual browser bounds/zoom checks remain
+unexecuted.
+
+The new lack-of-fit regression test was run against the previous calculation:
+**4 failed, 3 passed**. One failure directly reproduces `available=True` with
+zero pure-error variance; the other three require the new explicit reason
+metadata. This is calculation-path evidence, not a browser reproduction.

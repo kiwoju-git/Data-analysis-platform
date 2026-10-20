@@ -162,7 +162,7 @@ def test_saturated_analysis_pools_without_inventing_p_values(tmp_path):
 
 
 @pytest.mark.parametrize("screening", [False, True])
-def test_aliased_designs_reject_automatic_selection_before_fitting(tmp_path, screening):
+def test_pb_selection_remains_blocked_but_regular_fraction_requires_response(tmp_path, screening):
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         body = {
             "name": "Aliased selection guard",
@@ -185,9 +185,10 @@ def test_aliased_designs_reject_automatic_selection_before_fitting(tmp_path, scr
             json={"response_name": "Yield", "model_selection": {"method": "backward_elimination"}},
         )
         assert response.status_code == 409
-        assert (
-            response.json()["error"]["code"]
-            == "doe_factorial_model_selection_unsupported_for_aliased_design"
+        assert response.json()["error"]["code"] == (
+            "doe_factorial_model_selection_unsupported_for_aliased_design"
+            if screening
+            else "doe_response_revision_not_found"
         )
 
 

@@ -30,7 +30,7 @@ from app.api.v1.schemas.doe import (
     ResponseSurfaceDesignCreateRequest,
     ResponseSurfaceDesignResponse,
 )
-from app.api.v1.schemas.doe_model_workflow import DoeAnalysisTermCatalog
+from app.api.v1.schemas.doe_model_workflow import DoeAnalysisTermCatalog, DoeTermPreflightRequest
 from app.services.doe_design_retention import (
     delete_doe_design,
     get_doe_design_deletion_preflight,
@@ -90,6 +90,20 @@ def get_analysis_term_catalog_route(
     request: Request, design_id: UUID, max_interaction_order: int = Query(default=2, ge=1, le=3)
 ) -> DoeAnalysisTermCatalog:
     return get_analysis_term_catalog(request.app.state.settings, design_id, max_interaction_order)
+
+
+@router.post("/{design_id}/analysis-term-preflight", response_model=DoeAnalysisTermCatalog)
+def post_analysis_term_preflight_route(
+    request: Request,
+    design_id: UUID,
+    body: DoeTermPreflightRequest,
+) -> DoeAnalysisTermCatalog:
+    return get_analysis_term_catalog(
+        request.app.state.settings,
+        design_id,
+        body.max_interaction_order,
+        body.model_selection,
+    )
 
 
 @router.get(

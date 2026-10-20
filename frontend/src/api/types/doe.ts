@@ -1,4 +1,4 @@
-import type { DoeFinalModelWorkflow, DoeModelSelectionOptions, DoeModelSelectionResult } from "./doeModelWorkflow";
+import type { DoeFinalModelWorkflow, DoeModelSelectionOptions, DoeModelSelectionResult, DoeFractionalEstimability } from "./doeModelWorkflow";
 
 export interface TwoLevelNumericFactorRequest {
   factor_kind: "numeric";
@@ -114,6 +114,14 @@ export interface FactorialDesignResponse {
     generators: string[];
     defining_relation: string[];
     alias_groups: string[][];
+    alias_view_schema_version?: 1 | null;
+    alias_classes?: {
+      factor_indices: number[];
+      sign: -1 | 1;
+      order: number;
+      compact_label: string;
+      full_label: string;
+    }[][] | null;
     estimable_terms: string[];
     non_estimable_terms: string[];
     principal_fraction: boolean;
@@ -432,7 +440,10 @@ export interface DoeFactorialDiagnosticPoint {
 }
 
 export interface DoeFactorialAnalysisResult {
-  schema_version: 1 | 2 | 3;
+  fractional_design?: FactorialDesignResponse["fractional"];
+  screening_design?: FactorialDesignResponse["screening"];
+  schema_version: 1 | 2 | 3 | 4;
+  estimability?: DoeFractionalEstimability | null;
   model_selection?: DoeModelSelectionResult | null;
   final_model?: DoeFinalModelWorkflow | null;
   config_sha256?: string | null;
@@ -453,6 +464,11 @@ export interface DoeFactorialAnalysisResult {
     center_curvature_included: boolean;
     block_fixed_effects_included: boolean;
     sum_of_squares: string;
+    requested_interaction_order?: number | null;
+    effective_interaction_order?: number | null;
+    requested_term_ids?: string[] | null;
+    estimable_representative_term_ids?: string[] | null;
+    alias_rank_excluded_term_ids?: string[] | null;
   };
   sample: {
     n_observations: number;

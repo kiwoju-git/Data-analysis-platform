@@ -12,6 +12,7 @@ import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
+from app.statistics.doe_matrix_rank import doe_least_squares
 from app.statistics.term_block_model_selection import PRESS_LEVERAGE_TOLERANCE
 
 
@@ -68,6 +69,7 @@ def final_model_workflow(
     coding: Literal["coded", "treatment"],
     confidence_level: float,
     point_limit: int,
+    rank_tolerance: float | None = None,
 ) -> dict[str, Any]:
     """Use the supplied final fit, never select terms or refit the response."""
     fitted = matrix @ coefficients
@@ -151,7 +153,7 @@ def final_model_workflow(
     if any(row["vif"] is None for row in coefficient_rows[1:]):
         warnings.append("doe_factorial_vif_unavailable")
     with threadpool_limits(limits=1):
-        anova_groups = _anova_groups(matrix, response, features, sse, mse, df)
+        anova_groups = _anova_groups(matrix, response, features, sse, mse, df, rank_tolerance)
     return {
         "equation": {
             "scale": coding,
@@ -206,6 +208,7 @@ def _anova_groups(
     sse: float,
     mse: float | None,
     residual_df: int,
+    rank_tolerance: float | None = None,
 ) -> list[dict[str, Any]]:
     # Joint drop-one groups, not sums of non-additive term partial SS.
     groups: dict[str, dict[tuple[str, ...], list[int]]] = {}
@@ -222,7 +225,7 @@ def _anova_groups(
 
     def row(label: str, removed: list[int]) -> dict[str, Any]:
         reduced = np.delete(matrix, removed, axis=1)
-        beta, _, rank, _ = np.linalg.lstsq(reduced, response, rcond=None)
+        beta, rank = doe_least_squares(reduced, response, rank_tolerance)
         errors = response - reduced @ beta
         ss = max(0.0, float(errors @ errors) - sse)
         df = matrix.shape[1] - int(rank)

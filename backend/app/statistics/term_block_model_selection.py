@@ -13,14 +13,17 @@ import numpy as np
 from scipy import stats  # type: ignore[import-untyped]
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
+from app.statistics.doe_matrix_rank import doe_least_squares
+
 TIE_TOLERANCE = 1e-12
 PRESS_LEVERAGE_TOLERANCE = 1e-10
 
 
 class TermBlockSelectionError(ValueError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, conflicting_term_ids: tuple[str, ...] = ()) -> None:
         super().__init__(code)
         self.code = code
+        self.conflicting_term_ids = conflicting_term_ids
 
 
 @dataclass(frozen=True)
@@ -125,7 +128,7 @@ def term_catalog(
     ]
 
 
-def _resolve_policies(
+def resolve_term_policies(
     blocks: Sequence[ModelSelectionTermBlock], options: DoeSelectionOptions
 ) -> list[ModelSelectionTermBlock]:
     policies = {policy.term_id: policy.disposition for policy in options.term_policies}
@@ -168,11 +171,12 @@ def select_term_blocks(
     options: DoeSelectionOptions,
     *,
     time_budget_seconds: float = 60.0,
+    rank_tolerance: float | None = None,
 ) -> tuple[list[int], dict[str, Any]]:
     _validate(matrix, response, blocks, options)
     deadline = monotonic() + time_budget_seconds
     with threadpool_limits(limits=1):
-        return _select(matrix, response, blocks, options, deadline)
+        return _select(matrix, response, blocks, options, deadline, rank_tolerance)
 
 
 def _select(
@@ -181,14 +185,15 @@ def _select(
     blocks: Sequence[ModelSelectionTermBlock],
     options: DoeSelectionOptions,
     deadline: float,
+    rank_tolerance: float | None,
 ) -> tuple[list[int], dict[str, Any]]:
-    active = _resolve_policies(blocks, options)
+    active = resolve_term_policies(blocks, options)
     initial_order = {block.block_id: index for index, block in enumerate(blocks)}
     initial_ids = [block.block_id for block in active if _nonstructural(block)]
     candidate_ids = [block.block_id for block in active if not block.fixed]
     included_ids = {block.block_id for block in active}
     excluded_ids = [block.block_id for block in blocks if block.block_id not in included_ids]
-    current = _fit(matrix, response, active, deadline)
+    current = _fit(matrix, response, active, deadline, rank_tolerance=rank_tolerance)
     initial_fit = current
     saturated = current.residual_df == 0
     target = pooling_target(len(candidate_ids)) if saturated and options.method != "none" else 0
@@ -200,7 +205,7 @@ def _select(
     if options.method != "none":
         # Pool by SS only. Inferential p-values do not exist at a saturated start.
         while len(pooled) < target or (target > 0 and current.residual_df < 1):
-            candidates = _candidates(matrix, response, active, current, deadline)
+            candidates = _candidates(matrix, response, active, current, deadline, rank_tolerance)
             if not candidates:
                 stop_reason = "insufficient_residual_df"
                 break
@@ -230,7 +235,7 @@ def _select(
             if mse <= np.finfo(float).eps ** 2 * float(np.mean(response**2)):
                 stop_reason = "residual_variance_unavailable"
                 break
-            candidates = _candidates(matrix, response, active, current, deadline)
+            candidates = _candidates(matrix, response, active, current, deadline, rank_tolerance)
             if not candidates:
                 stop_reason = "no_removable_terms_due_to_hierarchy"
                 break
@@ -274,7 +279,14 @@ def _select(
             step_blocks = [block for block in blocks if block.block_id in step["active_term_ids"]]
             forced = {block.block_id for block in active if block.fixed}
             step_blocks = [replace(block, fixed=block.block_id in forced) for block in step_blocks]
-            detailed_fit = _fit(matrix, response, step_blocks, deadline, term_details=True)
+            detailed_fit = _fit(
+                matrix,
+                response,
+                step_blocks,
+                deadline,
+                term_details=True,
+                rank_tolerance=rank_tolerance,
+            )
             step["term_statistics"] = detailed_fit.metrics["term_statistics"]
             if step["removed_term_id"] is not None:
                 removed_block = next(
@@ -342,13 +354,18 @@ def _candidates(
     active: Sequence[ModelSelectionTermBlock],
     current: _Fit,
     deadline: float,
+    rank_tolerance: float | None,
 ) -> list[tuple[ModelSelectionTermBlock, _Fit, float, int]]:
     candidates = []
     for block in active:
         if not term_is_removable(block, active):
             continue
         reduced = _fit(
-            matrix, response, [item for item in active if item.block_id != block.block_id], deadline
+            matrix,
+            response,
+            [item for item in active if item.block_id != block.block_id],
+            deadline,
+            rank_tolerance=rank_tolerance,
         )
         removed_df = reduced.residual_df - current.residual_df
         if removed_df <= 0:
@@ -364,12 +381,13 @@ def _fit(
     deadline: float,
     *,
     term_details: bool = False,
+    rank_tolerance: float | None = None,
 ) -> _Fit:
     if monotonic() >= deadline:
         raise TermBlockSelectionError("doe_factorial_selection_time_budget_exceeded")
     columns = tuple(sorted(index for block in blocks for index in block.column_indices))
     selected = matrix[:, columns]
-    coefficients, _, rank, _ = np.linalg.lstsq(selected, response, rcond=None)
+    coefficients, rank = doe_least_squares(selected, response, rank_tolerance)
     if rank != len(columns):
         raise TermBlockSelectionError("doe_factorial_selection_rank_failure")
     residuals = response - selected @ coefficients

@@ -1,5 +1,13 @@
 # Runtime Compatibility Contract
 
+## DOE Expansion (API 25)
+
+API 25 adds the regular-fraction model preflight, structured alias view and
+factorial result 4/config 5 (method 0.10.0). It reserves this integrated DOE
+expansion contract for the subsequent RSM request/response additions. Metadata
+remains 22: these additions do not require a SQL migration. Legacy artifact
+readers remain explicit; runtime mismatch must still block execution.
+
 ## Pilot Follow-up After 0849aaa
 
 API contract 24 adds full group identity and stable group indexes to newly
@@ -140,7 +148,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `24`, schema 22 or later, and every required
+The frontend expects API contract `25`, schema 22 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

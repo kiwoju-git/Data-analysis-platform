@@ -1,0 +1,17 @@
+.fractional-alias-summary,
+.fractional-alias-summary details,
+.fractional-alias-summary td {
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.fractional-alias-summary summary {
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+.fractional-alias-summary code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

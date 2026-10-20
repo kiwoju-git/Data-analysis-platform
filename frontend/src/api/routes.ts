@@ -56,6 +56,8 @@ export const apiRoutes = {
     `/doe-designs/${pathId(designId)}/analysis-term-catalog`,
     new URLSearchParams({ max_interaction_order: String(order) }),
   ),
+  factorialTermPreflight: (designId: string) =>
+    apiUrl(`/doe-designs/${pathId(designId)}/analysis-term-preflight`),
   workspaceAssets(
     filters: import("./types").WorkspaceAssetFilters,
     offset: number,

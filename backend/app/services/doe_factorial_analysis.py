@@ -40,7 +40,15 @@ from app.storage.metadata import (
 
 DOE_FACTORIAL_ANALYSIS_SCHEMA_VERSION = 2
 DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION = 4
-SUPPORTED_FACTORIAL_METHOD_VERSIONS = {"0.4.0", "0.5.0", "0.6.0", "0.7.0", "0.8.0", "0.9.0"}
+SUPPORTED_FACTORIAL_METHOD_VERSIONS = {
+    "0.4.0",
+    "0.5.0",
+    "0.6.0",
+    "0.7.0",
+    "0.8.0",
+    "0.9.0",
+    "0.10.0",
+}
 
 
 def create_factorial_analysis(
@@ -49,13 +57,11 @@ def create_factorial_analysis(
     body: DoeFactorialAnalysisCreateRequest,
 ) -> DoeFactorialAnalysisResponse:
     design = get_factorial_design(settings, design_id)
-    if body.model_selection.term_policies and (design.fractional or design.screening):
+    if body.model_selection.term_policies and design.screening:
         raise _factorial_analysis_api_error(
             "doe_factorial_term_selection_unsupported_for_aliased_design"
         )
-    if body.model_selection.method != "none" and (
-        design.fractional is not None or design.screening is not None
-    ):
+    if body.model_selection.method != "none" and (design.screening is not None):
         raise _factorial_analysis_api_error(
             "doe_factorial_model_selection_unsupported_for_aliased_design"
         )
@@ -94,13 +100,12 @@ def create_factorial_analysis(
             response_name=response_name,
             response_unit=unit,
             max_interaction_order=(
-                1
-                if fractional_design is not None or screening_design is not None
-                else body.max_interaction_order
+                1 if screening_design is not None else body.max_interaction_order
             ),
             confidence_level=float(body.confidence_level),
             point_limit=body.point_limit,
             model_selection=selection_options_from_payload(body.model_selection.model_dump()),
+            regular_fraction=fractional_design is not None,
         )
         if fractional_design is not None:
             result_payload["method"] = "regular_fractional_factorial_alias_contrast_ols"
@@ -110,8 +115,8 @@ def create_factorial_analysis(
                 *(existing_warnings if isinstance(existing_warnings, list) else []),
                 (
                     f"Resolution {fractional_design.resolution} regular fraction입니다. "
-                    "표시된 주효과 계수는 alias group 전체의 추정 contrast이며 "
-                    "독립 효과가 아닙니다."
+                    "계수는 선택한 독립 대표 항 모형에 조건부이며 "
+                    "다른 Alias 효과가 0임을 증명하지 않습니다."
                 ),
             ]
         if screening_design is not None:
@@ -129,6 +134,14 @@ def create_factorial_analysis(
             ]
         result = DoeFactorialAnalysisResult.model_validate(result_payload)
     except FactorialAnalysisError as exc:
+        if exc.conflicting_term_ids:
+            raise ApiError(
+                code=exc.code,
+                status_code=409,
+                message="Forced term conflicts with the retained basis: "
+                + ", ".join(exc.conflicting_term_ids)
+                + ". Revise the forced representatives.",
+            ) from exc
         raise _factorial_analysis_api_error(exc.code) from exc
     except ValidationError as exc:
         raise ApiError(
@@ -161,7 +174,9 @@ def create_factorial_analysis(
     )
     config_json = _json_dumps(
         {
-            "schema_version": DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION,
+            "schema_version": 5
+            if result.schema_version == 4
+            else DOE_FACTORIAL_ANALYSIS_CONFIG_SCHEMA_VERSION,
             "design_id": str(design.design_id),
             "design_version_id": str(design.design_version_id),
             "design_sha256": design.design_sha256,
@@ -249,7 +264,7 @@ def _validated_analysis_response(
     if not isinstance(config, dict):
         raise _metadata_error("doe_factorial_analysis_metadata_invalid")
     expected_config = {
-        "schema_version": {1: 2, 2: 3, 3: 4}[response.result.schema_version],
+        "schema_version": {1: 2, 2: 3, 3: 4, 4: 5}[response.result.schema_version],
         "design_id": str(design.design_id),
         "design_version_id": str(design.design_version_id),
         "design_sha256": design.design_sha256,
@@ -260,6 +275,13 @@ def _validated_analysis_response(
         "response_name": record.response_name,
     }
     if any(config.get(key) != value for key, value in expected_config.items()):
+        raise _metadata_error("doe_factorial_analysis_dependency_mismatch")
+    if response.result.schema_version == 4 and (
+        record.method_version != "0.10.0"
+        or config.get("max_interaction_order")
+        != response.result.model_policy.requested_interaction_order
+        or design.fractional is None
+    ):
         raise _metadata_error("doe_factorial_analysis_dependency_mismatch")
     if (
         response.result.schema_version >= 2

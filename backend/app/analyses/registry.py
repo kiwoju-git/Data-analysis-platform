@@ -48,7 +48,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.capability": METHOD_VERSION,
     "quality.gage_rr": METHOD_VERSION,
     "quality.gage_run_chart": METHOD_VERSION,
-    "doe.factorial_design": "0.9.0",
+    "doe.factorial_design": "0.10.0",
     "doe.general_factorial_design": "0.4.0",
     "doe.latin_hypercube": "0.3.0",
     "doe.response_surface": "0.3.0",

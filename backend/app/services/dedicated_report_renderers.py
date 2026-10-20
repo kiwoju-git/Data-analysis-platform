@@ -30,13 +30,14 @@ def _definition(
     core: tuple[str, ...],
     optional: tuple[str, ...],
     schemas: tuple[int, ...] = (1, 2, 3),
+    renderer_version: str = "1.1.0",
 ) -> ReportDefinition:
     return ReportDefinition(
         method,
         summary,
         schemas,
         "dedicated_" + variant,
-        "1.1.0",
+        renderer_version,
         (
             ReportVariantDefinition(
                 variant,
@@ -59,8 +60,12 @@ DEFINITIONS = {
             "diagnostics",
             "residual_plots",
             "factorial_plots",
+            "alias_structure",
+            "estimability",
             "warnings",
         ),
+        (1, 2, 3, 4),
+        "1.2.0",
     ),
     "general_factorial": _definition(
         "doe.general_factorial_design",
@@ -344,7 +349,7 @@ def render_doe_analysis_body(
         result, dict
     ):
         return ReportBody("unsupported", (), "unsupported_result_schema")
-    schemas = (1,) if family == "response_surface" else (1, 2, 3)
+    schemas = DEFINITIONS[family].accepted_schemas
     if (
         type(result.get("schema_version")) is not int
         or result["schema_version"] not in schemas
@@ -460,6 +465,89 @@ def render_doe_analysis_body(
                 locale,
             ),
         ]
+        if family == "factorial":
+            alias = result.get("fractional_design")
+            if isinstance(alias, dict):
+                classes = alias.get("alias_classes")
+                if isinstance(classes, list):
+                    alias_rows = [
+                        (
+                            " = ".join(
+                                ("-" if term["sign"] < 0 else "") + term["compact_label"]
+                                for term in group
+                            ),
+                            " = ".join(
+                                ("-" if term["sign"] < 0 else "") + term["full_label"]
+                                for term in group
+                            ),
+                        )
+                        for group in classes
+                    ]
+                else:
+                    alias_rows = [
+                        ("", " = ".join(group)) for group in alias.get("alias_groups", [])
+                    ]
+                markup = report_table(
+                    [
+                        text(locale, "기호", "Symbol"),
+                        text(locale, "전체 요인명", "Full factor name"),
+                    ],
+                    [
+                        (chr(65 + index), name)
+                        for index, name in enumerate(result.get("factor_names", []))
+                    ],
+                ) + report_table(
+                    [
+                        text(locale, "Alias 그룹", "Alias class"),
+                        text(locale, "전체 이름", "Full names"),
+                    ],
+                    alias_rows,
+                )
+                sections.append(
+                    section("alias_structure", "Alias 구조", "Alias structure", markup, locale)
+                )
+            else:
+                sections.append(
+                    section(
+                        "alias_structure",
+                        "Alias 구조",
+                        "Alias structure",
+                        "<p>"
+                        + text(
+                            locale,
+                            "정규 부분요인 설계에 해당하지 않습니다.",
+                            "Not a regular fractional design.",
+                        )
+                        + "</p>",
+                        locale,
+                    )
+                )
+            if isinstance(alias, dict):
+                sections.append(
+                    _saved(
+                        "estimability",
+                        "독립 대표 모형",
+                        "Independent representative basis",
+                        result.get("estimability"),
+                        locale,
+                    )
+                )
+            else:
+                sections.append(
+                    section(
+                        "estimability",
+                        "독립 대표 모형",
+                        "Independent representative basis",
+                        "<p>"
+                        + text(
+                            locale,
+                            "부분요인 대표 항 선택에 해당하지 않습니다.",
+                            "Fractional representative selection does not apply.",
+                        )
+                        + "</p>",
+                        locale,
+                    )
+                )
     return _ordered(family, sections)
 
 

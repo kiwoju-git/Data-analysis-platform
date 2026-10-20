@@ -1,12 +1,14 @@
 # Factorial Model Selection Contract
 
-Status: implementation contract, updated 2026-09-16. Official sources and baseline
+Status: implementation contract, updated 2026-10-20. Official sources and baseline
 inventory: `factorial_model_reduction_prediction_plots_audit.md`.
 
 ## Scope and Options
 
-Two-level full and General Full only. Fractional/PB accept `none` only and
-reject backward with `doe_factorial_model_selection_unsupported_for_aliased_design`.
+Two-level full, General Full and catalogue-backed regular fractions support
+selection. Regular fractions support main and two-factor interaction requests;
+PB remains main-only and rejects backward with
+`doe_factorial_model_selection_unsupported_for_aliased_design`.
 Defaults: method `none`, alpha-to-remove 0.05 (finite, strictly 0..1), hierarchy
 `strong`, saturated policy `pool_smallest_adjusted_ss`, step details true.
 Unknown options are rejected; omitted options preserve the original full fit.
@@ -22,7 +24,31 @@ term policies and the server catalog are defined in
 `factorial_manual_term_selection_contract.md`. A factorial term is
 removable only when no remaining higher-order term contains its factor set.
 Validate initial hierarchy and exact column coverage. Rank-deficient initial
-matrices fail; selection is not a workaround for aliasing.
+matrices fail after the explicit regular-fraction representative preflight.
+Selection never treats duplicate alias columns as independently estimated.
+
+## Regular-Fraction Representative Preflight
+
+Method 0.10.0 writes result 4/config 5 for regular fractions (full and PB retain
+result 3/config 4). API 25 adds POST `analysis-term-preflight` alongside the
+existing design-owned catalog. Historical methods/configs/results remain readable
+without rewriting their hashes.
+
+Build the actual run matrix including centers and blocks. Before using response
+values, select whole independent term blocks in this order: structural, forced
+and their parents, main effects, then canonical interactions. Unit-column-norm
+SVD uses a fixed full-request-matrix tolerance for every candidate rank check.
+Record requested parameter count (after manual exclusions), independent rank,
+residual DF, tolerance, representatives, signed exact aliases and other rank
+dependencies. Positive residual DF, saturation and rank deficiency are distinct.
+Conflicting forced terms fail rather than silently dropping a forced effect.
+
+Only representatives enter the unchanged selection engine. Alias/rank exclusions
+are not backward removals. Manual exclusions, initial adjusted-SS pooling,
+backward removals and final retained terms remain separate. No alternative alias
+representative re-enters during backward. Inference is conditional on this model;
+it does not establish that unrepresented/high-order aliases have zero effects.
+Requested and effective representative interaction orders are stored separately.
 
 ## Saturated Start
 
@@ -74,12 +100,13 @@ centered SST times the corresponding diagonal of inverse(X'X); null for
 unavailable/degenerate columns. General Full VIF is coefficient-level, not GVIF.
 
 No automatic removal of structural terms, Lenth PSE, studentized deleted
-residuals, arbitrary generators, response transformations or alias-aware
-selection. OLS regression selection is not refactored in this change.
+residuals, arbitrary generators or response transformations. PB alias-aware
+selection remains unsupported. OLS regression selection is not refactored.
 
 ## Validation Gate
 
 Independent fixed fixtures, brute-force deleted-observation PRESS, full-model
 parity, multi-DF block removal, ABC lower-term retention, deterministic ties,
-pool count/cap, structural terms and aliased-design rejection are required.
+pool count/cap, structural terms, regular-fraction representatives and PB rejection
+are required.
 All numerical comparisons declare tolerances. No stored legacy payload rewrite.
