@@ -50,8 +50,12 @@ def verify_rsm_resume(
         view = page.request.get(base + view_api)
         assert view.status == 200, view.text()
         assert view.json()["sha256"] == original["view_sha256"]
+        # The original report is English; its exact link is readable from the
+        # Korean UI even though the ordinary list filters by the current locale.
         page.goto(
-            base + "/reports?source_kind=doe_analysis", wait_until="domcontentloaded"
+            base + "/reports?source_kind=doe_analysis"
+            + f"&report_id={original['report_id']}",
+            wait_until="domcontentloaded",
         )
         wait_for_app_ready(page, "ko", "/reports")
         sources = page.request.get(
@@ -63,8 +67,12 @@ def verify_rsm_resume(
             if (item["source"].get("plot_view") or {}).get("plot_view_id")
             == original["view"]
         )
-        page.locator(f'[data-report-source="{source["source_ref_sha256"]}"]').click()
+        expect(page.locator("[data-managed-report-selection]")).to_have_attribute(
+            "data-managed-report-selection", source["source_ref_sha256"]
+        )
         row = page.locator(f'[data-managed-report="{original["report_id"]}"]')
+        expect(row).to_have_count(1)
+        expect(row.get_by_role("cell", name="EN", exact=True)).to_be_visible()
         path = output / "rsm-restart" / "restored-contour.html"
         with page.expect_download() as download:
             row.get_by_role("button", name="다운로드", exact=True).click()
@@ -86,6 +94,10 @@ def verify_rsm_resume(
             "view_sha256": original["view_sha256"],
             "report_sha256": original["report_sha256"],
             "visible_saved_view_restored": True,
+            "report_opened_by_exact_id": True,
+            "report_source_ref_sha256": source["source_ref_sha256"],
+            "report_locale": "en",
+            "interface_locale": "ko",
             "report_bytes_unchanged": True,
             "analysis_post_count": 0,
         }

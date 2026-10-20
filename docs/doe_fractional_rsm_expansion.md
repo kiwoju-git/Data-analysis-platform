@@ -541,3 +541,24 @@ to graphs, following the existing regression fixture's pattern. The reporting
 stage now saves its own synthetic trace in a `finally` block. No product source
 guard, navigation behavior, timeout retry or statistical calculation changed.
 The failed combined suite remains recorded; no Linux archive was produced.
+
+Full run39470257428 (`3000037`) passed Linux's complete browser suite as well as
+backend **2652 passed / 13 skips in 360.71s**, frontend **936 tests**, full static
+checks and source lifecycle. Python3.11 passed **2652 / 13 skips in 339.10s**.
+Its first completed archive was then built and actually installed/reinstalled
+offline in a network-isolated namespace. Initial built-UI fractional/RSM/zoom
+and server-stopped HTML checks passed. The first restart failed to find an
+English RSM report in the Korean locale-filtered list; trace confirmed the EN
+report remained stored, KO query correctly returned an empty list, and there
+were no page errors or failed assets. The second installation was not reached.
+
+The restart fixture now uses the existing exact `report_id` deep link from the
+Korean UI, verifies the selected source hash and visible EN row, then downloads
+the unchanged original HTML. The report and interface locales are recorded
+separately. The archive validator requires those facts plus matching source
+hashes across both installation paths. No product locale filtering or stored
+artifact was changed. Narrow verification: **242 suite/validator tests passed
+in 6.51s**, backend/changed-script Ruff passed, and backend format check passed
+for 386 files. Read-only collector/publisher guard tests passed **160 in 6.50s**.
+The failed archive is not published; this correction requires a new exact-source
+archive and full gates.

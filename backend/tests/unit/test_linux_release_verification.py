@@ -377,6 +377,8 @@ def valid_doe_receipt() -> dict:
         "view": str(UUID(int=21)),
         "report_id": str(UUID(int=22)),
         "report_sha256": HASH,
+        "report_source_ref_sha256": HASH,
+        "report_locale": "en",
         "result_payload_sha256": HASH,
         "view_sha256": HASH,
         "report_path": str(ROOT / ".tmp" / "synthetic-contour.html"),
@@ -412,6 +414,10 @@ def valid_rsm_phase_receipt(phase: str) -> dict:
         "analysis_post_count": 0,
         "visible_saved_view_restored": True,
         "report_bytes_unchanged": True,
+        "report_opened_by_exact_id": True,
+        "report_source_ref_sha256": initial["report_source_ref_sha256"],
+        "report_locale": initial["report_locale"],
+        "interface_locale": "ko",
     }
 
 
@@ -435,6 +441,7 @@ def test_rsm_restart_and_server_stopped_proof_preserves_exact_source_ids_and_has
         ("result_payload_sha256", "0" * 64),
         ("view_sha256", "0" * 64),
         ("report_sha256", "0" * 64),
+        ("report_source_ref_sha256", "0" * 64),
     ],
 )
 def test_second_install_rsm_must_match_exact_initial_source(field: str, value) -> None:
@@ -473,6 +480,10 @@ def test_each_remaining_archive_phase_requires_rsm_receipt(phase: str) -> None:
         ("analysis_post_count", False),
         ("visible_saved_view_restored", False),
         ("report_bytes_unchanged", False),
+        ("report_opened_by_exact_id", False),
+        ("report_source_ref_sha256", "invalid"),
+        ("report_locale", "ko"),
+        ("interface_locale", "en"),
     ],
 )
 def test_rsm_restore_evidence_requires_visible_immutable_saved_view(field: str, value) -> None:

@@ -630,6 +630,8 @@ def require_doe_rsm_receipt(receipt: object) -> None:
         != next(item["id"] for item in designs if item["kind"] == "circumscribed")
         or receipt["analysis_id"] in {item["id"] for item in analyses}
         or not _receipt_sha256(receipt.get("report_sha256"))
+        or not _receipt_sha256(receipt.get("report_source_ref_sha256"))
+        or receipt.get("report_locale") != "en"
         or not _receipt_sha256(receipt.get("result_payload_sha256"))
         or not _receipt_sha256(receipt.get("view_sha256"))
         or not isinstance(receipt.get("report_path"), str)
@@ -700,6 +702,10 @@ def require_rsm_phase_receipt(receipt: object, phase: str) -> None:
         or receipt["analysis_post_count"] != 0
         or receipt.get("visible_saved_view_restored") is not True
         or receipt.get("report_bytes_unchanged") is not True
+        or receipt.get("report_opened_by_exact_id") is not True
+        or not _receipt_sha256(receipt.get("report_source_ref_sha256"))
+        or receipt.get("report_locale") != "en"
+        or receipt.get("interface_locale") != "ko"
     ):
         raise ValueError(
             "RSM restart must restore the saved view/report without refitting"
@@ -722,6 +728,8 @@ def require_rsm_roundtrip(smoke: dict, restarts: list[dict], offline: dict) -> d
             "result_payload_sha256",
             "view_sha256",
             "report_sha256",
+            "report_source_ref_sha256",
+            "report_locale",
         )
     }
     if len(restarts) != 2:

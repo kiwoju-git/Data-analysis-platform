@@ -291,6 +291,8 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
                 "view": saved["asset_id"],
                 "report_id": report["export_id"],
                 "report_sha256": report["sha256"],
+                "report_source_ref_sha256": report["source_ref_sha256"],
+                "report_locale": report["locale"],
                 "result_payload_sha256": hashlib.sha256(original_bytes).hexdigest(),
                 "view_sha256": saved["sha256"],
                 "report_path": str(path.resolve()),
