@@ -394,3 +394,11 @@ including 390px, and checks 4/3/2/1 chart columns against the actual
 strict receipt. Its focused verifier tests passed **165 tests in 2.29s**, and
 the three changed validation files passed targeted Ruff. The extended browser
 journey has not yet run; these checks do not establish viewport behavior.
+
+A subsequent source audit found the RSM browser fixture seeded Korean on every
+navigation while expecting English after an in-app language change. Its seed
+now applies only when locale storage is absent; the shared readiness/diagnostic
+helper and English assertions remain unchanged. The four DOE browser files
+passed Ruff, and suite-partition/archive-receipt tests passed **236 tests**.
+This is a fixture correction verified by source inspection and contract tests,
+not evidence that the actual native browser journey completed.

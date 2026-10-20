@@ -14,7 +14,15 @@ from app_readiness import diagnosed_page, wait_for_app_ready
 def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict:
     route = "/analysis/doe/doe.response_surface"
     receipt: dict = {"fixture": "synthetic", "designs": [], "analyses": []}
-    with diagnosed_page(browser, output, "rsm-completion", locale="ko") as page:
+    with diagnosed_page(
+        browser,
+        output,
+        "rsm-completion",
+        init_script=(
+            "if (localStorage.getItem('statistical-twin.locale') === null) "
+            "localStorage.setItem('statistical-twin.locale', 'ko')"
+        ),
+    ) as page:
         page.set_viewport_size({"width": 1440, "height": 1000})
         page.goto(base + route, wait_until="domcontentloaded")
         wait_for_app_ready(page, "ko", route)
