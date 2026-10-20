@@ -475,3 +475,27 @@ suite-partition/archive-validator batch passed **237 tests in 4.24s**, and Ruff
 passed for the three changed browser fixtures. The Korean compact status plot
 and English compact Alias screenshots from efec2aa were visually inspected;
 they are synthetic CI evidence, not screenshots of a user's workspace.
+
+Diagnostic-only run39463253002 (`3d938c1`) passed context, including explicit
+new-revision recovery and reanalysis. RSM workflows completed the four presets,
+backward and custom contour save, then reproduced actual page overflow at 390px.
+The captured DOM/CSS replay measured roughly 600px document width: the stationary
+coordinate grid's `max-content` track expanded for the long factor name, and
+the graph options declared grid columns without `display:grid`, leaving selects
+at their intrinsic width. Scoped RSM classes now constrain these two layouts;
+no global metadata/table/chart style changed. The browser assertion also records
+overflowing element boxes on failure. Native resize/zoom rerun remains required.
+The same static replay identified two existing unbroken warning-code strings
+that still extended beyond their boxes; an RSM-only warning class now wraps
+them without hiding or changing their content. The installed ui-ux-pro-max
+Long Token Wrapping guidance was applied, not page-level overflow suppression.
+
+The local Windows Node22.23.2 full frontend batch on `3d938c1` passed **108 files,
+936 tests in 111.02s**; lint had zero errors and 12 Fast Refresh warnings.
+These source-checkout checks do not replace the native product/archive gates.
+After the scoped CSS corrections, network-blocked static replay of the captured
+synthetic DOM passed 390/768/1024/1440px containment and 1/2/3/4 columns, including
+all ten compact charts, selects and four stationary coordinates. A separate
+server-free Chromium zoom-mechanism probe confirmed real 100/125/150 percent
+tab zoom changes CSS viewport width (1440/1152/960) without losing input. Neither
+probe is recorded as a live RSM or installed Linux archive pass.

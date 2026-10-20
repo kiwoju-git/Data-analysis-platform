@@ -42,7 +42,17 @@
 .rsm-plot-options .action-row,
 .rsm-plot-options .checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
 .rsm-plot-options label { min-inline-size: 0; overflow-wrap: anywhere; }
-.rsm-plot-options .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); }
+.rsm-plot-options .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 12px;
+  min-inline-size: 0;
+}
+.rsm-plot-options select {
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
 .rsm-contour-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-size: 12px; }
 .rsm-contour-legend strong { flex-basis: 100%; }
 .rsm-contour-legend span { display: inline-flex; align-items: center; gap: 4px; }

@@ -163,9 +163,22 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         for width in (1920, 1440, 1280, 1024, 900, 768, 390, 1440):
             page.set_viewport_size({"width": width, "height": 1000})
             expect(plots.locator(".doe-compact-grid")).to_be_visible()
-            assert page.evaluate(
-                "document.documentElement.scrollWidth <= innerWidth + 1"
-            )
+            overflow = page.evaluate("""() => ({
+                viewport: innerWidth,
+                scrollWidth: document.documentElement.scrollWidth,
+                elements: [...document.querySelectorAll('.analysis-run-panel *')]
+                    .map(element => ({
+                        tag: element.tagName, class: element.className,
+                        right: element.getBoundingClientRect().right,
+                        scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+                        overflowX: getComputedStyle(element).overflowX
+                    }))
+                    .filter(element => element.right > innerWidth + 1
+                        || (element.overflowX === 'visible'
+                            && element.scrollWidth > element.clientWidth + 1))
+                    .slice(0, 30)
+            })""")
+            assert overflow["scrollWidth"] <= overflow["viewport"] + 1, overflow
             cards = plots.locator(".doe-compact-plot")
             for card in cards.all():
                 svg = card.locator("svg.chart-frame-svg").bounding_box()

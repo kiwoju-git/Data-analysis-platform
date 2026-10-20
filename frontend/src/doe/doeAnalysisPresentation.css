@@ -47,3 +47,22 @@
   min-inline-size: 0;
   min-block-size: 100px;
 }
+
+.metadata-grid.rsm-stationary-coordinates {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  min-inline-size: 0;
+}
+
+.rsm-stationary-coordinates .metadata-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  align-items: start;
+}
+
+.rsm-result-warning {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}

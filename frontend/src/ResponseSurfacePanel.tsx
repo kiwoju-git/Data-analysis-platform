@@ -1019,7 +1019,7 @@ function ResponseSurfaceResult({ analysis, design }: {
         <strong>r{analysis.response_revision_number}</strong>
       </div>
       {stationary.available ? (
-        <div className="metadata-grid" aria-label="정상점 좌표">
+        <div className="metadata-grid rsm-stationary-coordinates" aria-label="정상점 좌표">
           {Object.entries(stationary.actual_coordinates).map(([factor, value]) => (
             <span key={factor} className="metadata-pair">
               <span>{factor}</span>
@@ -1071,7 +1071,7 @@ function ResponseSurfaceResult({ analysis, design }: {
       </div>
       <DoeLackOfFitNotice lack={result.anova.lack_of_fit} />
       {result.warnings.map((warning) => (
-        <div className="notice-box notice-warning" key={warning}>{warning === "doe_rsm_post_selection_inference_exploratory" ? t("doe.selection.exploratory") : warning}</div>
+        <div className="notice-box notice-warning rsm-result-warning" key={warning}>{warning === "doe_rsm_post_selection_inference_exploratory" ? t("doe.selection.exploratory") : warning}</div>
       ))}
     </section>
   );
