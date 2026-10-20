@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      browser_diagnostics_only:
+        description: "Diagnostic-only run: no product/release gate or publishable artifact"
+        required: false
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -246,7 +251,7 @@ jobs:
           if-no-files-found: error
 
   security-python:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     strategy:
       fail-fast: false
       matrix:
@@ -307,7 +312,7 @@ jobs:
           if-no-files-found: error
 
   security-npm:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -329,7 +334,7 @@ jobs:
           if-no-files-found: error
 
   dependency-security:
-    if: always() && inputs.generate_linux_locks != true
+    if: always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     needs: [security-python, security-npm]
     runs-on: ubuntu-24.04
     steps:
@@ -340,7 +345,7 @@ jobs:
         run: python scripts/release_readiness.py gate --kind dependencies --source-commit "$GITHUB_SHA" --output .tmp/dependency-gate.json
 
   windows:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: windows-latest
     # Observed backend duration reached 39m31s before frontend checks.
     timeout-minutes: 60
@@ -364,7 +369,7 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
 
   windows-e2e:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: windows-latest
     needs: windows
     timeout-minutes: 20
@@ -428,7 +433,7 @@ jobs:
           if-no-files-found: ignore
 
   e2e:
-    if: always() && inputs.generate_linux_locks != true
+    if: always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     needs: windows-e2e
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -440,7 +445,7 @@ jobs:
         run: python scripts/release_readiness.py gate --kind windows-e2e --source-commit "$GITHUB_SHA" --output .tmp/windows-e2e-gate.json
 
   linux:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -485,7 +490,7 @@ jobs:
           if-no-files-found: ignore
 
   python311:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -517,7 +522,7 @@ jobs:
           if-no-files-found: ignore
 
   linux-release:
-    if: inputs.generate_linux_locks != true
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: ubuntu-24.04
     needs: [linux, python311]
     timeout-minutes: 35
@@ -556,7 +561,7 @@ jobs:
           if-no-files-found: ignore
 
   release-ready:
-    if: always() && inputs.generate_linux_locks != true
+    if: always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     needs: [windows, e2e, linux, python311, linux-release, dependency-security]
     runs-on: ubuntu-24.04
     timeout-minutes: 5

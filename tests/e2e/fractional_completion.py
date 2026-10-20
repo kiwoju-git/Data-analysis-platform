@@ -512,6 +512,7 @@ def verify_fractional_completion(browser: Browser, base: str, output: Path) -> d
 
             created = page.request.post(
                 base + "/api/v1/doe-designs/factorial",
+                headers={"Origin": base},
                 data={
                     "name": f"Synthetic fraction IV {locale}",
                     "design_type": "two_level_fractional",

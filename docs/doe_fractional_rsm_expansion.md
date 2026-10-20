@@ -421,3 +421,18 @@ The suite-partition and archive-validator regression batch passed **237 tests**
 after that wiring change. The original ca1162b Windows job also finished with
 the same tutorial-version failure: **2658 passed, 1 failed, 3 skipped**,
 1828.00s on hosted Windows Server2025/Python3.10.11; its frontend did not run.
+
+Run39460057458's early context suite passed after the revision-fixture correction.
+Its workflows suite reached the five-factor analyses, HTML export and restore,
+then the API-only setup for the four-factor fixture was correctly rejected by
+the Vite Origin guard. The trace showed the real UI POST with Origin succeeded
+and the helper POST without Origin returned `403 dev_origin_not_allowed`.
+Only that synthetic helper now sends the exact local Origin; no Host/Origin/CORS
+protection changed.
+
+For iteration, `browser_diagnostics_only=true` can now explicitly run diagnostics
+without product jobs. Such a run has no release-ready result or publishable
+archive and is rejected by the release collector. Normal/full runs retain every
+required gate and the four Windows suites. Earlier obsolete 468dad7/6400408 runs
+were cancelled after collecting their Linux failures; their interrupted Windows
+checks are not passes. Final source requires a fresh complete native run.

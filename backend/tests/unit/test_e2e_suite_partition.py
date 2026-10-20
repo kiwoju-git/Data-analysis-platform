@@ -245,7 +245,9 @@ def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():
     )
     assert upload["with"]["name"] == "e2e-logs-${{ matrix.suite }}"
     aggregate = jobs["e2e"]
-    assert aggregate["if"] == "always() && inputs.generate_linux_locks != true"
+    assert aggregate["if"] == (
+        "always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true"
+    )
     assert aggregate["needs"] == "windows-e2e"
     assert "--kind windows-e2e" in aggregate["steps"][-1]["run"]
     assert "e2e" in jobs["release-ready"]["needs"]
@@ -265,8 +267,13 @@ def test_early_browser_diagnostics_do_not_replace_product_gates():
     assert diagnostic["strategy"]["fail-fast"] is False
     assert "inputs.browser_diagnostics == true" in diagnostic["if"]
     assert "needs" not in diagnostic
+    triggers = workflow.get("on", workflow.get(True))
+    diagnostic_only = triggers["workflow_dispatch"]["inputs"]["browser_diagnostics_only"]
+    assert diagnostic_only["type"] == "boolean"
+    assert diagnostic_only["default"] is False
     for name in ("windows", "windows-e2e", "linux", "python311", "linux-release", "release-ready"):
-        assert "browser_diagnostics" not in jobs[name]["if"]
+        assert "inputs.browser_diagnostics == true" not in jobs[name]["if"]
+        assert "inputs.browser_diagnostics_only != true" in jobs[name]["if"]
     assert set(jobs["release-ready"]["needs"]) == {
         "windows",
         "e2e",
@@ -308,7 +315,9 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
         },
     }
     for name in ("dependency-security", "e2e", "release-ready"):
-        assert jobs[name]["if"] == "always() && inputs.generate_linux_locks != true"
+        assert jobs[name]["if"] == (
+            "always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true"
+        )
     for name in (
         "security-python",
         "security-npm",
@@ -318,7 +327,9 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
         "python311",
         "linux-release",
     ):
-        assert jobs[name]["if"] == "inputs.generate_linux_locks != true"
+        assert jobs[name]["if"] == (
+            "inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true"
+        )
     assert jobs["release-ready"]["needs"] == [
         "windows",
         "e2e",
