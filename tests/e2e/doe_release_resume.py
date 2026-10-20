@@ -38,9 +38,9 @@ def verify_rsm_resume(
         wait_for_app_ready(page, "ko", route)
         expect(page.locator("#rsm-result-title")).to_be_visible()
         plots = page.locator(".rsm-plot-options")
-        plots.get_by_label("저장된 뷰", exact=True).select_option(original["view"])
-        expect(plots.get_by_label("X 요인", exact=True)).to_have_value("factor_3")
-        expect(plots.get_by_label("축 좌표", exact=True)).to_have_value("coded")
+        plots.get_by_role("combobox", name="저장된 뷰", exact=True).select_option(original["view"])
+        expect(plots.get_by_role("combobox", name="X 요인", exact=True)).to_have_value("factor_3")
+        expect(plots.get_by_role("combobox", name="축 좌표", exact=True)).to_have_value("coded")
         result = page.request.get(base + api)
         assert result.status == 200, result.text()
         assert (

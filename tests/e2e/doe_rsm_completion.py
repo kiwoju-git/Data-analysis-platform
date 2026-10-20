@@ -99,7 +99,7 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
             ("linear_interactions", 11),
             ("full_quadratic", 15),
         ):
-            page.get_by_label("RSM 모형항", exact=True).select_option(preset)
+            page.get_by_role("combobox", name="RSM 모형항", exact=True).select_option(preset)
             analysis = _analyze(page, analysis_path)
             assert analysis["result"]["sample"]["parameter_count"] == count
             assert analysis["result"]["term_preset"] == preset
@@ -130,12 +130,12 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
             if request.method == "POST"
             else None,
         )
-        plots.get_by_label("X 요인", exact=True).select_option("factor_3")
+        plots.get_by_role("combobox", name="X 요인", exact=True).select_option("factor_3")
         held_value = design["factors"][0]["low"] / 2 + design["factors"][0]["high"] / 2
         plots.get_by_label("고정 실제값: " + names[0], exact=False).fill(
             str(held_value)
         )
-        plots.get_by_label("축 좌표", exact=True).select_option("coded")
+        plots.get_by_role("combobox", name="축 좌표", exact=True).select_option("coded")
         plot_path = (
             f"/api/v1/doe-designs/{design['design_id']}"
             f"/response-surface-analyses/{analysis['analysis_id']}"
@@ -253,14 +253,14 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         wait_for_app_ready(page, "en", route)
         expect(page.locator("#rsm-result-title")).to_be_visible()
         restored_plots = page.locator(".rsm-plot-options")
-        restored_plots.get_by_label("Saved views", exact=True).select_option(
+        restored_plots.get_by_role("combobox", name="Saved views", exact=True).select_option(
             saved["asset_id"]
         )
-        expect(restored_plots.get_by_label("X factor", exact=True)).to_have_value(
+        expect(restored_plots.get_by_role("combobox", name="X factor", exact=True)).to_have_value(
             "factor_3"
         )
         expect(
-            restored_plots.get_by_label("Axis coordinates", exact=True)
+            restored_plots.get_by_role("combobox", name="Axis coordinates", exact=True)
         ).to_have_value("coded")
         assert (
             page.request.get(

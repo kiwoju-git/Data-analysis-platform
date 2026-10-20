@@ -446,3 +446,32 @@ label changed. The RSM browser fixture now also enters a synthetic long Korean/
 English factor name and unit through the form before design generation, so the
 same restored model exercises them during resize and real tab zoom checks.
 This diagnostic run skipped product/release gates and produced no release.
+
+A focused follow-up source review found an RSM recovery gap after correctly
+ignoring a stale analysis completion: the server could be `analyzed` while the
+edited page retained `completed`, making another legacy response PUT fail.
+Restoring history unlocked correction but replaced the current draft. The
+existing explicit "edit as new revision" action is now also available whenever
+a saved revision number exists. It preserves the draft and uses the existing
+owner/supersedes-validated POST; no automatic retry or response rewrite was added.
+The component test first failed on the missing action. The context browser
+fixture now continues through explicit revision creation and successful
+reanalysis, and checks that the earlier committed result remains unchanged.
+This follows ui-ux-pro-max's targeted error-recovery guidance without changing
+the existing layout or primary action. Native browser confirmation is pending.
+The narrow frontend batch (`App`, `rsmRestoreReview`, `rsmRequestContext`)
+passed **110 tests** after the missing-action red test.
+
+Diagnostic-only run39462017138 (`efec2aa`) passed context and both Korean/English
+fractional journeys. RSM created all three 31-run CCDs, including the long factor
+metadata, and saved responses before its preset locator timed out. The captured
+wrapping-label/select fragment reproduced `get_by_label(..., exact=True)` matching
+the options' text, while Chromium's accessible combobox name was correct. RSM
+select assertions now use that role/name, including saved-view restore. Product
+labels and accessibility semantics are unchanged; RSM completion still needs a
+native rerun. All required release gates were skipped in this diagnostic run.
+Focused verification after these changes: frontend typecheck passed, the
+suite-partition/archive-validator batch passed **237 tests in 4.24s**, and Ruff
+passed for the three changed browser fixtures. The Korean compact status plot
+and English compact Alias screenshots from efec2aa were visually inspected;
+they are synthetic CI evidence, not screenshots of a user's workspace.

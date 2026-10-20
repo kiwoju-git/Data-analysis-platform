@@ -129,6 +129,42 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
         assert restored.status == 200
         assert restored.json() == payload
         page.unroute("**" + analysis_path)
+        # The server may already lock the source after the obsolete completion.
+        # Explicit correction must preserve the edited draft instead of restoring history.
+        page.get_by_role("button", name="새 revision으로 수정", exact=True).click()
+        expect(first).to_have_value("0.75")
+        revision_path = (
+            f"/api/v1/doe-designs/{design['design_id']}/response-revisions"
+        )
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and urlsplit(response.url).path == revision_path
+        ) as corrected:
+            page.get_by_role("button", name="새 revision 저장", exact=True).click()
+        assert corrected.value.status == 201, corrected.value.text()
+        assert (
+            corrected.value.request.post_data_json["supersedes_response_revision_id"]
+            == payload["response_revision_id"]
+        )
+        corrected_revision = corrected.value.json()
+        assert corrected_revision["response_revision_id"] != payload["response_revision_id"]
+        assert corrected_revision["values"][0]["value"] == 0.75
+        expect(analyze).to_be_enabled()
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and urlsplit(response.url).path == analysis_path
+        ) as refreshed:
+            analyze.click()
+        assert refreshed.value.status == 201, refreshed.value.text()
+        assert (
+            refreshed.value.json()["response_revision_id"]
+            == corrected_revision["response_revision_id"]
+        )
+        expect(page.locator("#rsm-result-title")).to_be_visible()
+        expect(first).to_have_value("0.75")
+        assert page.request.get(
+            base_url + analysis_path + "/" + payload["analysis_id"]
+        ).json() == payload
         page.screenshot(
             path=str(output / "response-context" / "rsm-context-after-edit.png"),
             full_page=True,

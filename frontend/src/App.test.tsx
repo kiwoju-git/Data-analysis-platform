@@ -1367,6 +1367,15 @@ describe("App", () => {
     const completedHtml = renderToString(
       <ResponseSurfaceResponseEntry {...common} design={completed} />,
     );
+    const unsavedHtml = renderToString(
+      <ResponseSurfaceResponseEntry
+        {...common}
+        design={completed}
+        responsesSaved={false}
+        responseRevisionNumber={null}
+        responseRevisionSha256={null}
+      />,
+    );
     const correctionHtml = renderToString(
       <ResponseSurfaceResponseEntry
         {...common}
@@ -1407,6 +1416,8 @@ describe("App", () => {
     expect(analyzedHtml).toContain("새 revision으로 수정");
     expect(completedHtml).toContain("분석을 실행하면 현재 설계의 반응값이 잠깁니다");
     expect(completedHtml).not.toContain('role="status"');
+    expect(completedHtml).toContain("새 revision으로 수정");
+    expect(unsavedHtml).not.toContain("새 revision으로 수정");
     expect(correctionHtml).toContain("새 revision을 편집 중입니다");
     expect(correctionHtml).toContain("새 revision 저장");
     expect(correctionHtml).toMatch(/<input disabled="" value="Yield"/);

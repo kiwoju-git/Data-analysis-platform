@@ -931,7 +931,7 @@ export function ResponseSurfaceResponseEntry({
         >
           {isSaving ? "저장 중" : correctionMode ? "새 revision 저장" : "반응 저장"}
         </button>
-        {(design.status === "analyzed" || historicalRevision) && !correctionMode ? (
+        {(responseRevisionNumber !== null || design.status === "analyzed" || historicalRevision) && !correctionMode ? (
           <button type="button" className="secondary-button" onClick={onStartCorrection}>
             새 revision으로 수정
           </button>
