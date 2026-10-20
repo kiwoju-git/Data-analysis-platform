@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import importlib
 from collections import Counter
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ ONLY_FLAGS = (
 STAGE_CALLS = {
     "analysis_completion": "verify_analysis_completion",
     "report_center_context": "verify_report_center_context",
+    "rsm_context": "verify_rsm_context",
     "api_translation": "verify_api_translation_boundary",
     "dataset_context": "verify_dataset_context",
     "gp_prediction_context": "verify_gp_prediction_context",
@@ -56,6 +58,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert driver.suite_stage_ids("full") == (
         "analysis_completion",
         "report_center_context",
+        "rsm_context",
         "api_translation",
         "dataset_context",
         "gp_prediction_context",
@@ -79,6 +82,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         assert partition == tuple(stage for stage in driver.FULL_STAGE_ORDER if stage in partition)
     assert driver.suite_stage_ids("prediction") == ("gp_prediction_context", "pilot_prediction")
     assert "pilot_feedback" in driver.suite_stage_ids("context")
+    assert "rsm_context" in driver.suite_stage_ids("context")
+    assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
 
@@ -232,7 +237,7 @@ def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():
     )
     assert upload["with"]["name"] == "e2e-logs-${{ matrix.suite }}"
     aggregate = jobs["e2e"]
-    assert aggregate["if"] == "always()"
+    assert aggregate["if"] == "always() && inputs.generate_linux_locks != true"
     assert aggregate["needs"] == "windows-e2e"
     assert "--kind windows-e2e" in aggregate["steps"][-1]["run"]
     assert "e2e" in jobs["release-ready"]["needs"]
@@ -242,3 +247,129 @@ def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():
     assert '$PSBoundParameters.ContainsKey("Suite")' in powershell
     assert '$Args += @("--suite", "$Suite")' in powershell
     assert '[ValidateSet("full", "workflows", "context", "data", "prediction")]' in powershell
+
+
+def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    triggers = workflow.get("on", workflow.get(True))
+    option = triggers["workflow_dispatch"]["inputs"]["generate_linux_locks"]
+    assert option["type"] == "boolean"
+    assert option["default"] is False
+    assert option["required"] is False
+    jobs = workflow["jobs"]
+    native = jobs["generate-linux-locks"]
+    assert native["if"] == (
+        "github.event_name == 'workflow_dispatch' && inputs.generate_linux_locks == true"
+    )
+    assert native["runs-on"] == "ubuntu-24.04"
+    assert native["permissions"] == {"contents": "read"}
+    assert native["strategy"] == {
+        "fail-fast": False,
+        "matrix": {
+            "include": [
+                {"python": "3.11", "target": "py311-linux", "profile": "runtime"},
+                {"python": "3.11", "target": "py311-linux", "profile": "dev"},
+                {"python": "3.12", "target": "py312-linux", "profile": "runtime"},
+                {"python": "3.12", "target": "py312-linux", "profile": "dev"},
+            ]
+        },
+    }
+    for name in ("dependency-security", "e2e", "release-ready"):
+        assert jobs[name]["if"] == "always() && inputs.generate_linux_locks != true"
+    for name in (
+        "security-python",
+        "security-npm",
+        "windows",
+        "windows-e2e",
+        "linux",
+        "python311",
+        "linux-release",
+    ):
+        assert jobs[name]["if"] == "inputs.generate_linux_locks != true"
+    assert jobs["release-ready"]["needs"] == [
+        "windows",
+        "e2e",
+        "linux",
+        "python311",
+        "linux-release",
+        "dependency-security",
+    ]
+    assert "needs" not in native
+    commands = "\n".join(step.get("run", "") for step in native["steps"])
+    assert "pip download --only-binary=:all: --require-hashes" in commands
+    assert "pip download --only-binary=:all: --no-deps" in commands
+    assert "'contourpy==1.3.2'" in commands
+    assert "scripts/generate_python_lock.py" in commands
+    assert "scripts/validate_python_lock.py" in commands
+    assert "pip install --no-index --find-links" in commands
+    assert "--only-binary=:all: --require-hashes" in commands
+    assert "pip check" in commands
+    assert 'name="serial"' in commands
+    assert '"product_validation_complete": False' in commands
+    assert '"network_isolation_enforced": False' in commands
+    assert "release_readiness.py" not in commands
+    assert "--platform" not in commands
+    upload = next(
+        step for step in native["steps"] if step.get("uses") == "actions/upload-artifact@v4"
+    )
+    assert upload["if"] == "success()"
+    assert upload["with"]["name"] == (
+        "native-contourpy-locks-${{ matrix.target }}-${{ matrix.profile }}-${{ github.sha }}"
+    )
+    assert upload["with"]["if-no-files-found"] == "error"
+
+
+def _native_lock_python_blocks() -> list[str]:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    return [
+        step["run"].split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+        for step in workflow["jobs"]["generate-linux-locks"]["steps"]
+        if "<<'PY'\n" in step.get("run", "")
+    ]
+
+
+def test_native_lock_python_blocks_compile():
+    blocks = _native_lock_python_blocks()
+    assert len(blocks) == 2
+    for code in blocks:
+        compile(code, "ci-native-lock-verification", "exec")
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ("version", "Existing version or wheel SHA-256 changed: numpy"),
+        ("hash", "Existing version or wheel SHA-256 changed: numpy"),
+        ("missing", "Only ContourPy may be added"),
+        ("extra", "Only ContourPy may be added"),
+        ("contour_version", "Unexpected ContourPy version"),
+    ],
+)
+def test_native_lock_actual_drift_checks_reject_changes(change, message):
+    before = {"numpy": {"version": "2.2.6", "sha256": "a" * 64}}
+    after = {
+        **copy.deepcopy(before),
+        "contourpy": {"version": "1.3.2", "sha256": "b" * 64},
+    }
+    tree = ast.parse(_native_lock_python_blocks()[0])
+    first = next(
+        index
+        for index, node in enumerate(tree.body)
+        if isinstance(node, ast.If) and ast.unparse(node.test).startswith("set(after)")
+    )
+    checks = compile(
+        ast.Module(body=tree.body[first : first + 3], type_ignores=[]), "drift", "exec"
+    )
+    exec(checks, {"before": before, "after": after})
+    if change == "version":
+        after["numpy"]["version"] = "2.3.0"
+    elif change == "hash":
+        after["numpy"]["sha256"] = "c" * 64
+    elif change == "missing":
+        del after["numpy"]
+    elif change == "extra":
+        after["unexpected"] = {"version": "1.0", "sha256": "c" * 64}
+    else:
+        after["contourpy"]["version"] = "1.4.0"
+    with pytest.raises(SystemExit, match=message):
+        exec(checks, {"before": before, "after": after})

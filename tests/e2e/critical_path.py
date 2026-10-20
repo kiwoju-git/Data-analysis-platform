@@ -225,9 +225,9 @@ SUITE_STAGES = {
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "api_translation", "dataset_context",
     "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
-    "chart_formatting", "pilot_feedback", "rsm_context", "pilot_ingestion", "pilot_prediction",
+    "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "desktop_resize", "localization_shell", "legacy_workflow",
 )
 

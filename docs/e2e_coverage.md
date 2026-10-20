@@ -811,6 +811,7 @@ browser critical path.
 - `verify refined UI with exact synthetic version` (focused mode)
 - `verify current analysis completion ownership` (full flow)
 - `verify Report Center request context` (full flow)
+- `verify RSM response validation and source ownership`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
