@@ -49,6 +49,7 @@ from regularized_regression import verify_regularized_regression
 from result_charts import verify_chart_interactions, verify_result_chart_models
 from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
+from rsm_context import verify_rsm_context
 from desktop_resize import verify_desktop_resize
 from two_variances import verify_two_variances
 from pilot_feedback import verify_pilot_feedback
@@ -214,7 +215,7 @@ C\t96.0\t89\t19.5
 SUITE_STAGES = {
     "context": (
         "analysis_completion", "report_center_context", "api_translation", "chart_formatting",
-        "pilot_feedback",
+        "pilot_feedback", "rsm_context",
     ),
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
     "prediction": ("gp_prediction_context", "pilot_prediction"),
@@ -226,7 +227,7 @@ SUITE_STAGES = {
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "api_translation", "dataset_context",
     "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
-    "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
+    "chart_formatting", "pilot_feedback", "rsm_context", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
@@ -758,6 +759,9 @@ def run_browser_flow(
                 if "report_center_context" in stages:
                     diagnostics.step("verify Report Center request context")
                     verify_report_center_context(browser, frontend_base_url, diagnostics.root / "report-center-context")
+                if "rsm_context" in stages:
+                    diagnostics.step("verify RSM response validation and source ownership")
+                    verify_rsm_context(browser, frontend_base_url, diagnostics.root / "rsm-context")
                 if "api_translation" in stages:
                     diagnostics.step("verify API translation boundary with synthetic inputs")
                     verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)

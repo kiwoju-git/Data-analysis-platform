@@ -1,6 +1,8 @@
 {
   "version": 1,
   "en": {
+    "doe.rsm.historyFailure": "Response history could not be loaded. Successfully saved revisions are preserved.",
+    "doe.rsm.retryHistory": "Reload history",
     "charts.axisOffsetExplanation": "{axis}: add base {offset} to tick labels",
     "group_identity.full_names": "Full group names",
     "group_identity.legacy_labels": "This saved result does not contain full group values. Stored labels are shown; truncated names are not reconstructed.",
@@ -4152,6 +4154,8 @@
     "twoVariances.warning.two_variances_display_points_limited": "Charts display at most 500 points per group; calculations use every usable row."
   },
   "ko": {
+    "doe.rsm.historyFailure": "반응값 이력을 불러오지 못했습니다. 저장이 완료된 revision은 유지됩니다.",
+    "doe.rsm.retryHistory": "이력 다시 불러오기",
     "charts.axisOffsetExplanation": "{axis}: 눈금에 더하는 기준값 {offset}",
     "group_identity.full_names": "전체 그룹명",
     "group_identity.legacy_labels": "이 저장 결과에는 전체 그룹값이 없습니다. 저장된 라벨을 표시하며 축약된 이름을 복원하지 않습니다.",

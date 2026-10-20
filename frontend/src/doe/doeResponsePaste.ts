@@ -7,6 +7,13 @@ export type DoeResponsePasteResult =
   | { ok: true; rows: DoeResponsePasteRow[] }
   | { ok: false; error: DoeResponsePasteError };
 
+export function parseDoeResponseNumber(raw: string): number | null {
+  const text = raw.trim();
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(text)) return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function parseDoeResponsePaste(
   content: string,
   runOrders: readonly number[],
@@ -46,7 +53,7 @@ export function parseDoeResponsePaste(
     }
     seen.add(runOrder);
     const value = row[width - 1].trim();
-    if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(value) || !Number.isFinite(Number(value))) {
+    if (parseDoeResponseNumber(value) === null) {
       return { ok: false, error: "number" };
     }
     rows.push({ runOrder, value });

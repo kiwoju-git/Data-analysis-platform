@@ -28,6 +28,9 @@ import {
   type DoeFactorDomainDraft,
 } from "./doe/factorDomain";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
+import { parseRsmResponseDraft } from "./doe/rsmResponseDraft";
+import { createRsmRequestContext } from "./doe/rsmRequestContext";
+import { t } from "./i18n/translate";
 
 interface FactorDraft extends DoeFactorDomainDraft {
   id: number;
@@ -65,15 +68,29 @@ export function ResponseSurfacePanel() {
   const [isSaving, setIsSaving] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requestRevision = useRef(0);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [requests] = useState(createRsmRequestContext);
   const nextFactorId = useRef(3);
 
   useEffect(
-    () => () => {
-      requestRevision.current += 1;
-    },
-    [],
+    () => () => requests.invalidate(),
+    [requests],
   );
+
+  function invalidateSource(responseChanged = false) {
+    requests.invalidate();
+    setIsCreating(false);
+    setIsSaving(false);
+    setIsAnalyzing(false);
+    setIsLoadingHistory(false);
+    setError(null);
+    setHistoryError(null);
+    if (responseChanged) {
+      setResponsesSaved(false);
+      setAnalysis(null);
+    }
+  }
 
   const estimatedRunCount = useMemo(() => {
     const center = Number.parseInt(centerPoints, 10);
@@ -81,6 +98,7 @@ export function ResponseSurfacePanel() {
   }, [centerPoints, factors.length]);
 
   function resizeFactors(count: number) {
+    invalidateSource();
     setFactors((current) => {
       if (count <= current.length) return current.slice(0, count);
       const next = [...current];
@@ -99,6 +117,11 @@ export function ResponseSurfacePanel() {
     });
   }
 
+  function changeFactor(id: number, key: keyof Omit<FactorDraft, "id">, value: string) {
+    invalidateSource();
+    updateFactor(setFactors, id, key, value);
+  }
+
   const createDesign = async () => {
     const request = designRequest({
       name,
@@ -112,12 +135,13 @@ export function ResponseSurfacePanel() {
       setError(request);
       return;
     }
-    const revision = ++requestRevision.current;
+    invalidateSource();
+    const pending = requests.begin("create", request);
     setIsCreating(true);
     setError(null);
     try {
-      const created = await createResponseSurfaceDesign(request);
-      if (requestRevision.current !== revision) return;
+      const created = await createResponseSurfaceDesign(pending.snapshot);
+      if (!requests.isCurrent(pending)) return;
       setDesign(created);
       setIsSaving(false);
       setIsAnalyzing(false);
@@ -130,9 +154,30 @@ export function ResponseSurfacePanel() {
       setCorrectionMode(false);
       setResponseValues(Object.fromEntries(created.runs.map((run) => [run.run_order, ""])));
     } catch (caught) {
-      if (requestRevision.current === revision) setError(errorCode(caught));
+      if (requests.isCurrent(pending)) setError(errorCode(caught));
     } finally {
-      if (requestRevision.current === revision) setIsCreating(false);
+      if (requests.isCurrent(pending)) setIsCreating(false);
+    }
+  };
+
+  const loadHistory = async (sourceDesign = design, name = responseName.trim()) => {
+    if (sourceDesign === null || !name) return;
+    const pending = requests.begin("history", {
+      designId: sourceDesign.design_id,
+      designSha256: sourceDesign.design_sha256,
+      responseName: name,
+    });
+    setHistoryError(null);
+    setIsLoadingHistory(true);
+    try {
+      const history = await fetchDoeResponseRevisions(
+        pending.snapshot.designId, pending.snapshot.responseName,
+      );
+      if (requests.isCurrent(pending)) setRevisionHistory(history);
+    } catch (caught) {
+      if (requests.isCurrent(pending)) setHistoryError(errorCode(caught));
+    } finally {
+      if (requests.isCurrent(pending)) setIsLoadingHistory(false);
     }
   };
 
@@ -143,31 +188,35 @@ export function ResponseSurfacePanel() {
       setError("doe_rsm_response_name_required");
       return;
     }
-    const values = design.runs.map((run) => ({
-      run_order: run.run_order,
-      value: Number(responseValues[run.run_order]),
-    }));
-    if (values.some((value) => !Number.isFinite(value.value))) {
-      setError("doe_rsm_response_values_required");
+    const parsed = parseRsmResponseDraft(design.runs.map((run) => run.run_order), responseValues);
+    if (!parsed.ok) {
+      setError(parsed.code);
       return;
     }
-    const revision = ++requestRevision.current;
+    invalidateSource(true);
+    const pending = requests.begin("save", {
+      designId: design.design_id,
+      designVersionId: design.design_version_id,
+      designSha256: design.design_sha256,
+      previousRevisionId: responseRevisionId,
+      previousRevisionSha256: responseRevisionSha256,
+      correctionMode,
+      payload: {
+        response_name: trimmedName,
+        unit: responseUnit.trim() || null,
+        values: parsed.values,
+      },
+    });
     setIsSaving(true);
     setError(null);
     try {
-      const stored = correctionMode
-        ? await createDoeResponseRevision(design.design_id, {
-            response_name: trimmedName,
-            unit: responseUnit.trim() || null,
-            values,
-            supersedes_response_revision_id: responseRevisionId,
+      const stored = pending.snapshot.correctionMode
+        ? await createDoeResponseRevision(pending.snapshot.designId, {
+            ...pending.snapshot.payload,
+            supersedes_response_revision_id: pending.snapshot.previousRevisionId,
           })
-        : await saveResponseSurfaceResponses(design.design_id, {
-            response_name: trimmedName,
-            unit: responseUnit.trim() || null,
-            values,
-          });
-      if (requestRevision.current !== revision) return;
+        : await saveResponseSurfaceResponses(pending.snapshot.designId, pending.snapshot.payload);
+      if (!requests.isCurrent(pending)) return;
       setResponsesSaved(true);
       setAnalysis(null);
       setCorrectionMode(false);
@@ -183,35 +232,42 @@ export function ResponseSurfacePanel() {
         setResponseRevisionSha256(current?.response_revision_sha256 ?? null);
         setDesign((value) => (value === null ? null : { ...value, status: stored.status }));
       }
-      const history = await fetchDoeResponseRevisions(design.design_id, trimmedName);
-      if (requestRevision.current === revision) setRevisionHistory(history);
+      void loadHistory(design, pending.snapshot.payload.response_name);
     } catch (caught) {
-      if (requestRevision.current === revision) setError(errorCode(caught));
+      if (requests.isCurrent(pending)) setError(errorCode(caught));
     } finally {
-      if (requestRevision.current === revision) setIsSaving(false);
+      if (requests.isCurrent(pending)) setIsSaving(false);
     }
   };
 
   const runAnalysis = async () => {
     if (design === null || !responsesSaved) return;
-    const revision = ++requestRevision.current;
-    setIsAnalyzing(true);
-    setError(null);
-    try {
-      const created = await createResponseSurfaceAnalysis(design.design_id, {
+    const pending = requests.begin("analyze", {
+      designId: design.design_id,
+      designVersionId: design.design_version_id,
+      designSha256: design.design_sha256,
+      responseRevisionSha256,
+      payload: {
         response_name: responseName.trim(),
         response_revision_id: responseRevisionId,
         confidence_level: 0.95,
         point_limit: 256,
         contour_grid_size: 21,
-      });
-      if (requestRevision.current !== revision) return;
+      },
+    });
+    setIsAnalyzing(true);
+    setError(null);
+    try {
+      const created = await createResponseSurfaceAnalysis(
+        pending.snapshot.designId, pending.snapshot.payload,
+      );
+      if (!requests.isCurrent(pending)) return;
       setAnalysis(created);
       setDesign((current) => (current === null ? null : { ...current, status: "analyzed" }));
     } catch (caught) {
-      if (requestRevision.current === revision) setError(errorCode(caught));
+      if (requests.isCurrent(pending)) setError(errorCode(caught));
     } finally {
-      if (requestRevision.current === revision) setIsAnalyzing(false);
+      if (requests.isCurrent(pending)) setIsAnalyzing(false);
     }
   };
 
@@ -232,7 +288,7 @@ export function ResponseSurfacePanel() {
                 <input
                   id="rsm-design-name"
                   value={name}
-                  onChange={(event) => setName(event.currentTarget.value)}
+                  onChange={(event) => { invalidateSource(); setName(event.currentTarget.value); }}
                 />
               ),
             },
@@ -244,9 +300,10 @@ export function ResponseSurfacePanel() {
                 <select
                   id="rsm-alpha-mode"
                   value={alphaMode}
-                  onChange={(event) =>
-                    setAlphaMode(event.currentTarget.value as "rotatable" | "face_centered")
-                  }
+                  onChange={(event) => {
+                    invalidateSource();
+                    setAlphaMode(event.currentTarget.value as "rotatable" | "face_centered");
+                  }}
                 >
                   <option value="rotatable">Rotatable CCI</option>
                   <option value="face_centered">Face-centered CCD</option>
@@ -262,7 +319,7 @@ export function ResponseSurfacePanel() {
                   id="rsm-center-points"
                   inputMode="numeric"
                   value={centerPoints}
-                  onChange={(event) => setCenterPoints(event.currentTarget.value)}
+                  onChange={(event) => { invalidateSource(); setCenterPoints(event.currentTarget.value); }}
                 />
               ),
             },
@@ -283,7 +340,7 @@ export function ResponseSurfacePanel() {
                     id="rsm-randomization-seed"
                     inputMode="numeric"
                     value={randomizationSeed}
-                    onChange={(event) => setRandomizationSeed(event.currentTarget.value)}
+                    onChange={(event) => { invalidateSource(); setRandomizationSeed(event.currentTarget.value); }}
                   />
                 ),
               },
@@ -297,7 +354,7 @@ export function ResponseSurfacePanel() {
                       id="rsm-randomize"
                       type="checkbox"
                       checked={randomize}
-                      onChange={(event) => setRandomize(event.currentTarget.checked)}
+                      onChange={(event) => { invalidateSource(); setRandomize(event.currentTarget.checked); }}
                     />
                     <span>사용</span>
                   </label>
@@ -365,7 +422,7 @@ export function ResponseSurfacePanel() {
                     aria-label={`요인 ${index + 1} 이름`}
                     value={factor.name}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "name", event.currentTarget.value)
+                      changeFactor(factor.id, "name", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -375,7 +432,7 @@ export function ResponseSurfacePanel() {
                     inputMode="decimal"
                     value={factor.low}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "low", event.currentTarget.value)
+                      changeFactor(factor.id, "low", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -385,7 +442,7 @@ export function ResponseSurfacePanel() {
                     inputMode="decimal"
                     value={factor.high}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "high", event.currentTarget.value)
+                      changeFactor(factor.id, "high", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -394,7 +451,7 @@ export function ResponseSurfacePanel() {
                     aria-label={`${factor.name || `요인 ${index + 1}`} 설정 방식`}
                     value={factor.domainKind ?? "continuous"}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "domainKind", event.currentTarget.value)
+                      changeFactor(factor.id, "domainKind", event.currentTarget.value)
                     }
                   >
                     <option value="continuous">연속형</option>
@@ -409,7 +466,7 @@ export function ResponseSurfacePanel() {
                     placeholder="-"
                     value={factor.step ?? ""}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "step", event.currentTarget.value)
+                      changeFactor(factor.id, "step", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -420,7 +477,7 @@ export function ResponseSurfacePanel() {
                     placeholder="자동"
                     value={factor.displayDecimals ?? ""}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "displayDecimals", event.currentTarget.value)
+                      changeFactor(factor.id, "displayDecimals", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -429,7 +486,7 @@ export function ResponseSurfacePanel() {
                     aria-label={`${factor.name || `요인 ${index + 1}`} 단위`}
                     value={factor.unit}
                     onChange={(event) =>
-                      updateFactor(setFactors, factor.id, "unit", event.currentTarget.value)
+                      changeFactor(factor.id, "unit", event.currentTarget.value)
                     }
                   />
                 </td>
@@ -438,7 +495,10 @@ export function ResponseSurfacePanel() {
                     type="button"
                     className="secondary-button compact-button"
                     disabled={factors.length <= 2}
-                    onClick={() => setFactors((current) => current.filter((item) => item.id !== factor.id))}
+                    onClick={() => {
+                      invalidateSource();
+                      setFactors((current) => current.filter((item) => item.id !== factor.id));
+                    }}
                   >
                     제거
                   </button>
@@ -479,31 +539,28 @@ export function ResponseSurfacePanel() {
           responseRevisionNumber={responseRevisionNumber}
           responseRevisionSha256={responseRevisionSha256}
           revisionHistory={revisionHistory}
+          historyError={historyError}
+          isLoadingHistory={isLoadingHistory}
+          onRetryHistory={() => void loadHistory()}
           correctionMode={correctionMode}
           isSaving={isSaving}
           isAnalyzing={isAnalyzing}
           onResponseNameChange={(value) => {
+            invalidateSource(true);
             setResponseName(value);
-            setResponsesSaved(false);
           }}
-          onResponseUnitChange={setResponseUnit}
+          onResponseUnitChange={(value) => {
+            invalidateSource(true);
+            setResponseUnit(value);
+          }}
           onResponseValueChange={(runOrder, value) => {
-            setResponsesSaved(false);
+            invalidateSource(true);
             setResponseValues((current) => ({ ...current, [runOrder]: value }));
           }}
           onStartCorrection={() => {
+            invalidateSource(true);
             setCorrectionMode(true);
-            setError(null);
-            const revision = ++requestRevision.current;
-            if (responseName.trim().length > 0) {
-              void fetchDoeResponseRevisions(design.design_id, responseName.trim())
-                .then((history) => {
-                  if (requestRevision.current === revision) setRevisionHistory(history);
-                })
-                .catch((caught: unknown) => {
-                  if (requestRevision.current === revision) setError(errorCode(caught));
-                });
-            }
+            void loadHistory();
           }}
           onSave={() => void saveResponses()}
           onAnalyze={() => void runAnalysis()}
@@ -528,6 +585,9 @@ interface ResponseEntryProps {
   responseRevisionNumber: number | null;
   responseRevisionSha256: string | null;
   revisionHistory: DoeResponseRevisionHistoryResponse | null;
+  historyError?: string | null;
+  isLoadingHistory?: boolean;
+  onRetryHistory?: () => void;
   correctionMode: boolean;
   isSaving: boolean;
   isAnalyzing: boolean;
@@ -548,6 +608,9 @@ export function ResponseSurfaceResponseEntry({
   responseRevisionNumber,
   responseRevisionSha256,
   revisionHistory,
+  historyError = null,
+  isLoadingHistory = false,
+  onRetryHistory,
   correctionMode,
   isSaving,
   isAnalyzing,
@@ -560,7 +623,7 @@ export function ResponseSurfaceResponseEntry({
 }: ResponseEntryProps) {
   const responsesLocked = design.status === "analyzed" && !correctionMode;
   return (
-    <section className="analysis-result-section" aria-labelledby="rsm-response-title">
+    <section className="analysis-result-section" aria-labelledby="rsm-response-title" data-rsm-response-entry>
       <div className="panel-heading compact-heading">
         <div>
           <h4 id="rsm-response-title">CCD 실행표와 반응 입력</h4>
@@ -673,6 +736,15 @@ export function ResponseSurfaceResponseEntry({
           {isAnalyzing ? "분석 중" : "Quadratic model 적합"}
         </button>
       </div>
+      {historyError !== null ? (
+        <div className="notice-box notice-warning" role="status">
+          <p>{t("doe.rsm.historyFailure")}</p>
+          <code>{historyError}</code>
+          <button type="button" className="secondary-button" disabled={isLoadingHistory} onClick={onRetryHistory}>
+            {t("doe.rsm.retryHistory")}
+          </button>
+        </div>
+      ) : null}
       {revisionHistory !== null ? (
         <div className="table-wrap" aria-label="RSM response revision history">
           <table className="result-table">
