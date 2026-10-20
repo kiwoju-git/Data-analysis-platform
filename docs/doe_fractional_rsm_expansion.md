@@ -524,3 +524,20 @@ Local Windows checks after the lint correction: full backend Ruff and format
 checks passed (386 formatted files), mypy passed (216 source files), and the
 suite-partition/archive-validation tests passed **237 in 4.59s**. These results
 do not make the failed run release-ready; a fresh complete run is required.
+
+Full run39467075706 (`d437883`) passed the independent context/workflows browser
+suites, including the previously stale factorial assertions. Python3.11 passed
+**2652 tests / 13 Windows-only skips in 404.25s**. Linux backend passed **2652 /
+13 skips in 377.60s** and frontend **108 files / 936 tests**, lint, typecheck,
+build and source lifecycle. Linux's longer combined browser suite then failed
+at the existing reporting-summary dataset-to-graph transition. The saved page
+showed the newly registered dataset, not the expected graph page. This parent
+journey had no trace, so the precise response/click ordering is unverified.
+
+That fixture's `v1` caption assertion could match the previously active dataset.
+It now waits for its real confirm-parsing response, checks status 201 and the
+exact returned version ID in the enabled active-dataset selector before moving
+to graphs, following the existing regression fixture's pattern. The reporting
+stage now saves its own synthetic trace in a `finally` block. No product source
+guard, navigation behavior, timeout retry or statistical calculation changed.
+The failed combined suite remains recorded; no Linux archive was produced.

@@ -976,7 +976,13 @@ def run_browser_flow(
             diagnostics.step("verify attribute control chart")
             verify_attribute_control_chart(page)
             diagnostics.step("verify reporting summary variance and fixed-Y scatter")
-            verify_reporting_summary_variance_and_scatter(page, diagnostics)
+            context.tracing.start(screenshots=True, snapshots=True, sources=False)
+            try:
+                verify_reporting_summary_variance_and_scatter(page, diagnostics)
+            finally:
+                context.tracing.stop(
+                    path=str(diagnostics.root / "reporting-summary-trace.zip")
+                )
             diagnostics.step("verify DOE factorial analysis")
             verify_doe_factorial_analysis(page, diagnostics)
             verify_factorial_model_workflow(page, diagnostics, backend_base_url)
@@ -2188,7 +2194,16 @@ def verify_reporting_summary_variance_and_scatter(
     paste_plain_text(page, REPORTING_SUMMARY_DATA)
     page.get_by_role("button", name="붙여넣기 데이터 등록").click()
     expect(page.get_by_role("heading", name="파싱 옵션")).to_be_visible(timeout=15_000)
-    page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/confirm-parsing")
+    ) as confirmation:
+        page.get_by_role("button", name="파싱 확정 및 버전 생성").click()
+    assert confirmation.value.status == 201, confirmation.value.text()
+    version_id = confirmation.value.json()["version_id"]
+    active_dataset = page.locator("#active-dataset-version")
+    expect(active_dataset).to_be_enabled(timeout=20_000)
+    expect(active_dataset).to_have_value(version_id, timeout=20_000)
     expect(page.locator("#version-title")).to_contain_text("v1", timeout=20_000)
 
     open_primary_navigation(page, "그래프")
