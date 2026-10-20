@@ -24,6 +24,7 @@ EXPECTED_RESULTS_PATH = TUTORIAL_ROOT / "tutorial_expected_results.json"
 MANIFEST_PATH = TUTORIAL_ROOT / "tutorial_data_manifest.json"
 TUTORIAL_PATH = REPOSITORY_ROOT / "docs" / "statistical_twin_end_to_end_tutorial_ko.md"
 TUTORIAL_RENDERER_PATH = REPOSITORY_ROOT / "scripts" / "render_tutorial_results.py"
+TUTORIAL_SMOKE_PATH = REPOSITORY_ROOT / "scripts" / "tutorial_smoke.py"
 
 
 def _load_generator():
@@ -174,6 +175,28 @@ def test_tutorial_short_group_t_test_preserves_recorded_numeric_values() -> None
         assert contrast["confidence_interval"][bound] == pytest.approx(
             expected["confidence_interval"][bound], **tolerance
         )
+
+
+def test_tutorial_doe_api_preserves_recorded_numeric_values(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("tutorial_smoke", TUTORIAL_SMOKE_PATH)
+    assert spec is not None and spec.loader is not None
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    expected = json.loads(EXPECTED_RESULTS_PATH.read_text(encoding="utf-8"))["results"]
+
+    with smoke.TestClient(
+        smoke.create_app(smoke.Settings(workspace_root=tmp_path, git_commit="tutorial-test"))
+    ) as client:
+        actual = smoke._collect_doe_results(client, METHOD_VERSIONS)
+
+    # Historical fixture numbers remain the oracle when method metadata advances.
+    for method_id in ("doe.factorial_design", "doe.response_surface"):
+        saved, current = expected[method_id], actual[method_id]
+        assert current["method_version"] == METHOD_VERSIONS[method_id]
+        assert current["input_file_sha256"] == saved["input_file_sha256"]
+        assert current["absolute_tolerance"] == saved["absolute_tolerance"] == 1e-8
+        assert current["relative_tolerance"] == saved["relative_tolerance"] == 1e-8
+        smoke._compare(saved["result"], current["result"], f"$.results.{method_id}.result")
 
 
 def test_tutorial_markdown_result_blocks_are_in_sync() -> None:

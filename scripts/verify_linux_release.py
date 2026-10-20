@@ -641,7 +641,7 @@ def require_doe_rsm_receipt(receipt: object) -> None:
     dimensions = receipt.get("resize_content_widths")
     if (
         not isinstance(dimensions, list)
-        or len(dimensions) != 7
+        or len(dimensions) != 8
         or any(
             not isinstance(item, dict)
             or type(item.get("viewport")) is not int
@@ -649,11 +649,21 @@ def require_doe_rsm_receipt(receipt: object) -> None:
             or not math.isfinite(item["content"])
             or not 0 < item["content"] <= item["viewport"] + 1
             or type(item.get("columns")) is not int
-            or item["columns"] not in {1, 2, 3, 4}
+            or item["columns"]
+            != (
+                4
+                if item["content"] >= 1040
+                else 3
+                if item["content"] >= 780
+                else 2
+                if item["content"] >= 520
+                else 1
+            )
             for item in dimensions
         )
         or [item["viewport"] for item in dimensions]
-        != [1920, 1440, 1280, 1024, 900, 768, 1440]
+        != [1920, 1440, 1280, 1024, 900, 768, 390, 1440]
+        or {item["columns"] for item in dimensions} != {1, 2, 3, 4}
         or receipt.get("browser_zoom") != "not exercised by this fixture"
     ):
         raise ValueError(

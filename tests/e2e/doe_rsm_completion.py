@@ -146,7 +146,7 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         plots.get_by_label("소형 전체 보기", exact=True).check()
         expect(plots.locator(".doe-compact-plot")).to_have_count(10)
         dimensions = []
-        for width in (1920, 1440, 1280, 1024, 900, 768, 1440):
+        for width in (1920, 1440, 1280, 1024, 900, 768, 390, 1440):
             page.set_viewport_size({"width": width, "height": 1000})
             expect(plots.locator(".doe-compact-grid")).to_be_visible()
             assert page.evaluate(
@@ -158,15 +158,27 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
                 box = card.bounding_box()
                 assert svg and box and svg["x"] >= box["x"] - 1
                 assert svg["x"] + svg["width"] <= box["x"] + box["width"] + 1
-            dimensions.append(
-                {
-                    "viewport": width,
-                    "content": plots.bounding_box()["width"],
-                    "columns": plots.locator(".doe-compact-grid").evaluate(
-                        "element => getComputedStyle(element).gridTemplateColumns.split(' ').length"
-                    ),
-                }
+            content_width = plots.locator(".doe-compact-scope").bounding_box()["width"]
+            columns = plots.locator(".doe-compact-grid").evaluate(
+                "element => getComputedStyle(element).gridTemplateColumns.split(' ').length"
             )
+            expected_columns = (
+                4
+                if content_width >= 1040
+                else 3
+                if content_width >= 780
+                else 2
+                if content_width >= 520
+                else 1
+            )
+            dimension = {
+                "viewport": width,
+                "content": content_width,
+                "columns": columns,
+            }
+            assert columns == expected_columns, dimension
+            dimensions.append(dimension)
+        assert {item["columns"] for item in dimensions} == {1, 2, 3, 4}, dimensions
         first = plots.locator('svg [tabindex="0"]').first
         first.focus()
         first.press("ArrowRight")

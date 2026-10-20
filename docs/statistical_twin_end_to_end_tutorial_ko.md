@@ -493,7 +493,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
   max interaction order 2 > 분석 실행.
 - **실행 전 확인:** UI run order와 파일의 factor coordinates/replicate를 함께 확인한다.
 <!-- TUTORIAL_RESULT:doe.factorial_design:start -->
-- **검증 source:** `doe.factorial_design` v0.9.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
+- **검증 source:** `doe.factorial_design` v0.10.0 · input SHA-256 `ed21e8605cab7123f1164cfb10d3dcfd3ed386ccc6b671aba241c855e1cd3a73`
 - **예상 실제 결과 (표시 반올림):**
   - N=16, residual df=9, selected interaction `factor_1:factor_2`
   - effect order: `factor_1` 6.8707, `factor_2` 3.9555, `factor_1:factor_2` 3.3892, `factor_3` 0.8814
@@ -516,7 +516,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **클릭 순서:** CCD 생성 > coordinates 매칭 > 13 responses 저장 > quadratic model 실행.
 - **실행 전 확인:** center 반복과 pure error, factor region, response lock 안내를 확인한다.
 <!-- TUTORIAL_RESULT:doe.response_surface:start -->
-- **검증 source:** `doe.response_surface` v0.3.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+- **검증 source:** `doe.response_surface` v0.4.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - R-squared=0.99874, adjusted=0.99784, warnings=4
   - stationary `maximum`: temperature=76.4437, pressure=9.6718, predicted=90.9986, inside region=true

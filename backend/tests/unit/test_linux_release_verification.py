@@ -381,8 +381,12 @@ def valid_doe_receipt() -> dict:
         "view_sha256": HASH,
         "report_path": str(ROOT / ".tmp" / "synthetic-contour.html"),
         "resize_content_widths": [
-            {"viewport": width, "content": width - 100.0, "columns": 2}
-            for width in (1920, 1440, 1280, 1024, 900, 768, 1440)
+            {
+                "viewport": width,
+                "content": width - 100.0,
+                "columns": 4 if width >= 1140 else 3 if width >= 880 else 2 if width >= 620 else 1,
+            }
+            for width in (1920, 1440, 1280, 1024, 900, 768, 390, 1440)
         ],
         "browser_zoom": "not exercised by this fixture",
     }
@@ -713,7 +717,7 @@ def test_doe_receipt_rejects_duplicate_kind_or_preset(collection: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "field,value", [("content", float("nan")), ("content", 2000), ("columns", True)]
+    "field,value", [("content", float("nan")), ("content", 2000), ("columns", True), ("columns", 4)]
 )
 def test_doe_receipt_rejects_invalid_resize_measurement(field: str, value) -> None:
     receipt = valid_doe_receipt()

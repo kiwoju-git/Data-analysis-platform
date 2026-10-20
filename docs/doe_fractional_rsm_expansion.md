@@ -344,3 +344,53 @@ receipts, exact source IDs/hashes, source preservation and no analysis POST from
 view/resize/zoom changes. Defining or unit-testing those receipts is not evidence
 that the browser journey itself ran. Final native CI and exact-archive evidence
 must accompany the release; a failed required gate prohibits publication.
+
+## Tutorial Version Checkpoint (2026-10-21)
+
+Native product run `39454810197`, source
+`ca1162b371c9d5dc7a369edabd0dd9d05ddd6f00`, failed one tutorial metadata
+assertion on both Ubuntu Python targets. Each reported **1 failed, 2648 passed,
+13 skipped**: Python3.12 took 377.03s and Python3.11 took 382.94s. The skips
+were the Windows-only PowerShell startup tests. The committed tutorial expected
+`doe.factorial_design` v0.9.0 and `doe.response_surface` v0.3.0 rather than
+the implemented v0.10.0/v0.4.0. Linux Ruff/format/mypy and the dependency-security
+aggregate passed; frontend/browser stages did not run and Linux Release was
+skipped. This run is not a successful product gate.
+
+A new regression test reuses the existing real DOE API tutorial collector with
+a fresh synthetic temporary workspace. Before changing fixture metadata, its
+first two checks exposed additive RSM LoF metadata and stationary-point `reason`
+keys in the normalized summary. The collector now explicitly selects the same
+five LoF and eight stationary-point fields already documented by the tutorial.
+The full application result and its new fields are unchanged and remain covered
+by their separate API/domain tests.
+
+The recorded factorial sample/DF/effects/residual ANOVA, RSM fit/stationary-point/
+LoF values and both warning counts then matched the current APIs at the existing
+absolute and relative tolerance of **1e-8**. No numeric fixture was regenerated
+or edited, and no tolerance was widened. Only the two expected method-version
+strings and their renderer-generated Markdown source lines changed.
+
+Actual Windows/Python3.10 checks after this correction:
+
+- `pytest backend/tests/tutorial/test_tutorial_data_pack.py -k doe_api -q`:
+  **1 passed, 8 deselected, 3 deprecation warnings**, 12.50s.
+- `pytest backend/tests/tutorial/test_tutorial_data_pack.py -q`:
+  **9 passed, 3 deprecation warnings**, 18.28s, including the generated-document
+  check and the new current-API numeric regression.
+- `scripts/render_tutorial_results.py --write` synchronized 18 documentation
+  blocks; the resulting document diff changes only the two version source lines.
+- Ruff check for the changed Python files and format check for the backend test
+  passed. No statistical implementation, user workspace or persisted result
+  was modified.
+
+These are focused source-checkout checks, not a rerun of all 18 API smoke
+methods, native full CI, browser verification or an installed archive. Those
+remaining gates require the next exact-source CI run.
+
+The same follow-up also extends the DOE browser fixture to eight resize steps,
+including 390px, and checks 4/3/2/1 chart columns against the actual
+`.doe-compact-scope` content width. The archive validator requires that same
+strict receipt. Its focused verifier tests passed **165 tests in 2.29s**, and
+the three changed validation files passed targeted Ruff. The extended browser
+journey has not yet run; these checks do not establish viewport behavior.

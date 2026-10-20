@@ -896,8 +896,30 @@ def _collect_doe_results(
             "result": {
                 "r_squared": rsm_result["fit"]["r_squared"],
                 "adjusted_r_squared": rsm_result["fit"]["adjusted_r_squared"],
-                "stationary_point": rsm_result["stationary_point"],
-                "lack_of_fit": rsm_result["anova"]["lack_of_fit"],
+                "stationary_point": {
+                    key: rsm_result["stationary_point"][key]
+                    for key in (
+                        "actual_coordinates",
+                        "available",
+                        "classification",
+                        "coded_coordinates",
+                        "hessian_eigenvalues",
+                        "predicted_response",
+                        "within_axial_bounds",
+                        "within_factorial_cube",
+                    )
+                },
+                # The tutorial records this stable summary, not every result-schema field.
+                "lack_of_fit": {
+                    key: rsm_result["anova"]["lack_of_fit"][key]
+                    for key in (
+                        "available",
+                        "lack_of_fit",
+                        "pure_error",
+                        "residual_df",
+                        "unique_design_point_count",
+                    )
+                },
                 "warning_count": len(rsm_result["warnings"]),
             },
         },
