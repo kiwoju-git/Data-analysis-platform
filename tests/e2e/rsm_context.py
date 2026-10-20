@@ -85,13 +85,15 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
                 route.continue_()
                 return
             response = route.fetch()
-            assert response.status == 200
+            assert response.status == 200, response.text()
             held.append((route, response.json()))
 
+        first = page.get_by_label(f"Run {runs[0]['run_order']} 반응", exact=True)
+        # A second revision must differ from the committed one; duplicate saves are rejected.
+        first.fill("0.25")
         page.route("**" + response_path, hold_save)
         save.click()
         _wait_held(page, held)
-        first = page.get_by_label(f"Run {runs[0]['run_order']} 반응", exact=True)
         first.fill("0.5")
         pending_save, saved_response = held.pop()
         pending_save.fulfill(status=200, json=saved_response)

@@ -257,6 +257,31 @@ def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():
     assert '[ValidateSet("full", "workflows", "context", "data", "prediction")]' in powershell
 
 
+def test_early_browser_diagnostics_do_not_replace_product_gates():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+    diagnostic = jobs["browser-diagnostics"]
+    assert diagnostic["strategy"]["matrix"]["suite"] == ["context", "workflows"]
+    assert diagnostic["strategy"]["fail-fast"] is False
+    assert "inputs.browser_diagnostics == true" in diagnostic["if"]
+    assert "needs" not in diagnostic
+    for name in ("windows", "windows-e2e", "linux", "python311", "linux-release", "release-ready"):
+        assert "browser_diagnostics" not in jobs[name]["if"]
+    assert set(jobs["release-ready"]["needs"]) == {
+        "windows",
+        "e2e",
+        "linux",
+        "python311",
+        "linux-release",
+        "dependency-security",
+    }
+    command = next(
+        step["run"] for step in diagnostic["steps"] if step.get("name") == "Existing browser suite"
+    )
+    assert "--suite ${{ matrix.suite }}" in command
+    assert "--diagnostics-root" in command
+
+
 def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
     workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))

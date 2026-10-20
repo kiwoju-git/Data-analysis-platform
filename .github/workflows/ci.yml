@@ -12,12 +12,51 @@ on:
         required: false
         type: boolean
         default: false
+      browser_diagnostics:
+        description: "Also run context/workflows browser diagnostics early; all product gates still run"
+        required: false
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
       - main
 
 jobs:
+  browser-diagnostics:
+    if: github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics == true && inputs.generate_linux_locks != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [context, workflows]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Locked bootstrap
+        run: bash scripts/bootstrap.sh --python python3.12
+      - name: Install Chromium
+        run: .venv/bin/python -m playwright install --with-deps chromium
+      - name: Existing browser suite
+        run: bash scripts/e2e.sh --suite ${{ matrix.suite }} --diagnostics-root .tmp/early-browser-${{ matrix.suite }}
+      - name: Synthetic child-page diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-browser-${{ matrix.suite }}-${{ github.sha }}
+          path: .tmp/early-browser-${{ matrix.suite }}
+          if-no-files-found: ignore
+
   generate-linux-locks:
     if: github.event_name == 'workflow_dispatch' && inputs.generate_linux_locks == true
     runs-on: ubuntu-24.04

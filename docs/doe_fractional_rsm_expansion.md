@@ -402,3 +402,22 @@ helper and English assertions remain unchanged. The four DOE browser files
 passed Ruff, and suite-partition/archive-receipt tests passed **236 tests**.
 This is a fixture correction verified by source inspection and contract tests,
 not evidence that the actual native browser journey completed.
+
+Run39457319672 (`468dad7`) passed Linux backend **2651 tests, 13 skipped**
+and frontend **108 files, 936 tests**, then failed the new RSM context journey.
+The child-page trace showed a successful initial response revision followed by
+an identical second PUT 249ms later. The second request correctly returned
+`409 doe_response_revision_conflict`; it was not a locale/chunk or analysis-lock
+failure. The fixture now changes the first response to 0.25 before holding that
+save, then edits it to 0.5 while the real completion is delayed. The product's
+duplicate-revision rejection remains unchanged. Native browser rerun is required.
+
+An opt-in `browser_diagnostics` workflow input runs the existing Linux context
+and workflows browser suites without waiting for the full unit job. It does not
+skip, replace or change any required Windows/Linux/security/archive/release-ready
+gate. Its synthetic child-page artifacts remain separate from final native
+archive evidence. This is early failure diagnosis, not a release shortcut.
+The suite-partition and archive-validator regression batch passed **237 tests**
+after that wiring change. The original ca1162b Windows job also finished with
+the same tutorial-version failure: **2658 passed, 1 failed, 3 skipped**,
+1828.00s on hosted Windows Server2025/Python3.10.11; its frontend did not run.
