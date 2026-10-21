@@ -14,6 +14,58 @@ from app_readiness import diagnosed_page, wait_for_app_ready
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
+_RECEIPT_CHECKS = (
+    "q1_target_ui",
+    "joint_batch_ui",
+    "replicate_ui",
+    "individual_observations_ui",
+    "exact_aggregation_ui",
+    "legacy_observations_unchanged",
+    "restore_ui",
+    "locale_resize_restore_do_not_post",
+    "committed_post_replayed_only_by_explicit_action",
+    "same_request_id_payload",
+    "no_duplicate_trials",
+    "history_unchanged",
+)
+
+
+def _record_receipt(output: Path, receipt: dict) -> dict:
+    """Persist allowlisted test evidence without changing the archive receipt contract."""
+    assert receipt["schema_version"] == 1 and receipt["synthetic"] is True
+    assert receipt["status"] == "succeeded"
+    checks = {}
+    for key in _RECEIPT_CHECKS:
+        if key in receipt:
+            assert receipt[key] is True
+            checks[key] = True
+    assert checks
+    counts = {}
+    for key in ("raw_n", "effective_n"):
+        if key in receipt:
+            value = receipt[key]
+            assert type(value) is int and 0 <= value <= 200
+            counts[key] = value
+    viewports = []
+    for view in receipt.get("locales_viewports", []):
+        assert view["locale"] in {"ko", "en"}
+        assert type(view["width"]) is int and view["width"] in {1024, 1440}
+        viewports.append({"locale": view["locale"], "width": view["width"]})
+    safe = {
+        "schema_version": 1,
+        "synthetic": True,
+        "status": "succeeded",
+        "checks": checks,
+        "counts": counts,
+        "locales_viewports": viewports,
+    }
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "bo-validation-receipt.json").write_text(
+        json.dumps(safe, sort_keys=True, indent=2, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    return receipt
+
 
 def _digest(value: object) -> str:
     return hashlib.sha256(
@@ -240,24 +292,29 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             + f"/api/v1/bayesian-studies/{study['study_id']}/recommendation-batches/{compressed['batch_id']}"
         )
         assert saved.status == 200 and saved.json()["observation_view"] == view
-        return {
-            "schema_version": 1,
-            "synthetic": True,
-            "status": "succeeded",
-            "study_id": study["study_id"],
-            "q1_target_ui": True,
-            "joint_batch_ui": True,
-            "replicate_ui": True,
-            "individual_observations_ui": True,
-            "exact_aggregation_ui": True,
-            "legacy_observations_unchanged": True,
-            "restore_ui": True,
-            "locale_resize_restore_do_not_post": True,
-            "raw_n": 9,
-            "effective_n": 7,
-            "locales_viewports": snapshots,
-            "source_history_sha256": compressed["source_observation_history_sha256"],
-        }
+        return _record_receipt(
+            output,
+            {
+                "schema_version": 1,
+                "synthetic": True,
+                "status": "succeeded",
+                "study_id": study["study_id"],
+                "q1_target_ui": True,
+                "joint_batch_ui": True,
+                "replicate_ui": True,
+                "individual_observations_ui": True,
+                "exact_aggregation_ui": True,
+                "legacy_observations_unchanged": True,
+                "restore_ui": True,
+                "locale_resize_restore_do_not_post": True,
+                "raw_n": 9,
+                "effective_n": 7,
+                "locales_viewports": snapshots,
+                "source_history_sha256": compressed[
+                    "source_observation_history_sha256"
+                ],
+            },
+        )
 
 
 def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
@@ -299,12 +356,15 @@ def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
         restored = _study(page, base, study["study_id"])
         assert len(restored["trials"]) == 5 and restored["pending_trial_count"] == 1
         assert restored["observation_history"] == study["observation_history"]
-        return {
-            "schema_version": 1,
-            "synthetic": True,
-            "status": "succeeded",
-            "committed_post_replayed_only_by_explicit_action": True,
-            "same_request_id_payload": True,
-            "no_duplicate_trials": True,
-            "history_unchanged": True,
-        }
+        return _record_receipt(
+            output,
+            {
+                "schema_version": 1,
+                "synthetic": True,
+                "status": "succeeded",
+                "committed_post_replayed_only_by_explicit_action": True,
+                "same_request_id_payload": True,
+                "no_duplicate_trials": True,
+                "history_unchanged": True,
+            },
+        )

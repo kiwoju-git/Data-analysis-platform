@@ -101,5 +101,53 @@ matching the other guarded E2E fixtures.
 
 `test_bo_noise_e2e_fixture.py` reproduced both loopback/LAN-base failures before the fix. Afterward,
 the fixture and suite-partition checks passed 74 tests; Ruff passed for both changed files.
-The corrected native browser journey still requires a subsequent CI run. The workflows job in this
-first run stopped earlier in a GP surface locator and did not reach the BO workflow.
+At this first-run checkpoint the corrected native browser journey was still pending. The workflows
+job in this first run stopped earlier in a GP surface locator and did not reach the BO workflow.
+
+## Subsequent Linux Browser Evidence
+
+Early-browser CI run `39616780776`, source `20a5b1f973986cd17dc0dc1e71df7cdc7d72f4c3`, subsequently
+executed both BO fixtures on Ubuntu 24.04 / CPython 3.12.15 / Playwright Chromium. This is native
+source/Vite browser evidence, not an exact Linux release archive or a Windows browser pass.
+
+- Context job `119279871974`: the complete browser suite step succeeded. Its BO child performed a
+  server-committed replicate POST followed by a simulated client-side 503, then an explicit identical
+  retry. The assertions verify replay, a single new pending trial, unchanged completed history, and
+  identical request ID/payload. Artifact `12352668604` contains the completed BO child trace.
+- Workflows job `119279871375`: `verify_bo_noise_extension` returned successfully before the runner
+  continued through the legacy workflow and later failed in the separate GPR regression stage. The
+  BO fixture exercised visible q1 target / q2 joint batch / individual observation entry / two
+  replicates / exact compression (raw 9, unique and effective 7), source-history preservation,
+  predictive-minus-latent variance, KO/EN at 1024/1440 CSS pixels, reload, and no new POST caused by
+  locale/resize/reload. Artifact `12353896147` contains its completed child trace and all four BO
+  screenshots, with no BO child failure record.
+
+The workflow failure is retained as a full-product gate failure. Successful BO stages do not turn the
+whole run, release-ready gate, or archive validation into a pass. At that source commit, the
+critical-path runner consumed the fixture's assertions without persisting its returned receipt; the
+exact-archive harness separately persisted and validated that receipt.
+
+A subsequent test-only change writes `bo-validation-receipt.json` after either BO fixture succeeds.
+Its allowlist contains only boolean checks, bounded row counts, locale and viewport size. It excludes
+trial/study IDs, hashes, coordinates, observations, and arbitrary extra payload keys. The original
+returned receipt remains unchanged for archive verification. Five red tests demonstrated the missing
+writer before implementation; focused tests additionally reject invalid metadata before any receipt
+file is created. This new diagnostic file does not itself constitute a new browser execution.
+
+Main integration, the aggregate product/security gates, exact-archive verification, and prerelease
+publication are not completed by these BO browser-stage results.
+
+## Versioned API Inventory Follow-up
+
+The native Python 3.11 run exposed outdated OpenAPI test expectations for legacy-only batch/trial
+responses. The contract tests now explicitly require the exact legacy/V2 response unions, current
+list/latest envelope types, and legacy/replicate trial unions. They also require the replicate route's
+intent/count/history/idempotency fields. The client uses its central, escaped-ID route builder.
+
+The tutorial still executes the legacy schema-1 recommendation route. Its collector now records the
+actual response method version `0.6.0`, rather than falsely labeling that algorithm with the current
+catalog's `0.7.0`. Existing tutorial data and expected result files were not modified. Local narrow
+red tests reproduced seven stale contract expectations (204 passed); after correction, the complete
+OpenAPI and tutorial files passed 245 tests, including the real legacy API collector and unchanged
+fixture bytes. The new frontend route-encoding test passed, and targeted Ruff passed. These are
+Windows CPython 3.10 checks, not a claim that the subsequent native Python 3.11 gate has passed.

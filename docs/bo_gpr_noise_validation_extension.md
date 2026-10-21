@@ -229,3 +229,25 @@ Loading the sklearn-based class only at fit/read execution boundaries restores
 that contract; the actual fresh-process startup regression remains enabled.
 Security failures and exact native lock remediation are recorded separately in
 `bo_gpr_security_followup.md`; no audit exception was added.
+
+## Resource and Browser Follow-up
+
+The first Linux resource matrix passed 30 fit/restore/prediction cases and rejected
+six 2000-row mixed requests at admission. The first Windows matrix exceeded its
+unchanged outer deadline at a 1000-row comparison case; its stage was not recorded
+by that older supervisor. Neither result establishes all-platform performance.
+
+The estimate is now `exact_gp_peak_v2`, with measured worker allowance, separate
+fit/transfer phases, a comparison allocator reserve and training-diagnostic query
+costs. The 512 MiB budget is unchanged. Some 2000-row numeric single-kernel
+settings pass admission, while the benchmark's mixed/comparison settings do not.
+`gp_resource_benchmark_contract.md` records the formula, calibration, original
+failed measurements and source-provenance requirements. The old concurrent local
+run is diagnostic only, not evidence for its ending commit. A native rerun of the
+new estimate is required.
+
+Early Linux browser run39616780776 completed the BO context suite and the new BO
+workflow stage. The complete workflows suite and GPR prediction suite still
+failed on ambiguous or missing accessible select names. These are separately
+tracked browser failures, not passing product or release gates. The detailed BO
+assertions and retained diagnostics are in `bo_frontend_noise_evidence.md`.
