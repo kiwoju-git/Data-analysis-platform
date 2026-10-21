@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "policy": "greedy_mc_joint_latent_improvement_v2",
+  "mc": {
+    "means": [0.15, 0.42],
+    "covariance": [[0.25, 0.18], [0.18, 0.49]],
+    "directional_incumbent": 0.3,
+    "target": 0.1,
+    "target_distance": 0.6,
+    "xi": 0.07,
+    "reference_seed": 73519,
+    "reference_sample_count": 1048576,
+    "sample_counts": [16, 32, 64, 128, 256],
+    "root_seeds": [101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132],
+    "maximum_rms_ratio_256_to_16": 0.6,
+    "maximum_reference_standard_errors": 6.0
+  },
+  "sequential": {
+    "formula": "2 - 4*(x-0.68)^2 - 0.2*(d-1)^2",
+    "known_maximum": 2.0,
+    "target": 1.2,
+    "initial_points": [[0, 0.1], [0, 0.8], [1, 0.15], [1, 0.35], [2, 0.65]],
+    "actual_constraint": "x + 0.1*d <= 0.95",
+    "noise_sd": 0.04,
+    "root_seeds": [7, 19, 43],
+    "batch_count": 3,
+    "batch_size": 2,
+    "posterior_sample_count": 64,
+    "total_trial_budget": 11,
+    "exploratory_median_regret_ratio_threshold_not_a_release_gate": 0.5,
+    "search": {
+      "candidate_count_per_step": 64,
+      "local_start_count_per_step": 3,
+      "max_iterations_per_step": 30,
+      "max_evaluations_total": 4096,
+      "model_max_iterations": 50,
+      "model_max_evaluations": 200,
+      "hyperparameter_restart_count": 0,
+      "time_budget_ms": 30000,
+      "jitter": 1e-8,
+      "duplicate_tolerance": 1e-6
+    }
+  },
+  "limitations": [
+    "Synthetic characterization, not superiority over another acquisition policy.",
+    "MC aggregate error may improve without monotone error for each seed or sample count.",
+    "Oracle regret uses the declared latent formula, not the best noisy observation.",
+    "Fixed finite seeds and budgets do not establish a universal performance guarantee."
+  ]
+}
