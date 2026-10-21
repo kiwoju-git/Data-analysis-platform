@@ -187,3 +187,28 @@ not import sklearn. The import-boundary, stored-family report, mixed fitting,
 time/lag report and E2E marker checks then passed 42 tests in 55.21 seconds.
 The surface report test now checks all three stored quantities and confirms
 that legacy results without latent SD report that section as unavailable.
+
+## Second native browser diagnostic run
+
+Run `39616780776` at source `20a5b1f973986cd17dc0dc1e71df7cdc7d72f4c3`
+was a browser-only diagnostic, not a passing release-ready gate. The prediction
+job `119279871802` reached the new GP extension form but stopped before its
+first fit: the Response select's wrapping label included option text, so an
+exact accessible-name query could not find it. The child page was mounted,
+runtime-compatible and English, with no page errors or failed assets. Its
+actual DOM, screenshot and Playwright trace were retained in artifact
+`12353755995`; the screenshot confirms the synthetic dataset and visible form.
+
+Response and extension metadata/axis/hold selects now have explicit localized
+accessible names matching their visible labels. The workflows job
+`119279871375` separately reached the existing GP fitted-result checks and
+failed because its unscoped X-axis selector matched both initial draft axes
+and applied result axes. That assertion now scopes the applied surface result.
+These are accessibility and fixture-scoping corrections, not numerical-model
+changes. The new form journey still requires a successful native rerun.
+
+KO/EN component markup plus existing extension and chart adapter tests passed
+17 tests in 5.16 seconds. Markup assertions do not prove browser interaction.
+The synthetic receipt now retains the existing lag and surface request/response
+snapshots, so archive restart/second-install verification can compare the same
+stored model and applied view without fitting another model.

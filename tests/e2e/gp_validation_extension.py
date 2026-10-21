@@ -216,7 +216,9 @@ def verify_gp_validation_extension(
             all(t < row["target_time"] for t in row["source_times"])
             for row in lineage["rows"]
         )
-        _predict(page, lagged["result"], save=False)
+        lag_prediction, lag_prediction_request = _predict(
+            page, lagged["result"], save=False
+        )
         _restore(page, base, version, grouped)
         prediction, prediction_request = _predict(page, grouped["result"], save=True)
         unknown = json.loads(json.dumps(prediction_request))
@@ -319,6 +321,11 @@ def verify_gp_validation_extension(
             analyses=[grouped, timed, lagged],
             requests=[group_request, time_request, lag_request],
             prediction=prediction,
+            prediction_request=prediction_request,
+            lag_prediction=lag_prediction,
+            lag_prediction_request=lag_prediction_request,
+            surface_prediction=saved_view.value.json(),
+            surface_request=view_request,
             managed=managed,
             surface_managed=view_managed,
             forbidden_resize_locale_requests=calls,

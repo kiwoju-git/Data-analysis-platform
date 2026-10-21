@@ -3162,12 +3162,13 @@ def verify_gaussian_process_regression_and_prediction(
     expect(panel.locator(".gp-profile-chart")).to_have_count(2)
     diagnostics.capture_page(page, "gp-conditional-profile.png")
 
-    surface = panel.locator('[data-chart-id="gp-surface"]')
+    surface_result = panel.locator(".gp-surface-result")
+    surface = surface_result.locator('[data-chart-id="gp-surface"]')
     expect(surface).to_be_visible()
-    expect(panel.get_by_label("X 예측변수").locator("option:checked")).to_have_text(
+    expect(surface_result.get_by_label("X 예측변수", exact=True).locator("option:checked")).to_have_text(
         "temperature_c"
     )
-    expect(panel.get_by_label("Y 예측변수").locator("option:checked")).to_have_text(
+    expect(surface_result.get_by_label("Y 예측변수", exact=True).locator("option:checked")).to_have_text(
         "pressure_bar"
     )
     diagnostics.capture_page(page, "gp-mean-surface.png")

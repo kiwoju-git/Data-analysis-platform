@@ -11,9 +11,33 @@ import { GpKernelSelectionSettings, gpOptimizerStarts, gpPresets } from "./GpKer
 import { setCurrentLocale } from "./i18n/store";
 import { GpExtensionSettings } from "./GpExtensionSettings";
 import { defaultGpExtensionDraft } from "./gpExtensionOptions";
-import { GpProfileChart } from "./charts/GaussianProcessCharts";
+import { GpProfileChart, GpSurfaceChart } from "./charts/GaussianProcessCharts";
+import { t } from "./i18n/translate";
 
 describe("GaussianProcessRegressionPanel", () => {
+  it("gives response, metadata and applied-surface selects explicit localized names", () => {
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      const version = datasetVersion();
+      const panel = renderToString(<GaussianProcessRegressionPanel analysisResult={null} filterValidationError={null} isRunningAnalysis={false} methodId="regression.gaussian_process" result={null} version={version} onRun={() => undefined} />);
+      expect(panel).toContain(`<select aria-label="${t("gp.response")}"`);
+      const props = { onChange: () => undefined, onMethodChange: () => undefined, columns: version.columns, numericColumns: version.columns, selectedNumeric: version.columns.slice(1), responseId: "response", predictorIds: ["x1", "x2"] };
+      const draft = { ...defaultGpExtensionDraft(), lagEnabled: true, timeFormat: "timestamp" as const };
+      const group = renderToString(<GpExtensionSettings {...props} draft={draft} method="group_k_fold" />);
+      expect(group).toContain(`<select aria-label="${t("gp.extension.groupColumn")}"`);
+      const time = renderToString(<GpExtensionSettings {...props} draft={draft} method="time_series_split" />);
+      for (const key of ["gp.extension.timeColumn", "gp.extension.timeFormat", "gp.extension.timezone", "gp.extension.series", "gp.extension.resource", "gp.surfaceX", "gp.surfaceY"] as const) {
+        expect(time).toContain(`<select aria-label="${t(key)}"`);
+      }
+      const result = resultFixture();
+      result.training_ranges.push({ column_id: "category", display_name: "Category", kind: "nominal", levels: ["A", "B"], mode: "A" });
+      const surface = renderToString(<GpSurfaceChart result={result} scope="accessible-result" analysisId="analysis-gp" />);
+      expect(surface).toContain('class="result-section gp-surface-result"');
+      for (const key of ["gp.surfaceX", "gp.surfaceY"] as const) expect(surface).toContain(`<select aria-label="${t(key)}"`);
+      expect(surface).toContain(`<select aria-label="Category · ${t("gp.extension.holdValue")}"`);
+    }
+  });
+
   it("explains inactive numeric kernel presets for nominal-only models in both locales", () => {
     for (const locale of ["en", "ko"] as const) {
       setCurrentLocale(locale);

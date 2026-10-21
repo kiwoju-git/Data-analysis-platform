@@ -214,6 +214,7 @@ export function GaussianProcessRegressionPanel({
             <label>
               <span>{t("gp.response")}</span>
               <select
+                aria-label={t("gp.response")}
                 value={responseColumnId}
                 onChange={(event) => {
                   onAnalysisInputChange?.();
