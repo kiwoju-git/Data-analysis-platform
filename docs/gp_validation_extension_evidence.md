@@ -254,3 +254,20 @@ bounds. GP records main/surface/sidebar geometry at each locale/viewport. The
 helper and invalid-geometry regression checks passed as part of 83 unit tests
 in 6.85 seconds. These new post-transition geometry assertions require another
 native execution; the prior screenshots alone do not prove their result.
+
+Python 3.11 native job `119289234826` passed 2,994 tests with 13 skips and
+114 warnings in 449.75 seconds. Its numerical probe remains explicitly
+diagnostic-only, including the BO 100-evaluation budget failure and subsequent
+200-evaluation diagnostic result. Linux job `119289235264` later stopped at
+the localization registry gate before its browser stage: 91 newly explicit
+BO KO/EN display pairs had not been registered. Their existing translations
+are now registered without changing request objects, enum values, user input,
+the compiler scope or API transport. Two obsolete legacy source mappings were
+removed, while their translation keys remain readable.
+
+The localization check now passes 2,959 source strings and 4,404 keys. Local
+i18n/BO/hook checks passed 234 tests; full frontend lint, typecheck and build
+passed. Lint retained 12 fast-refresh warnings; build retained the chunk-size
+and localization-plugin timing warnings. Compiler regression tests explicitly
+confirm that registering these display pairs does not rewrite the `text(ko,en)`
+helper arguments, request names or `noise_mode` enum values.

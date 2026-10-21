@@ -137,3 +137,23 @@ observed difference6.776e-10). These are the specified synthetic configurations,
 not arbitrary application workloads or a Windows performance result. RSS peaks
 remain separate process high-water marks, not simultaneous combined memory.
 The full product, Windows resource and exact-archive gates are separate.
+
+## Clean Windows Rerun
+
+The same source passed job119289235092 on the GitHub `windows-latest` hosted
+runner, CPython3.10.11. Python reported `Windows-10-10.0.26100-SP0`; this is not
+verification on the owner's Windows11 computer. Artifact12354961679 has ZIP
+SHA-256 `30bb3d1aede627a4fa2ae57de2b5b9d5674878d6dd540c27eaeded58f8e3581e`.
+All case and matrix provenance checks were clean and unchanged.
+
+| Rows | Fit/restore/predict passes | Admission rejections | Maximum worker RSS MiB | Maximum parent RSS MiB | Maximum analysis request seconds |
+| --- | --- | --- | --- | --- | --- |
+| 501 | 12 | 0 | 140.980 | 157.230 | 4.789 |
+| 1000 | 12 | 0 | 203.867 | 168.984 | 14.683 |
+| 2000 | 3 | 9 | 394.367 | 213.277 | 32.098 |
+
+The largest restored-prediction absolute difference was3.862e-10; source result
+checksums stayed unchanged. The admitted/rejected configurations match Linux.
+The earlier Windows outer timeout was not reproduced here, but its unrecorded
+stage/root cause is still unknown. This rerun does not erase the earlier failure
+or establish all-machine performance. No timeout or budget was increased.
