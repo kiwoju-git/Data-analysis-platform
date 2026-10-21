@@ -35,3 +35,39 @@ the archive gate. Unit tests of this contract do not constitute browser or Linux
 archive execution. Native initial-form receipts may be validated independently,
 but final release completion still requires both real restart journeys and the
 server-stopped offline phase against the final archive.
+
+## Read-Only POST Classification Regression
+
+Archive job `119326239437` in run `39627587187`, source
+`0ea7b2120ce4ee22c9b0a45a376b739c878a8ce8`, completed the initial application
+journey but failed the first installation's restart guard. The guard incorrectly
+classified 15 report lookup/download POSTs as mutations: five each to
+`/api/v1/reports/capability`, `/api/v1/reports/artifacts/query`, and
+`/api/v1/reports/{export_id}/download`. This was an archive-verifier defect;
+the run remains failed and is not reported as a completed archive validation.
+
+Source review of `backend/app/api/v1/reports.py` and the corresponding
+`report_sources`/`report_exports` services confirms that these routes validate
+and read an exact stored source or report. Download checks the expected source
+and output hash and returns existing bytes. They do not invoke report creation,
+fitting, CV, or recommendation generation.
+
+The corrected guard recognizes only those exact API paths, the existing exact
+source-snapshot path, and a canonical UUID-shaped report download path. Unsaved
+GP prediction remains restricted to the exact model route and `save_result`
+absent/false. POSTs to report creation, recommendation, replicate creation, or
+observation submission remain forbidden, as do saved predictions, suffix
+lookalikes, malformed prediction bodies and non-read methods. This is not a
+blanket permission for POST or for every route under `/reports`.
+
+Local Windows/Python 3.10 regression evidence:
+
+- Before the correction: 10 failed, 24 passed in the new classifier suite.
+  Three failures reproduce the native report routes; the others cover
+  over-broad suffix matching and malformed/unknown request boundaries.
+- After the correction: classifier, archive journey contract and archive
+  verifier suites together passed **239 tests** in 3.99 seconds.
+
+These tests do not replace another exact-archive native run. The restart,
+second-installation and server-stopped phases still have to pass on the newly
+built archive before publication.

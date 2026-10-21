@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -13,6 +14,17 @@ from app_readiness import wait_for_app_ready
 from bo_gp_release_contract import digest, extension_identity, report_identity
 from gp_prediction_context import _restore
 from managed_reports_live import verify_prediction_html
+
+_UUID_PATH = (
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+_READ_ONLY_REPORT_POSTS = frozenset(
+    {
+        "/api/v1/reports/capability",
+        "/api/v1/reports/source-snapshot",
+        "/api/v1/reports/artifacts/query",
+    }
+)
 
 
 def _managed(original: dict):
@@ -29,14 +41,19 @@ def _get(page: Page, base: str, path: str) -> dict:
 
 def _forbidden(request) -> bool:
     path = urlsplit(request.url).path
-    if request.method in {"PUT", "PATCH", "DELETE"}:
-        return True
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return False
     if request.method != "POST":
+        return True
+    if path in _READ_ONLY_REPORT_POSTS:
         return False
-    if path.endswith("/reports/source-snapshot"):
+    if re.fullmatch(rf"/api/v1/reports/{_UUID_PATH}/download", path):
         return False
-    if path.endswith("/gaussian-process-predictions"):
-        return request.post_data_json.get("save_result", False) is not False
+    if re.fullmatch(
+        rf"/api/v1/regression-models/{_UUID_PATH}/gaussian-process-predictions", path
+    ):
+        body = request.post_data_json
+        return not isinstance(body, dict) or body.get("save_result", False) is not False
     return True
 
 
