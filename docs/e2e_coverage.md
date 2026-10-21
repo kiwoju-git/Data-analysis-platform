@@ -812,9 +812,11 @@ browser critical path.
 - `verify current analysis completion ownership` (full flow)
 - `verify Report Center request context` (full flow)
 - `verify RSM response validation and source ownership`
+- `verify explicit replicate retry ownership`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
+- `verify GPR group/time/lag, mixed restore and saved surface forms`
 - `verify two-editor schema concurrency` (full flow)
 - `verify chart axis formatting`
 - `verify privacy-safe local pilot feedback`
@@ -824,6 +826,7 @@ browser critical path.
 - `verify visible fractional aliases, second-order selection and reports`
 - `verify visible CCD presets, selection and saved contours`
 - `Verify actual DOE browser zoom and preserved model source`
+- `verify noise-aware target/batch/replicate visible workflow`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
   - `create an immutable version from one cell correction`

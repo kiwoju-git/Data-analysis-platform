@@ -273,7 +273,7 @@ def test_early_browser_diagnostics_do_not_replace_product_gates():
     workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     jobs = workflow["jobs"]
     diagnostic = jobs["browser-diagnostics"]
-    assert diagnostic["strategy"]["matrix"]["suite"] == ["context", "workflows"]
+    assert diagnostic["strategy"]["matrix"]["suite"] == ["context", "workflows", "prediction"]
     assert diagnostic["strategy"]["fail-fast"] is False
     assert "inputs.browser_diagnostics == true" in diagnostic["if"]
     assert "needs" not in diagnostic

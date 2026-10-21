@@ -206,3 +206,26 @@ result is claimed from that failed run.
 
 Full source checks, browser journeys, native CI, performance matrix, exact Linux
 archive installation/restart and publication remain pending at this record point.
+
+## First Native CI Follow-up
+
+Branch run39613148814 used1c178d33444d185625418f5bb71270d39d1aa1df.
+It is not a passing release gate. Linux type checking found a Windows ctypes
+attribute boundary; Python3.11 completed2939 tests with20 failures and13 skips.
+Failures exposed outdated explicit migration/table/OpenAPI/tutorial/report
+expectations. The unchanged legacy tutorial still exercises BO0.6, not the new
+noise-aware0.7 policy, and must retain its actual method identity.
+Updated metadata/managed-report fixtures passed45 tests with1 existing skip;
+previous migration/checksum assertions remain. No stored artifact was rewritten.
+
+Early browser diagnostics stopped at a stale GP Generate selector and an absent
+Origin header in the synthetic BO setup request. The product Host/Origin guard
+was retained. Named action selection and exact-origin fixture requests have
+focused regressions; browser re-execution is still required. Early diagnostic
+CI now also runs the prediction suite while all normal product gates remain.
+
+The new mixed-kernel import initially broke the lightweight startup contract.
+Loading the sklearn-based class only at fit/read execution boundaries restores
+that contract; the actual fresh-process startup regression remains enabled.
+Security failures and exact native lock remediation are recorded separately in
+`bo_gpr_security_followup.md`; no audit exception was added.

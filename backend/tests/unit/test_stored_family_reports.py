@@ -291,7 +291,7 @@ def test_gage_preserves_separate_series_and_does_not_invent_interaction() -> Non
     assert section(body, "gage_variance_components").status == "rendered"
 
 
-def test_gp_surface_both_modes_units_constant_scale_and_no_predictions(
+def test_gp_surface_three_quantities_units_constant_scale_and_no_predictions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     result = calculate_gaussian_process_regression(
@@ -312,12 +312,36 @@ def test_gp_surface_both_modes_units_constant_scale_and_no_predictions(
         lambda *args, **kwargs: pytest.fail("report fit"),
     )
     sections = gp_surface_sections(result)
-    assert [item.section_id for item in sections] == ["gp_surface_mean", "gp_surface_sd"]
+    assert [item.section_id for item in sections] == [
+        "gp_surface_mean",
+        "gp_surface_sd",
+        "gp_surface_latent_sd",
+    ]
     root = tree(ReportBody("single", sections))
-    assert len(root.findall(".//svg")) == 2
-    assert len([item for item in root.findall(".//rect") if "data-value" in item.attrib]) == 200
+    assert len(root.findall(".//svg")) == 3
+    assert len([item for item in root.findall(".//rect") if "data-value" in item.attrib]) == 300
     assert "Temperature (C)" in sections[0].markup
     assert "New Observation Predictive SD (mg)" in sections[1].markup
+    assert "Latent Response SD (mg)" in sections[2].markup
+    for report_section, key in zip(
+        sections,
+        ("predicted_mean", "predictive_standard_deviation", "latent_standard_deviation"),
+        strict=True,
+    ):
+        cells = [
+            item
+            for item in tree(ReportBody("single", (report_section,))).findall(".//rect")
+            if "data-value" in item.attrib
+        ]
+        assert [float(item.attrib["data-value"]) for item in cells] == [
+            point[key] for point in result["two_predictor_surface"]["points"]
+        ]
+    legacy = json.loads(json.dumps(result))
+    for point in legacy["two_predictor_surface"]["points"]:
+        del point["latent_standard_deviation"]
+    legacy_sections = gp_surface_sections(legacy)
+    assert [item.status for item in legacy_sections] == ["rendered", "rendered", "missing"]
+    assert legacy_sections[-1].reason == "surface_quantity_not_stored"
     assert digest(result) == before
     assert all(
         item.status == "not_applicable"

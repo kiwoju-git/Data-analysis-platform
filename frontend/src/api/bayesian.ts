@@ -49,7 +49,7 @@ export async function createBayesianRecommendationBatch(
 export async function createBayesianReplicates(
   studyId: string, trialId: string, request: BayesianReplicateCreateRequest,
 ): Promise<BayesianReplicateCreateResponse> {
-  const response = await fetchApi(`${apiRoutes.bayesianStudy(studyId)}/trials/${encodeURIComponent(trialId)}/replicates`, {
+  const response = await fetchApi(apiRoutes.bayesianReplicates(studyId, trialId), {
     method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(request),
   });

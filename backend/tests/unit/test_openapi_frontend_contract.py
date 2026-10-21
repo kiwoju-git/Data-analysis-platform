@@ -20,6 +20,7 @@ class OperationContract:
     response_schema: str | None
     parameters: frozenset[tuple[str, str]] = field(default_factory=frozenset)
     request_media_types: frozenset[str] = field(default_factory=frozenset)
+    response_any_of_refs: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class SchemaComponentContract:
     property_refs: tuple[tuple[str, str], ...] = ()
     property_any_of_refs: tuple[tuple[str, frozenset[str]], ...] = ()
     array_item_refs: tuple[tuple[str, str], ...] = ()
+    array_item_any_of_refs: tuple[tuple[str, frozenset[str]], ...] = ()
     property_consts: tuple[tuple[str, object], ...] = ()
     property_enums: tuple[tuple[str, frozenset[object]], ...] = ()
     additional_properties: bool | None = False
@@ -788,6 +790,15 @@ FRONTEND_ROUTE_CONTRACTS = [
         request_media_types=frozenset({"application/json"}),
     ),
     OperationContract(
+        route_name="bayesianReplicates",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/replicates",
+        success_status="201",
+        response_schema="BayesianReplicateCreateResponse",
+        parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="bayesianTrialAbandon",
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/abandon",
@@ -817,7 +828,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/recommendations",
         success_status="201",
-        response_schema="BayesianRecommendationResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianRecommendationResponse", "BayesianNoiseBatchResponse"}
+        ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -850,7 +864,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/recommendation-batches",
         success_status="201",
-        response_schema="BayesianRecommendationBatchResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"}
+        ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -859,7 +876,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="get",
         path="/api/v1/bayesian-studies/{study_id}/recommendation-batches",
         success_status="200",
-        response_schema="BayesianRecommendationBatchListResponse",
+        response_schema="BayesianAnyBatchListResponse",
         parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
     ),
     OperationContract(
@@ -867,7 +884,7 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="get",
         path="/api/v1/bayesian-studies/{study_id}/recommendation-batches/latest",
         success_status="200",
-        response_schema="BayesianLatestRecommendationBatchResponse",
+        response_schema="BayesianAnyLatestBatchResponse",
         parameters=frozenset({("study_id", "path")}),
     ),
     OperationContract(
@@ -875,7 +892,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="get",
         path=("/api/v1/bayesian-studies/{study_id}/recommendation-batches/" "{batch_id}"),
         success_status="200",
-        response_schema="BayesianRecommendationBatchResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"}
+        ),
         parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
     ),
     OperationContract(
@@ -1551,7 +1571,9 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         array_item_refs=(
             ("factors", "BayesianFactorResponse"),
             ("constraints", "BayesianLinearConstraintResponse"),
-            ("trials", "BayesianTrialResponse"),
+        ),
+        array_item_any_of_refs=(
+            ("trials", frozenset({"BayesianTrialResponse", "BayesianReplicateTrialResponse"})),
         ),
         property_consts=(("method_id", "doe.bayesian_optimization"),),
     ),
@@ -3519,6 +3541,63 @@ def test_dataset_schema_update_requires_lowercase_source_hash(
     assert schema["additionalProperties"] is False
 
 
+def test_bayesian_versioned_response_and_replicate_contracts(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schemas = openapi_schema["components"]["schemas"]
+    batches = frozenset({"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"})
+    trials = frozenset({"BayesianTrialResponse", "BayesianReplicateTrialResponse"})
+    assert (
+        _schema_any_of_ref_names(
+            schemas["BayesianAnyBatchListResponse"]["properties"]["items"]["items"]
+        )
+        == batches
+    )
+    latest = schemas["BayesianAnyLatestBatchResponse"]["properties"]["item"]
+    assert _schema_any_of_ref_names(latest) == batches
+    assert {"type": "null"} in latest["anyOf"]
+    assert len(latest["anyOf"]) == 3
+    assert (
+        _schema_any_of_ref_names(
+            schemas["BayesianTrialListResponse"]["properties"]["items"]["items"]
+        )
+        == trials
+    )
+    assert (
+        _schema_any_of_ref_names(schemas["BayesianTrialTransitionResponse"]["properties"]["trial"])
+        == trials
+    )
+    legacy = schemas["BayesianRecommendationBatchResponse"]["properties"]
+    current = schemas["BayesianNoiseBatchResponse"]["properties"]
+    assert legacy["method_version"]["type"] == "string"
+    assert current["method_version"]["const"] == "0.7.0"
+    for field_name, old, new in (
+        ("config_schema_version", 1, 2),
+        ("result_schema_version", 1, 2),
+        ("model_schema_version", 2, 3),
+        ("item_schema_version", 1, 2),
+    ):
+        assert legacy[field_name]["const"] == old
+        assert current[field_name]["const"] == new
+    assert "replicate_of_trial_id" not in schemas["BayesianTrialResponse"]["properties"]
+    replicate = schemas["BayesianReplicateTrialResponse"]
+    assert replicate["properties"]["origin"]["const"] == "replicate"
+    assert "replicate_of_trial_id" in replicate["required"]
+    request = schemas["BayesianReplicateCreateRequest"]
+    assert request["additionalProperties"] is False
+    assert set(request["required"]) == {
+        "expected_history_revision_id",
+        "expected_history_sha256",
+        "request_id",
+        "count",
+        "confirm_replicate_intent",
+    }
+    assert request["properties"]["count"]["minimum"] == 1
+    assert request["properties"]["count"]["maximum"] == 8
+    assert request["properties"]["confirm_replicate_intent"]["const"] is True
+    assert request["properties"]["expected_history_sha256"]["pattern"] == r"^[0-9a-f]{64}$"
+
+
 @pytest.mark.parametrize(
     "contract",
     FRONTEND_ROUTE_CONTRACTS,
@@ -3537,6 +3616,16 @@ def test_frontend_route_contract_is_present_in_openapi(
     assert _operation_parameters(operation) == contract.parameters
     assert _request_media_types(operation) == contract.request_media_types
     assert contract.success_status in operation["responses"]
+
+    if contract.response_any_of_refs:
+        assert contract.response_schema is None
+        response = operation["responses"][contract.success_status]
+        schema = response["content"]["application/json"]["schema"]
+        assert _schema_any_of_ref_names(schema) == contract.response_any_of_refs
+        assert len(schema["anyOf"]) == len(contract.response_any_of_refs)
+        assert all(set(item) == {"$ref"} for item in schema["anyOf"])
+        assert contract.response_any_of_refs <= frozenset(openapi_schema["components"]["schemas"])
+        return
 
     if contract.response_schema is None:
         return
@@ -4141,6 +4230,13 @@ def test_frontend_schema_component_contract_is_present_in_openapi(
     for field_name, ref_name in contract.array_item_refs:
         assert _array_item_ref_name(properties[field_name]) == ref_name
         assert ref_name in schemas
+
+    for field_name, ref_names in contract.array_item_any_of_refs:
+        items = properties[field_name]["items"]
+        assert _schema_any_of_ref_names(items) == ref_names
+        assert len(items["anyOf"]) == len(ref_names)
+        assert all(set(item) == {"$ref"} for item in items["anyOf"])
+        assert ref_names <= frozenset(schemas)
 
     for field_name, const_value in contract.property_consts:
         assert properties[field_name].get("const") == const_value

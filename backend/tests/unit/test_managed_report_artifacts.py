@@ -501,7 +501,10 @@ def test_attachment_exact_history_json_hash_and_fk(workspace, kind):
         if kind == "recommendation":
             trial_id = str(uuid4())
             connection.execute(
-                "INSERT INTO bayesian_trials VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO bayesian_trials (trial_id, study_version_id, trial_number, "
+                "origin, state, actual_coordinates_json, normalized_coordinates_json, "
+                "coordinates_sha256, objective_value, created_at, closed_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     trial_id,
                     str(source.study_version_id),

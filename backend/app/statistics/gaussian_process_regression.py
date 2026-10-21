@@ -14,12 +14,6 @@ from numpy.typing import NDArray
 from scipy.linalg import solve_triangular  # type: ignore[import-untyped]
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
-from app.statistics.gp_mixed_kernels import (
-    MixedPredictorKernel,
-    mixed_kernel_from_payload,
-    mixed_kernel_to_payload,
-    mixed_kernel_warning_codes,
-)
 from app.statistics.gp_preprocessing import (
     GpPredictorSpec,
     GpPreprocessingError,
@@ -692,6 +686,8 @@ def build_gaussian_process_state(
     log_marginal_likelihood: float = 0.0,
     preprocessing_payload: dict[str, Any] | None = None,
 ) -> GaussianProcessFittedState:
+    from app.statistics.gp_mixed_kernels import MixedPredictorKernel
+
     signal_kernel = _kernel_from_payload(signal_kernel_payload)
     preprocessor = None
     if preprocessing_payload is not None:
@@ -769,6 +765,8 @@ def _fit_model(
 ) -> _FitResult:
     from sklearn.exceptions import ConvergenceWarning  # type: ignore[import-untyped]
     from sklearn.gaussian_process import GaussianProcessRegressor  # type: ignore[import-untyped]
+
+    from app.statistics.gp_mixed_kernels import MixedPredictorKernel
 
     preprocessor = None
     if raw_predictors is not None:
@@ -1046,6 +1044,8 @@ def _split_fitted_kernel(
 
 
 def _kernel_payload(kernel: Any, preset: KernelPreset) -> dict[str, object]:
+    from app.statistics.gp_mixed_kernels import MixedPredictorKernel, mixed_kernel_to_payload
+
     if isinstance(kernel, MixedPredictorKernel):
         mixed = mixed_kernel_to_payload(kernel)
         signal = mixed["signal"]
@@ -1087,6 +1087,8 @@ def _kernel_from_payload(payload: dict[str, object]) -> Any:
         Matern,
         RationalQuadratic,
     )
+
+    from app.statistics.gp_mixed_kernels import mixed_kernel_from_payload
 
     if "mixed_kernel" in payload:
         try:
@@ -1516,6 +1518,8 @@ def _warning_codes(
     cv_converged: bool,
     length_bounds: tuple[float, float] = (0.01, 100.0),
 ) -> list[str]:
+    from app.statistics.gp_mixed_kernels import MixedPredictorKernel, mixed_kernel_warning_codes
+
     codes = ["gp_predictive_not_causal", "gp_uncertainty_conditional_on_kernel"]
     if state.preprocessing is not None:
         codes.extend(state.preprocessing.warning_codes)

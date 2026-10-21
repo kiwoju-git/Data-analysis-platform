@@ -264,6 +264,12 @@ export const apiRoutes = {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}/observations/batch`);
   },
 
+  bayesianReplicates(studyId: string, trialId: string): string {
+    return apiUrl(
+      `/bayesian-studies/${pathId(studyId)}/trials/${pathId(trialId)}/replicates`,
+    );
+  },
+
   bayesianTrialAbandon(studyId: string, trialId: string): string {
     return apiUrl(
       `/bayesian-studies/${pathId(studyId)}/trials/${pathId(trialId)}/abandon`,

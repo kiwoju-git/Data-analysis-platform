@@ -6,7 +6,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from playwright.sync_api import Browser, Locator, Route, expect, sync_playwright
+from playwright.sync_api import Browser, Locator, Page, Route, expect, sync_playwright
+
+from app_readiness import diagnosed_page
 
 
 def verify_chart_interactions(browser: Browser, base_url: str, output: Path) -> None:
@@ -151,9 +153,13 @@ def _surface_response(route: Route, offset: float) -> dict[str, Any]:
 
 def verify_result_chart_models(browser: Browser, base_url: str, output: Path) -> None:
     """Verify stored-payload display adapters, independently of interaction fixture."""
+    with diagnosed_page(browser, output, "result-chart-models", locale="en") as page:
+        page.set_viewport_size({"width": 1440, "height": 900})
+        _verify_result_chart_models(page, base_url, output)
+
+
+def _verify_result_chart_models(page: Page, base_url: str, output: Path) -> None:
     output.mkdir(parents=True, exist_ok=True)
-    context = browser.new_context(viewport={"width": 1440, "height": 900})
-    page = context.new_page()
     errors: list[str] = []
     api_requests: list[str] = []
     pending: list[Route] = []
@@ -301,7 +307,7 @@ def verify_result_chart_models(browser: Browser, base_url: str, output: Path) ->
             "x3"
         )
         assert _axis_text(surface_chart) == ["temperature_c", "pressure_bar"]
-        generate = surface.locator(".gp-surface-controls > button")
+        generate = surface.get_by_role("button", name="Generate Surface", exact=True)
         with page.expect_request(prediction_route):
             generate.click()
         page.wait_for_timeout(50)
@@ -414,7 +420,6 @@ def verify_result_chart_models(browser: Browser, base_url: str, output: Path) ->
     finally:
         for route in pending:
             route.abort()
-        context.close()
 
 
 if __name__ == "__main__":

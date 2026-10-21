@@ -1048,7 +1048,7 @@ def _collect_bayesian_result(
     result = recommendation["result"]
     return {
         "method_id": "doe.bayesian_optimization",
-        "method_version": versions["doe.bayesian_optimization"],
+        "method_version": recommendation["method_version"],
         "input_file_sha256": _sha256(
             TUTORIAL_ROOT / "studio_bayesian_observations.csv"
         ),

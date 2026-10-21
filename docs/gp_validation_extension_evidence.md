@@ -148,3 +148,42 @@ benchmarks are separate integration gates; the above Python/API evidence does
 not claim those gates passed. HTML export smoke uses stored result and checks
 table/SVG presence and unchanged model bytes; it does not yet establish visible
 parity for every new validation-plan field.
+
+## First native CI corrections
+
+Run `39613148814` at source `1c178d33444d185625418f5bb71270d39d1aa1df`
+did not pass the product gates. Its Linux check stopped at Mypy because Linux
+ctypes stubs do not expose `WinDLL`; the Windows-only peak-RSS branch now uses
+an explicit typed platform boundary, matching the Linux-only resource branch.
+The native Windows worker tests, including positive peak-RSS reporting, passed
+8 tests in 19.93 seconds. CI-style Mypy with `--platform linux` and
+`--platform win32` passed for the worker. An additional invocation explicitly using the backend strict config
+(not the root CI invocation) found 13 existing/dependency strict issues; that
+invocation is not counted as a pass.
+
+The early Windows workflows diagnostic run failed in the existing chart fixture
+before reaching the new GP form journey: a broad child-button locator matched
+both Generate Surface and the newly added Save Applied View action. It now
+targets the explicit Generate Surface name. The chart fixture also uses the
+common child-page diagnostic owner so its own URL, DOM, screenshot and trace
+survive failure, rather than depending on an unrelated top-level page.
+Diagnostic/partition unit checks passed 83 tests in 7.40 seconds; these mock
+checks do not replace rerunning the actual native browser workflow.
+
+Additional actual time/lag fits verified that saved HTML CV plots contain exactly
+the scored observations, not fake zero-valued warm-up predictions, and that
+KO/EN plan/lag tables preserve the saved identity. The two report checks passed
+in 15.28 seconds while fit, saved-model prediction and raw-row readers were
+forbidden during export; source payload bytes remained equivalent. This closes
+that specific report coverage gap, not the pending native browser journey.
+
+Python 3.11's first full calculation/API check reported 20 failures, 2,939
+passes and 13 skips. Most were old schema/version/test expectations. The
+sklearn import-boundary check also exposed a real startup regression after its
+module allowlist was updated: the new mixed-kernel base class was imported by
+the main GPR module at application startup. Mixed-kernel imports now happen
+only at fit/state-load/payload/warning execution boundaries. Startup still must
+not import sklearn. The import-boundary, stored-family report, mixed fitting,
+time/lag report and E2E marker checks then passed 42 tests in 55.21 seconds.
+The surface report test now checks all three stored quantities and confirms
+that legacy results without latent SD report that section as unavailable.

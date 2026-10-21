@@ -24,6 +24,7 @@ def _digest(value: object) -> str:
 def _seed(page: Page, base: str) -> dict:
     created = page.request.post(
         base + "/api/v1/bayesian-studies",
+        headers={"Origin": base},
         data={
             "name": "Synthetic noise-aware target study",
             "factors": [
@@ -55,6 +56,7 @@ def _seed(page: Page, base: str) -> dict:
         saved = page.request.put(
             base
             + f"/api/v1/bayesian-studies/{study['study_id']}/trials/{trial['trial_id']}/observation",
+            headers={"Origin": base},
             data={
                 "objective_value": 1
                 + 2 * trial["actual_coordinates"]["x"]

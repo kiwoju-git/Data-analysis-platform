@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import multiprocessing
+import platform
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -24,6 +25,14 @@ def result():
             },
         },
     }
+
+
+def test_native_worker_peak_rss_has_explicit_supported_platform_contract():
+    peak = gp_worker.worker_peak_resident_bytes()
+    if platform.system() in {"Windows", "Linux"}:
+        assert isinstance(peak, int) and peak > 0
+    else:
+        assert peak is None
 
 
 def test_bundle_uses_numeric_npz_and_preserves_json_and_exact_values(tmp_path):

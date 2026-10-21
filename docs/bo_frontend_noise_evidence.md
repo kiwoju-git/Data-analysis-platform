@@ -85,3 +85,21 @@ Local dev/server startup had already been denied in the parent task; this subtas
 Browser layout, native CI, archived installation, performance and release publication remain separate
 gates owned by the parent integration. A fixture definition or static markup pass is not a passing
 browser/release claim. Full frontend checking is also an integration gate while GPR files change.
+
+## First Native Browser Attempt
+
+CI run `39613148814`, source `1c178d33444d185625418f5bb71270d39d1aa1df`, ran the early Linux
+context suite on Python 3.12.15 / Chromium 149.0.7827.55. Its BO child failed before opening the app:
+the synthetic study-creation POST lacked an `Origin` header and the development origin guard
+correctly returned `dev_origin_not_allowed`.
+
+The actual child `failure.json` and Playwright `trace.zip` in artifact `12352071489` were inspected.
+They show `about:blank`, no mounted root or page errors, and the headerless API POST at `_seed`.
+This is a test-fixture defect, not evidence that the replicate UI ran or failed. The guard was not
+weakened. Synthetic study POST and observation PUT requests now supply the exact test server origin,
+matching the other guarded E2E fixtures.
+
+`test_bo_noise_e2e_fixture.py` reproduced both loopback/LAN-base failures before the fix. Afterward,
+the fixture and suite-partition checks passed 74 tests; Ruff passed for both changed files.
+The corrected native browser journey still requires a subsequent CI run. The workflows job in this
+first run stopped earlier in a GP surface locator and did not reach the BO workflow.

@@ -57,8 +57,9 @@ def worker_peak_resident_bytes() -> int | None:
                 ("PeakPagefileUsage", ctypes.c_size_t),
             ]
 
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        windows_ctypes = cast(Any, ctypes)
+        kernel32 = windows_ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = windows_ctypes.WinDLL("psapi", use_last_error=True)
         kernel32.GetCurrentProcess.restype = wintypes.HANDLE
         psapi.GetProcessMemoryInfo.argtypes = [
             wintypes.HANDLE,

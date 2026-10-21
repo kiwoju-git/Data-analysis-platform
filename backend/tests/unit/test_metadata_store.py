@@ -94,6 +94,7 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -172,6 +173,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -262,6 +264,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -384,6 +387,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -560,6 +564,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -623,6 +628,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -694,6 +700,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -761,6 +768,7 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (21, "create_managed_report_artifacts"),
         (22, "persist_interrupted_execution_reason"),
         (23, "support_rsm_plot_view_assets"),
+        (24, "explicit_bayesian_replicate_trials"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -948,6 +956,7 @@ def test_initialize_metadata_store_upgrades_v10_with_empty_bayesian_foundation(
         "bayesian_recommendations",
         "bayesian_recommendation_batches",
         "bayesian_recommendation_batch_items",
+        "bayesian_replicate_requests",
         "bayesian_study_lifecycle_events",
     }
     assert study_count == 0
