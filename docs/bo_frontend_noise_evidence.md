@@ -213,6 +213,36 @@ Node VM verified empty storage initializes KO and an in-memory user's EN value s
 initialization; that is script evidence, not browser persistence evidence. Native re-execution of
 the corrected report/restart journey and the 390px CSS fix remains pending.
 
+## Native Follow-up At bb94ab4
+
+Run `39624250223` tested source `bb94ab48125b6edbd49a5cc805131a01b13ec54e`. Artifact API metadata
+for both items below explicitly reports that run ID and full source SHA; downloaded ZIP digests
+were checked against the API digest, not inferred from artifact-ID ordering.
+
+- Context job `119305400516` succeeded. Artifact `12355394534`, ZIP SHA-256
+  `1f40b65691fed7d28e59386d1aeafeae77218453392a5e14ed5cc05f6575440a`, contains the completed BO
+  receipt for explicit same-request replay, no duplicate trials and unchanged history.
+- Workflow artifact `12356503315`, ZIP SHA-256
+  `7d44225a131e2db4f79ed1a7cd04b99dcad3f87e3cddb6d268db764c53505d73`, contains a successful new
+  BO fixture receipt and the downloaded managed EN HTML. The fixture completed target q1, joint q2,
+  individual observations, explicit repeats, compression 9/7, source-preserving reload, ENG reload
+  and report deep-link restoration, exact report snapshot/download checksum, and all four KO/EN
+  1024/1440 post-transition bounds. At 1024 the sidebar right edge was -6.2px with main 0..1024px;
+  at 1440 they were 248px and 248..1440px. The actual KO1024 screenshot was inspected and no longer
+  shows the earlier left sidebar sliver.
+- The later existing 390px journey also passed its layout assertions: settings and all direct
+  children had left=14px/right=376px; oversized tables remained inside 362px auto-scroll wrappers.
+  Thus the previously observed 84px page overflow is corrected in this native execution.
+
+The whole workflows job still failed. Its later constrained, two-observation BO request returned
+HTTP 409 `bayesian_optimization_artifact_mismatch`; the old fixture then timed out waiting for a
+result heading. Actual failure HTML/screenshot and backend logs confirm the error. This is a new
+product/API blocker, not a layout, locale or optimizer-timeout diagnosis. The fixture now checks
+each recommendation's actual HTTP status/code and source history identity before its existing UI
+assertions, without increasing its timeout. Local fixture/suite-partition checks passed 89 tests
+and targeted Ruff passed. The backend cause/fix and native rerun are tracked separately; these
+partial successes do not qualify the product or a Linux archive for release.
+
 ## Versioned API Inventory Follow-up
 
 The native Python 3.11 run exposed outdated OpenAPI test expectations for legacy-only batch/trial

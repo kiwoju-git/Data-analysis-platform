@@ -410,7 +410,9 @@ def validate_calculation(
         raise _error()
     observations_by_id = {o["trial_id"]: o for o in payload["observations"]}
     best = observations_by_id[str(result.incumbent.best_observed_trial_id)]
-    latent = observations_by_id[str(result.incumbent.latent_incumbent_trial_id)]
+    # The core fits canonical actual-to-normalized coordinates, which can differ
+    # by one ULP from an earlier stored normalized-to-actual round trip.
+    latent_index = view.trial_ids.index(str(result.incumbent.latent_incumbent_trial_id))
     factor_ids = [f["factor_id"] for f in payload["factors"]]
     expected_best = (
         min(view.raw_y, key=lambda y: abs(y - payload["objective"]["target_value"]))
@@ -427,7 +429,7 @@ def validate_calculation(
         result.incumbent.best_observed_objective != best["objective_value"]
         or result.incumbent.best_observed_objective != expected_best
         or result.incumbent.latent_incumbent_coordinates_normalized
-        != [latent["normalized_coordinates"][f] for f in factor_ids]
+        != view.raw_x[latent_index].tolist()
         or model.target_scaled != expected_target
         or result.incumbent.target_scaled != expected_target
         or result.incumbent.incumbent_kind
@@ -507,8 +509,8 @@ def validate_calculation(
         seen.append(point)
         for constraint in payload["constraints"]:
             lhs = sum(
-                coefficient * item.actual_coordinates[key]
-                for key, coefficient in constraint["coefficients"].items()
+                term["coefficient"] * item.actual_coordinates[term["factor_id"]]
+                for term in constraint["terms"]
             )
             bound = constraint["bound"]
             if (constraint["relation"] == "less_than_or_equal" and lhs > bound + 1e-8) or (

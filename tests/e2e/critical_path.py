@@ -4216,7 +4216,28 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     diagnostics.capture_page(page, "bayesian-parallel-batch-settings.png")
     page.get_by_role("radio", name="결과를 하나씩 반영").check()
     diagnostics.capture_page(page, "bayesian-sequential-settings.png")
-    recommendation_button.click()
+
+    def recommend_batch() -> None:
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/recommendation-batches"),
+            timeout=45_000,
+        ) as requested:
+            recommendation_button.click()
+        response = requested.value
+        payload = response.json()
+        assert response.status == 201, {
+            "status": response.status,
+            "code": payload.get("error", {}).get("code"),
+        }
+        request = response.request.post_data_json
+        assert payload["result_schema_version"] == request["schema_version"] == 2
+        assert payload["source_history_revision_id"] == request["expected_history_revision_id"]
+        assert (
+            payload["source_observation_history_sha256"] == request["expected_history_sha256"]
+        )
+
+    recommend_batch()
 
     expect(page.get_by_role("heading", name="추천 batch 결과")).to_be_visible(
         timeout=45_000
@@ -4244,7 +4265,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     )
 
     expect(recommendation_button).to_be_enabled(timeout=20_000)
-    recommendation_button.click()
+    recommend_batch()
     trial_four_input = page.get_by_label("Trial 4 관측값")
     expect(trial_four_input).to_be_visible(timeout=45_000)
     trial_four_row = trial_four_input.locator("xpath=ancestor::tr")
@@ -4258,7 +4279,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     )
 
     expect(recommendation_button).to_be_enabled(timeout=20_000)
-    recommendation_button.click()
+    recommend_batch()
     trial_five_input = page.get_by_label("Trial 5 관측값")
     expect(trial_five_input).to_be_visible(timeout=45_000)
     trial_five_row = trial_five_input.locator("xpath=ancestor::tr")
