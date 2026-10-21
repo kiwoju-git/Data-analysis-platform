@@ -21,6 +21,7 @@ describe("GaussianProcessRegressionPanel", () => {
       const version = datasetVersion();
       const panel = renderToString(<GaussianProcessRegressionPanel analysisResult={null} filterValidationError={null} isRunningAnalysis={false} methodId="regression.gaussian_process" result={null} version={version} onRun={() => undefined} />);
       expect(panel).toContain(`<select aria-label="${t("gp.response")}"`);
+      expect(panel).toContain(`<select aria-label="${t("gp.validation")}"`);
       const props = { onChange: () => undefined, onMethodChange: () => undefined, columns: version.columns, numericColumns: version.columns, selectedNumeric: version.columns.slice(1), responseId: "response", predictorIds: ["x1", "x2"] };
       const draft = { ...defaultGpExtensionDraft(), lagEnabled: true, timeFormat: "timestamp" as const };
       const group = renderToString(<GpExtensionSettings {...props} draft={draft} method="group_k_fold" />);

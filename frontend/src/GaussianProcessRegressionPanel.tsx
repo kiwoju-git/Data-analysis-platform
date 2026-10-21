@@ -361,6 +361,7 @@ export function GaussianProcessRegressionPanel({
             <label>
               <span>{t("gp.validation")}</span>
               <select
+                aria-label={t("gp.validation")}
                 value={validationMethod === "group_k_fold" ? "k_fold" : validationMethod}
                 onChange={(event) =>
                   {

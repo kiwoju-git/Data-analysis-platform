@@ -3172,7 +3172,7 @@ def verify_gaussian_process_regression_and_prediction(
         "pressure_bar"
     )
     diagnostics.capture_page(page, "gp-mean-surface.png")
-    panel.get_by_role("button", name="예측 불확실성").click()
+    surface_result.get_by_role("button", name="새 관측값 예측 표준편차", exact=True).click()
     diagnostics.capture_page(page, "gp-uncertainty-surface.png")
 
     prediction = panel.locator(".gp-point-prediction")
