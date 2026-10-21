@@ -1,0 +1,39 @@
+name: security-lock-refresh
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  native-certifi:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python: "3.10"
+            target: py310-win
+          - os: ubuntu-24.04
+            python: "3.11"
+            target: py311-linux
+          - os: ubuntu-24.04
+            python: "3.12"
+            target: py312-linux
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Generator dependency
+        run: python -m pip install --only-binary=:all: packaging==25.0
+      - name: Refresh only certifi and verify offline target installation
+        run: python scripts/refresh_certifi_lock.py --target ${{ matrix.target }} --output-dir .tmp/security-lock-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-lock-${{ matrix.target }}-${{ github.sha }}
+          path: .tmp/security-lock-${{ matrix.target }}
+          if-no-files-found: error

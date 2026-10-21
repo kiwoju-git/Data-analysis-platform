@@ -22,12 +22,23 @@ on:
         required: false
         type: boolean
         default: false
+      security_lock_refresh:
+        description: "Native certifi lock maintenance only; requires diagnostic-only mode"
+        required: false
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
       - main
 
 jobs:
+  security-lock-refresh:
+    if: github.event_name == 'workflow_dispatch' && inputs.security_lock_refresh == true && inputs.browser_diagnostics_only == true
+    uses: ./.github/workflows/security-lock-refresh.yml
+    permissions:
+      contents: read
+
   browser-diagnostics:
     if: github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics == true && inputs.generate_linux_locks != true
     runs-on: ubuntu-24.04
