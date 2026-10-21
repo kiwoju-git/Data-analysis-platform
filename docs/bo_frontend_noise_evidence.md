@@ -167,6 +167,27 @@ of the visible numeric table, latent/predictive labels and raw/effective counts.
 the post-transition bounding checks, and the strengthened exact-archive restart checks are pending
 native execution at this documentation checkpoint. Earlier native results did not run them.
 
+## Confirmed Narrow-screen Grid Regression
+
+Subsequent Linux workflow run `39619608275`, job `119289235207`, source `6fe0b5`, reached the existing
+BO study journey after its GP/DOE/RSM/LHS stages. At 390px the BO settings page exceeded the viewport by
+84px. Artifact `12354089397` contains the actual failed page HTML and screenshot
+`failure-verify-bayesian-study-observations-and-recommendation-20261021T145111Z`.
+
+The new noise settings introduce a section around scrollable settings tables. The parent
+`.bayesian-recommendation-settings` used an implicit auto-minimum grid track, so that section's table
+minimum width propagated into the outer grid. Its previously direct scroll-container children did
+not have the same intrinsic-size behavior. The narrow fix explicitly uses `minmax(0, 1fr)` and gives
+its direct children `min-inline-size: 0`; no global table minimum, design token, or overflow-hiding
+rule changes. Tables retain their internal horizontal scrolling.
+
+The existing failed browser assertion is retained. It now also waits for actual layout transitions,
+records numeric settings/child/table-wrapper bounds, and checks that any oversized table remains in
+an `auto`/`scroll` container. This is separate from the transient sidebar screenshot issue. Actual
+native green confirmation of this scoped CSS change remains pending at this checkpoint.
+Related local BO settings/presentation tests passed 18 tests; fixture/suite-partition checks passed
+87 tests and targeted Ruff passed. None of those local checks executes a browser layout engine.
+
 ## Versioned API Inventory Follow-up
 
 The native Python 3.11 run exposed outdated OpenAPI test expectations for legacy-only batch/trial

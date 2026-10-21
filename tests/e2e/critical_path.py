@@ -41,7 +41,7 @@ from refined_ui import create_refined_ui_fixture, verify_refined_ui
 from startup_readiness import verify_startup_readiness
 from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
-from app_readiness import wait_for_app_ready
+from app_readiness import wait_for_app_ready, wait_for_layout_settled
 from gp_prediction_context import verify_gp_prediction_context
 from gp_validation_extension import verify_gp_validation_extension
 from schema_concurrency import verify_schema_concurrency
@@ -4076,6 +4076,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     page.get_by_label("허용 오차 (선택)").fill("0.1")
     diagnostics.capture_page(page, "bayesian-target-goal.png")
     page.set_viewport_size({"width": 390, "height": 844})
+    wait_for_layout_settled(page)
     mobile_overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - window.innerWidth"
     )
@@ -4086,6 +4087,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     diagnostics.capture_page(page, "bayesian-mobile.png")
     diagnostics.capture_page(page, "doe-table-ui-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
+    wait_for_layout_settled(page)
     page.get_by_label("최적화 목표").select_option("maximize")
     with page.expect_response(
         lambda response: response.request.method == "POST"
@@ -4129,10 +4131,47 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     )
     diagnostics.capture_page(page, "bayesian-goal-layout-desktop.png")
     page.set_viewport_size({"width": 390, "height": 844})
+    wait_for_layout_settled(page)
     assert_children_do_not_overlap(
         exploration.locator(".bayesian-exploration-options"),
         exploration_options,
         "Bayesian exploration options mobile",
+    )
+    settings_geometry = page.locator(".bayesian-recommendation-settings").evaluate(
+        """root => {
+            const bounds = element => {
+                const rect = element.getBoundingClientRect();
+                return {left: rect.left, right: rect.right, width: rect.width};
+            };
+            return {
+                viewport: document.documentElement.clientWidth,
+                root: bounds(root),
+                children: [...root.children].map(bounds),
+                tables: [...root.querySelectorAll('.table-wrap')]
+                    .filter(element => element.getBoundingClientRect().width > 0)
+                    .map(element => ({...bounds(element),
+                        scroll_width: element.scrollWidth,
+                        client_width: element.clientWidth,
+                        overflow_x: getComputedStyle(element).overflowX}))
+            };
+        }"""
+    )
+    assert settings_geometry["root"]["left"] >= -1, settings_geometry
+    assert (
+        settings_geometry["root"]["right"] <= settings_geometry["viewport"] + 1
+    ), settings_geometry
+    for bounds in settings_geometry["children"] + settings_geometry["tables"]:
+        assert (
+            bounds["left"] >= settings_geometry["root"]["left"] - 1
+        ), settings_geometry
+        assert (
+            bounds["right"] <= settings_geometry["root"]["right"] + 1
+        ), settings_geometry
+    for table in settings_geometry["tables"]:
+        if table["scroll_width"] > table["client_width"] + 1:
+            assert table["overflow_x"] in {"auto", "scroll"}, settings_geometry
+    diagnostics.record(
+        "BO 390px settings bounds: " + json.dumps(settings_geometry, sort_keys=True)
     )
     bayesian_mobile_overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - window.innerWidth"
@@ -4143,6 +4182,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
         )
     diagnostics.capture_page(page, "bayesian-goal-layout-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
+    wait_for_layout_settled(page)
 
     page.get_by_role("button", name="관측값 붙여넣기").click()
     page.get_by_label("Bayesian 관측값 붙여넣기").fill("0.8\n1.0")
