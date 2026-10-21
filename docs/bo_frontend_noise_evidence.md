@@ -132,10 +132,40 @@ Its allowlist contains only boolean checks, bounded row counts, locale and viewp
 trial/study IDs, hashes, coordinates, observations, and arbitrary extra payload keys. The original
 returned receipt remains unchanged for archive verification. Five red tests demonstrated the missing
 writer before implementation; focused tests additionally reject invalid metadata before any receipt
-file is created. This new diagnostic file does not itself constitute a new browser execution.
+file is created. The receipt/fixture, suite-partition, and release-verifier test files passed 262 tests
+afterward; targeted Ruff passed. This new diagnostic file does not itself constitute a new browser
+execution.
 
 Main integration, the aggregate product/security gates, exact-archive verification, and prerelease
 publication are not completed by these BO browser-stage results.
+
+## Transition and Exact-source Follow-up
+
+Visual inspection of the native 1024px screenshots found a narrow sidebar sliver and obscured left
+content. Source inspection found a 160ms sidebar transform transition below 1100px, while that fixture
+captured immediately after resizing. This does not establish a persistent post-transition product
+defect. No sidebar product CSS was changed on that evidence alone.
+
+The BO fixture now awaits the actual sidebar animation completion, then checks viewport/main bounds,
+the result title and noise control bounds, and the closed/open sidebar edge. It does not add an
+arbitrary sleep or increase an assertion timeout. Explicit finite geometry fields are allowlisted in
+the privacy-safe receipt; labels, source IDs and payloads remain excluded. Five focused red tests
+failed before this helper existed, and the completed fixture test file passed 15 tests, including
+invalid bounds, non-finite receipt geometry, sensitive nested payload exclusion, and rejection when
+a visible report cell turns a nonzero SD into zero. These are Python fixture checks, not a replacement
+for the next native layout run.
+
+The original in-memory archive receipt now also carries exact study/batch payload digests, both
+recommendation-source and current history identity, and replicate parent/child identity. The context
+receipt carries the explicit retry request and current history identity. These fields are for the
+isolated synthetic restart harness and are not copied into the diagnostic sidecar.
+
+A new visible Report Center step selects the exact stored compressed batch, displays and checks its
+source snapshot, creates an EN managed report, downloads and verifies its checksum, and reopens its
+deep link. Its returned report descriptor/snapshot supports separate server-stopped offline checks
+of the visible numeric table, latent/predictive labels and raw/effective counts. This report step,
+the post-transition bounding checks, and the strengthened exact-archive restart checks are pending
+native execution at this documentation checkpoint. Earlier native results did not run them.
 
 ## Versioned API Inventory Follow-up
 

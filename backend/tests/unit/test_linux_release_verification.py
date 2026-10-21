@@ -295,8 +295,30 @@ def test_source_and_version_must_match_requested_archive(field: str, replacement
         VERIFY.require_expected_identity(identity, SHA, "2026.10.3")
 
 
-def valid_gp_receipt() -> dict:
+def _extension_report(kind: str, payload: dict, source: dict) -> dict:
+    ref = hashlib.sha256(
+        json.dumps(source, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
     return {
+        "source": source,
+        "source_ref_sha256": ref,
+        "snapshot": {"payload": payload},
+        "reports": [
+            {
+                "descriptor": {
+                    "export_id": str(UUID(int=9100 + {"bo": 0, "mixed": 1, "surface": 2}[kind])),
+                    "sha256": HASH,
+                    "locale": "en",
+                    "source": source,
+                },
+                "path": f"/synthetic/{kind}.html",
+            }
+        ],
+    }
+
+
+def valid_gp_receipt() -> dict:
+    receipt = {
         "schema_version": 1,
         "synthetic": True,
         "status": "succeeded",
@@ -315,6 +337,62 @@ def valid_gp_receipt() -> dict:
             {"locale": locale, "width": width} for locale in ("ko", "en") for width in (1024, 1440)
         ],
     }
+    receipt["version_id"] = str(UUID(int=9000))
+    receipt["analyses"] = [
+        {
+            "analysis_id": str(UUID(int=9010 + index)),
+            "result": {
+                "schema_version": 4,
+                "model_manifest": {
+                    "model_id": str(UUID(int=9020 + index)),
+                    "manifest_sha256": HASH,
+                },
+                "validation_plan": {
+                    "effective_method": "group_k_fold" if index == 0 else "time_series_split"
+                },
+                "feature_lineage": {"prediction_input_policy": "explicit_past_lag_values"}
+                if index == 2
+                else None,
+            },
+        }
+        for index in range(3)
+    ]
+    for kind, response_key, request_key, owner in (
+        ("mixed", "prediction", "prediction_request", 0),
+        ("lag", "lag_prediction", "lag_prediction_request", 2),
+        ("surface", "surface_prediction", "surface_request", 0),
+    ):
+        rows = [
+            {"client_row_id": str(i), "predicted_mean": float(i)}
+            for i in range(4 if kind == "surface" else 1)
+        ]
+        request = {
+            "expected_model_manifest_sha256": HASH,
+            "rows": [
+                {"client_row_id": row["client_row_id"], "values": {"x": row["predicted_mean"]}}
+                for row in rows
+            ],
+        }
+        if kind == "surface":
+            request["surface_view"] = {
+                "display_mode": "latent_sd",
+                "hold_values": {"category": "level-B"},
+                "grid_size": 2,
+            }
+        model_id = str(UUID(int=9020 + owner))
+        receipt[response_key] = {"model_id": model_id, "rows": rows}
+        receipt[request_key] = request
+        if kind != "lag":
+            payload = {
+                "request": request,
+                "result": {"rows": rows},
+                "model_id": model_id,
+                "model_manifest_sha256": HASH,
+            }
+            receipt["managed" if kind == "mixed" else "surface_managed"] = _extension_report(
+                kind, payload, {"kind": "regression_prediction", "model_id": model_id}
+            )
+    return receipt
 
 
 @pytest.mark.parametrize(
@@ -341,6 +419,118 @@ def test_gp_archive_receipt_rejects_missing_or_posting_resize_evidence() -> None
     for receipt in (None, {}, {**valid_gp_receipt(), "forbidden_resize_locale_requests": ["POST"]}):
         with pytest.raises(ValueError, match="GPR built-UI"):
             VERIFY.require_gp_extension_receipt(receipt)
+
+
+def test_gp_archive_receipt_rejects_boolean_only_ownerless_proof() -> None:
+    receipt = valid_gp_receipt()
+    receipt.pop("version_id")
+    with pytest.raises(ValueError, match="identity"):
+        VERIFY.require_gp_extension_receipt(receipt)
+
+
+def test_bo_archive_receipt_rejects_boolean_only_ownerless_proof() -> None:
+    receipt = valid_bo_receipt()
+    receipt.pop("study_id")
+    with pytest.raises(ValueError, match="identity"):
+        VERIFY.require_bo_noise_receipts(receipt, valid_bo_context_receipt())
+
+
+def test_archive_resume_requires_extension_owner_roundtrip() -> None:
+    evidence = valid_evidence("resume")
+    evidence.pop("bo_gp_receipt")
+    with pytest.raises(ValueError, match="BO/GPR"):
+        VERIFY.require_browser_evidence(evidence, "resume-smoke.json")
+
+
+def test_archive_offline_requires_extension_reports() -> None:
+    evidence = valid_evidence("offline")
+    evidence.pop("bo_gp_receipt")
+    with pytest.raises(ValueError, match="BO/GPR"):
+        VERIFY.require_browser_evidence(evidence, "offline-smoke.json")
+
+
+def valid_extension_phase(phase: str) -> dict:
+    contract = VERIFY.extension_contract()
+    identity = contract.extension_identity(valid_evidence("initial"))
+    if phase == "offline":
+        identity = {"reports": identity["reports"]}
+    return {
+        "schema_version": 1,
+        "phase": phase,
+        "status": "succeeded",
+        "identity": identity,
+        "identity_sha256": contract.digest(identity),
+        "forbidden_mutation_requests": [],
+        "models_predicted_without_save": True,
+        "exact_sources_visible": True,
+        "stored_surface_geometry_visible": True,
+    }
+
+
+def test_extension_roundtrip_requires_exact_sources_across_both_installs_and_offline():
+    result = VERIFY.extension_contract().require_roundtrip(
+        valid_evidence("initial"),
+        [valid_evidence("resume"), valid_evidence("resume")],
+        valid_evidence("offline"),
+    )
+    assert result["same_install_restart"] and result["second_install_shared_workspace"]
+    assert result["server_stopped_reports"]
+
+
+@pytest.mark.parametrize(
+    "change", ["history", "model", "result", "prediction", "report", "snapshot"]
+)
+def test_extension_roundtrip_rejects_mismatched_owner_hash_or_saved_view(change):
+    contract = VERIFY.extension_contract()
+    restarts = [valid_evidence("resume"), valid_evidence("resume")]
+    receipt = restarts[1]["bo_gp_receipt"]
+    identity = receipt["identity"]
+    if change == "history":
+        identity["bo"]["current_history_sha256"] = "c" * 64
+    elif change == "model":
+        identity["gp"]["analyses"][0]["model_id"] = str(UUID(int=9999))
+    elif change == "result":
+        identity["gp"]["analyses"][2]["result_payload_sha256"] = "c" * 64
+    elif change == "prediction":
+        identity["gp"]["predictions"][2]["request_sha256"] = "c" * 64
+    elif change == "report":
+        identity["reports"][2]["export_id"] = str(UUID(int=9999))
+    else:
+        identity["reports"][2]["snapshot_sha256"] = "c" * 64
+    receipt["identity_sha256"] = contract.digest(identity)
+    with pytest.raises(ValueError, match="identity"):
+        contract.require_roundtrip(valid_evidence("initial"), restarts, valid_evidence("offline"))
+
+
+def test_extension_roundtrip_rejects_missing_offline_surface_and_new_mutations():
+    contract = VERIFY.extension_contract()
+    restarts = [valid_evidence("resume"), valid_evidence("resume")]
+    offline = valid_evidence("offline")
+    offline["bo_gp_receipt"]["identity"]["reports"].pop()
+    offline["bo_gp_receipt"]["identity_sha256"] = contract.digest(
+        offline["bo_gp_receipt"]["identity"]
+    )
+    with pytest.raises(ValueError, match="identity"):
+        contract.require_roundtrip(valid_evidence("initial"), restarts, offline)
+    restarts[0]["bo_gp_receipt"]["forbidden_mutation_requests"] = [
+        {"method": "POST", "path": "/api/v1/analysis-runs"}
+    ]
+    with pytest.raises(ValueError, match="identity"):
+        contract.require_roundtrip(valid_evidence("initial"), restarts, valid_evidence("offline"))
+
+
+def test_gp_receipt_rejects_a_report_from_another_model_even_with_valid_ids():
+    receipt = valid_gp_receipt()
+    receipt["surface_managed"]["snapshot"]["payload"]["model_id"] = str(UUID(int=9999))
+    with pytest.raises(ValueError, match="identity"):
+        VERIFY.require_gp_extension_receipt(receipt)
+
+
+def test_bo_receipt_rejects_a_report_from_another_history():
+    receipt = valid_bo_receipt()
+    receipt["managed_report"]["source"]["history_revision_id"] = str(UUID(int=9999))
+    with pytest.raises(ValueError, match="identity"):
+        VERIFY.require_bo_noise_receipts(receipt, valid_bo_context_receipt())
 
 
 def valid_evidence(phase: str) -> dict:
@@ -388,10 +578,12 @@ def valid_evidence(phase: str) -> dict:
             "analyses": analyses,
             "predictions": predictions,
             "doe_rsm_receipt": valid_rsm_phase_receipt("resume"),
+            "bo_gp_receipt": valid_extension_phase("resume"),
         }
     return {
         **base,
         "original_server_unreachable": True,
+        "bo_gp_receipt": valid_extension_phase("offline"),
         "browser_network_offline": True,
         "http_request_count": 0,
         "doe_rsm_receipt": valid_rsm_phase_receipt("offline"),
@@ -552,7 +744,7 @@ def test_offline_rsm_evidence_requires_visible_geometry() -> None:
 
 
 def valid_bo_receipt() -> dict:
-    return {
+    receipt = {
         "schema_version": 1,
         "synthetic": True,
         "status": "succeeded",
@@ -570,6 +762,32 @@ def valid_bo_receipt() -> dict:
             {"locale": locale, "width": width} for locale in ("ko", "en") for width in (1024, 1440)
         ],
     }
+    for index, field in enumerate(
+        (
+            "study_id",
+            "batch_id",
+            "current_history_revision_id",
+            "source_history_revision_id",
+            "replicate_parent_trial_id",
+        )
+    ):
+        receipt[field] = str(UUID(int=9200 + index))
+    for field in (
+        "stored_batch_sha256",
+        "study_payload_sha256",
+        "current_history_sha256",
+        "source_history_sha256",
+    ):
+        receipt[field] = HASH
+    receipt["replicate_trial_ids"] = [str(UUID(int=9210)), str(UUID(int=9211))]
+    source = {
+        "study_id": receipt["study_id"],
+        "history_revision_id": receipt["source_history_revision_id"],
+        "expected_source_sha256": HASH,
+        "attachment": {"batch_id": receipt["batch_id"]},
+    }
+    receipt["managed_report"] = _extension_report("bo", {"observations": []}, source)
+    return receipt
 
 
 def valid_bo_context_receipt() -> dict:
@@ -581,6 +799,11 @@ def valid_bo_context_receipt() -> dict:
         "same_request_id_payload": True,
         "no_duplicate_trials": True,
         "history_unchanged": True,
+        "study_id": str(UUID(int=9300)),
+        "request_id": str(UUID(int=9301)),
+        "current_history_revision_id": str(UUID(int=9302)),
+        "current_history_sha256": HASH,
+        "replicate_trial_ids": [str(UUID(int=9303))],
     }
 
 

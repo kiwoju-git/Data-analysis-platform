@@ -161,7 +161,7 @@ The native Windows worker tests, including positive peak-RSS reporting, passed
 (not the root CI invocation) found 13 existing/dependency strict issues; that
 invocation is not counted as a pass.
 
-The early Windows workflows diagnostic run failed in the existing chart fixture
+The early workflows diagnostic run failed in the existing chart fixture
 before reaching the new GP form journey: a broad child-button locator matched
 both Generate Surface and the newly added Save Applied View action. It now
 targets the explicit Generate Surface name. The chart fixture also uses the
@@ -212,3 +212,45 @@ KO/EN component markup plus existing extension and chart adapter tests passed
 The synthetic receipt now retains the existing lag and surface request/response
 snapshots, so archive restart/second-install verification can compare the same
 stored model and applied view without fitting another model.
+
+## Native GP browser journey passed
+
+Run `39619608275`, source `6fe0b509a726a43be340450b4f0faf47a3ec5927`,
+prediction job `119289234987` passed on Ubuntu/Python 3.12 at
+`2026-10-21T14:47:55Z`. Artifact `12353084481` retains the actual synthetic
+receipt, KO/EN screenshots, saved prediction reports and child trace.
+This is native browser execution evidence, not a mock or API-only substitute.
+
+- Group form: 36 used/scored rows, six full-identity groups, disjoint fold groups.
+- Time form: 36 used rows, 27 scored rows and nine training-only warm-up rows.
+- Positive lag form: 35 used rows, 24 scored rows and 11 training-only rows;
+  persisted source times precede target times. Four predictors include the
+  explicit past-response lag. Direct lag-value prediction completed.
+- Mixed model: restored stored analysis, numeric/category input prediction,
+  saved prediction and managed report reopen/download completed.
+- Surface: category hold `level-B`, 10-by-10 grid, saved `latent_sd` view with
+  100 prediction rows. The report uses that explicit applied view snapshot.
+- KO/EN at 1024/1440 CSS-pixel viewports: ready prediction preserved, no page
+  horizontal overflow, zero analysis/prediction POSTs on locale/resize changes.
+  Screenshots were inspected; this does not substitute for browser-zoom tests.
+- Source result checksums remained unchanged. Unknown-category rejection was
+  tested through API; the UI deliberately offers only trained levels.
+
+The failed preceding runs remain recorded above. Windows browser execution,
+full product aggregate gates and exact-archive restart/second-install verification
+are separate acceptance gates and are not implied by this successful job.
+
+The same run's workflows job passed the existing GP fitting, uncertainty and
+kernel-comparison stages, then failed later at the existing Bayesian mobile
+overflow assertion. That later failure is not recorded as a GP pass for the
+whole workflow. The current-code 501-row extended worker API regression was
+rerun locally: one test passed in 27.88 seconds, with three dependency
+deprecation warnings; the earlier long-running old-code process failure did
+not reproduce.
+
+Screenshot timing is now strengthened separately: both BO and GP fixtures use
+`wait_for_layout_settled` to await actual drawer animations, then test content
+bounds. GP records main/surface/sidebar geometry at each locale/viewport. The
+helper and invalid-geometry regression checks passed as part of 83 unit tests
+in 6.85 seconds. These new post-transition geometry assertions require another
+native execution; the prior screenshots alone do not prove their result.

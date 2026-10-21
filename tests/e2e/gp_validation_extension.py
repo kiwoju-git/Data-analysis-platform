@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 from playwright.sync_api import Browser, Page, expect
 
-from app_readiness import diagnosed_page, wait_for_app_ready
+from app_readiness import diagnosed_page, wait_for_app_ready, wait_for_layout_settled
 from gp_prediction_context import _restore
 from managed_reports_live import verify_saved_prediction_report
 
@@ -139,6 +139,30 @@ def _predict(page: Page, result: dict, *, save: bool) -> tuple[dict, dict]:
     return payload, request
 
 
+def _settled_gp_layout(page: Page) -> dict:
+    wait_for_layout_settled(page)
+    geometry = page.evaluate("""() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+        const main = rect('main.main'), sidebar = rect('#application-sidebar');
+        const surface = rect('.gp-surface-result');
+        return {width: document.documentElement.clientWidth,
+            main_left: main.left, main_right: main.right,
+            sidebar_right: sidebar.right,
+            sidebar_hidden: document.querySelector('#application-sidebar').getAttribute('aria-hidden') === 'true',
+            surface_left: surface.left, surface_right: surface.right};
+    }""")
+    width = geometry["width"]
+    assert geometry["main_left"] >= -1 and geometry["main_right"] <= width + 1, geometry
+    assert geometry["surface_left"] >= max(0, geometry["main_left"]) - 1, geometry
+    assert geometry["surface_right"] <= min(width, geometry["main_right"]) + 1, geometry
+    if width < 1100:
+        assert geometry["sidebar_hidden"] and geometry["sidebar_right"] <= 1, geometry
+    else:
+        assert not geometry["sidebar_hidden"], geometry
+        assert geometry["sidebar_right"] <= geometry["main_left"] + 1, geometry
+    return geometry
+
+
 def verify_gp_validation_extension(
     browser: Browser, base: str, root: Path, *, isolated_workspace: bool
 ) -> dict:
@@ -259,6 +283,7 @@ def verify_gp_validation_extension(
         )
         assert view_request["surface_view"]["hold_values"][ids["category"]] == "level-B"
         calls: list[str] = []
+        layout_evidence: list[dict] = []
         page.on(
             "request",
             lambda r: calls.append(r.url)
@@ -274,6 +299,7 @@ def verify_gp_validation_extension(
             expect(page.locator("html")).to_have_attribute("lang", locale)
             for width in (1024, 1440):
                 page.set_viewport_size({"width": width, "height": 900})
+                layout_evidence.append({"locale": locale, **_settled_gp_layout(page)})
                 expect(page.locator(".gp-point-prediction")).to_have_attribute(
                     "data-prediction-state", "ready"
                 )
@@ -329,6 +355,7 @@ def verify_gp_validation_extension(
             managed=managed,
             surface_managed=view_managed,
             forbidden_resize_locale_requests=calls,
+            settled_layouts=layout_evidence,
             group_form=True,
             time_form=True,
             lag_form=True,

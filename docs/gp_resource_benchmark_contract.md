@@ -114,3 +114,26 @@ import overhead and the conservative N-squared terms have different effects.
 Because the source and measurement implementation changed during the run,
 these numbers do not justify weakening admission, claiming a total RSS bound,
 or replacing a clean native-target rerun.
+
+## Clean Linux Rerun
+
+Run39619608275 / job119289234806 used source
+`6fe0b509a726a43be340450b4f0faf47a3ec5927` on Ubuntu24.04 / Python3.12.
+Evidence schema2 confirms a clean, unchanged tracked tree before/after all36
+cases and each child case. Artifact12354198062 has ZIP SHA-256
+`40b71decf33d9c66313611e52bd31ab33b37e35099d07af8c7a70ab198f72e08`.
+
+| Rows | Fit/restore/predict passes | Admission rejections | Maximum worker RSS MiB | Maximum parent RSS MiB | Maximum analysis request seconds |
+| --- | --- | --- | --- | --- | --- |
+| 501 | 12 | 0 | 179.180 | 192.176 | 2.376 |
+| 1000 | 12 | 0 | 263.301 | 203.652 | 6.523 |
+| 2000 | 3 | 9 | 507.898 | 243.090 | 13.414 |
+
+The2000-row passes are numeric single-kernel row/group/time CV. Comparison and
+mixed settings were explicitly rejected, not silently simplified. All accepted
+cases restored their saved result and model, kept the original result checksum,
+and matched a stored fitted prediction within1e-9 absolute tolerance (largest
+observed difference6.776e-10). These are the specified synthetic configurations,
+not arbitrary application workloads or a Windows performance result. RSS peaks
+remain separate process high-water marks, not simultaneous combined memory.
+The full product, Windows resource and exact-archive gates are separate.

@@ -91,3 +91,109 @@ def test_bo_native_receipt_rejects_invalid_metadata_before_writing(monkeypatch, 
     with pytest.raises(AssertionError):
         fixture._record_receipt(tmp_path, receipt)
     assert not (tmp_path / "bo-validation-receipt.json").exists()
+
+
+@pytest.mark.parametrize(
+    "invalid", [None, "sidebar_right", "main_left", "title_right", "control_left"]
+)
+def test_bo_resize_waits_for_transition_then_checks_actual_bounds(monkeypatch, invalid):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "tests/e2e"))
+    fixture = importlib.import_module("bo_noise_extension")
+    geometry = {
+        "width": 1024,
+        "main_left": 0,
+        "main_right": 1024,
+        "sidebar_right": -6.2,
+        "sidebar_hidden": True,
+        "title_left": 20,
+        "title_right": 300,
+        "control_left": 20,
+        "control_right": 490,
+    }
+    if invalid:
+        geometry[invalid] = 1100 if invalid.endswith("right") else -25
+    page = Mock()
+    page.evaluate.side_effect = [None, geometry]
+    if invalid:
+        with pytest.raises(AssertionError):
+            fixture._settled_layout(page)
+    else:
+        assert fixture._settled_layout(page) == geometry
+    transition_script = page.evaluate.call_args_list[0].args[0]
+    assert "getAnimations" in transition_script and ".finished" in transition_script
+    assert "setTimeout" not in transition_script
+
+
+def test_bo_layout_receipt_only_keeps_finite_bounds(monkeypatch, tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "tests/e2e"))
+    fixture = importlib.import_module("bo_noise_extension")
+    geometry = {
+        "locale": "ko",
+        "width": 1024,
+        "main_left": 0,
+        "main_right": 1024,
+        "sidebar_right": -6.2,
+        "sidebar_hidden": True,
+        "title_left": 20,
+        "title_right": 300,
+        "control_left": 20,
+        "control_right": 490,
+        "raw_title": "SENSITIVE",
+    }
+    receipt = {
+        "schema_version": 1,
+        "synthetic": True,
+        "status": "succeeded",
+        "q1_target_ui": True,
+        "layout_geometry": [geometry],
+        "managed_report": {"snapshot": {"payload": "SENSITIVE"}},
+    }
+    fixture._record_receipt(tmp_path, receipt)
+    stored = (tmp_path / "bo-validation-receipt.json").read_text(encoding="utf-8")
+    assert "SENSITIVE" not in stored
+    assert json.loads(stored)["layout_geometry"] == [
+        {key: value for key, value in geometry.items() if key != "raw_title"}
+    ]
+    geometry["control_right"] = float("nan")
+    with pytest.raises(AssertionError):
+        fixture._record_receipt(tmp_path / "invalid", receipt)
+    assert not (tmp_path / "invalid" / "bo-validation-receipt.json").exists()
+
+
+@pytest.mark.parametrize("changed_cell", [False, True])
+def test_bo_offline_html_fixture_reads_visible_table_values(monkeypatch, tmp_path, changed_cell):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "tests/e2e"))
+    fixture = importlib.import_module("bo_noise_extension")
+    checks = Mock()
+    monkeypatch.setattr(fixture, "expect", lambda _: checks)
+    item = {
+        "rank": 1,
+        "actual_coordinates": {"x": 0.5},
+        "predicted_objective_mean": 1.5,
+        "latent_standard_deviation": 1e-6,
+        "predictive_standard_deviation": 2e-6,
+        "acquisition_value_standardized": 0.003,
+        "acquisition_value_raw": 0.001,
+    }
+    payload = {"definition": {"factors": [{"factor_id": "x"}]}, "attachment": {"items": [item]}}
+    page, section, table, rows, cells = (Mock() for _ in range(5))
+    page.locator.side_effect = [Mock(), section]
+    section.locator.return_value.nth.return_value = table
+    table.locator.return_value = rows
+    rows.nth.return_value.locator.return_value = cells
+    shown = ["1", "0.5", "1.5", "0" if changed_cell else "1e-6", "2e-6", "0.003", "0.001"]
+    cells.nth.side_effect = [
+        SimpleNamespace(inner_text=lambda value=value: value) for value in shown
+    ]
+    if changed_cell:
+        with pytest.raises(AssertionError):
+            fixture.verify_bo_report_html(page, tmp_path / "synthetic.html", payload)
+    else:
+        fixture.verify_bo_report_html(page, tmp_path / "synthetic.html", payload)
+        checks.to_have_attribute.assert_any_call("data-report-section-status", "rendered")
+        checks.to_contain_text.assert_any_call("New-observation predictive SD (mg)")
+        checks.to_have_count.assert_called_once_with(1)
+    page.goto.assert_called_once()

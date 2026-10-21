@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import errno
 import hashlib
+import importlib.util
 import ipaddress
 import json
 import math
@@ -24,6 +25,7 @@ import urllib.error
 import urllib.request
 import zipfile
 from email.parser import BytesParser
+from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from uuid import UUID
 
@@ -36,6 +38,16 @@ MAX_ARCHIVE_BYTES = 2 * 1024 * 1024 * 1024
 CONTOUR_WHEEL_NAME = (
     "contourpy-1.3.2-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
 )
+
+
+@lru_cache(maxsize=1)
+def extension_contract():
+    path = Path(__file__).resolve().parents[1] / "tests/e2e/bo_gp_release_contract.py"
+    spec = importlib.util.spec_from_file_location("bo_gp_release_contract", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def file_sha256(path: Path) -> str:
@@ -361,6 +373,7 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
         ):
             raise ValueError("Restore journey must not resubmit an analysis")
         require_rsm_phase_receipt(evidence.get("doe_rsm_receipt"), "resume")
+        extension_contract().require_phase(evidence.get("bo_gp_receipt"), "resume")
     elif filename == "offline-smoke.json":
         reports = evidence.get("reports")
         if (
@@ -380,6 +393,7 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
         ):
             raise ValueError("Server-stopped offline report evidence is incomplete")
         require_rsm_phase_receipt(evidence.get("doe_rsm_receipt"), "offline")
+        extension_contract().require_phase(evidence.get("bo_gp_receipt"), "offline")
     elif filename == "application-smoke.json":
         checks = evidence.get("network_guard_checks")
         if (
@@ -433,6 +447,9 @@ def require_gp_extension_receipt(receipt: object) -> None:
         raise ValueError(
             "GPR built-UI validation/mixed/saved-view evidence is incomplete"
         )
+    extension_contract().gp_identity(receipt)
+    extension_contract().report_identity("mixed", receipt.get("managed"))
+    extension_contract().report_identity("surface", receipt.get("surface_managed"))
 
 
 def require_bo_noise_receipts(workflow: object, context: object) -> None:
@@ -474,6 +491,18 @@ def require_bo_noise_receipts(workflow: object, context: object) -> None:
         != {("ko", 1024), ("ko", 1440), ("en", 1024), ("en", 1440)}
     ):
         raise ValueError("BO built-UI aggregation or locale evidence is incomplete")
+    extension_contract().bo_identity(workflow)
+    extension_contract().report_identity("bo", workflow.get("managed_report"))
+    if (
+        not _receipt_uuid(context.get("study_id"))
+        or not _receipt_uuid(context.get("request_id"))
+        or not _receipt_uuid(context.get("current_history_revision_id"))
+        or not _receipt_sha256(context.get("current_history_sha256"))
+        or not isinstance(context.get("replicate_trial_ids"), list)
+        or len(context["replicate_trial_ids"]) != 1
+        or not _receipt_uuid(context["replicate_trial_ids"][0])
+    ):
+        raise ValueError("BO archive context owner/source identity is incomplete")
 
 
 def _receipt_uuid(value: object) -> bool:
@@ -1412,6 +1441,7 @@ def main() -> int:
             raise ValueError("Archive bytes changed during validation")
         pilot_checks = require_pilot_receipts(smoke, restarts, offline)
         rsm_checks = require_rsm_roundtrip(smoke, restarts, offline)
+        bo_gp_checks = extension_contract().require_roundtrip(smoke, restarts, offline)
         report = {
             "schema_version": 2,
             "status": "passed",
@@ -1445,6 +1475,7 @@ def main() -> int:
             "application": smoke,
             "pilot_checks": pilot_checks,
             "doe_rsm_checks": rsm_checks,
+            "bo_gp_checks": bo_gp_checks,
             "pilot_legacy_provisioning": legacy_seed,
         }
         (output / "validation-report.json").write_text(

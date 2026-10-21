@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import Browser, Page, Route, expect
 
-from app_readiness import diagnosed_page, wait_for_app_ready
+from app_readiness import diagnosed_page, wait_for_app_ready, wait_for_layout_settled
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
@@ -59,6 +59,30 @@ def _record_receipt(output: Path, receipt: dict) -> dict:
         "counts": counts,
         "locales_viewports": viewports,
     }
+    if "layout_geometry" in receipt:
+        geometry = []
+        for item in receipt["layout_geometry"]:
+            assert item["locale"] in {"ko", "en"}
+            assert item["width"] in {1024, 1440}
+            assert type(item["sidebar_hidden"]) is bool
+            record = {
+                "locale": item["locale"],
+                "width": item["width"],
+                "sidebar_hidden": item["sidebar_hidden"],
+            }
+            for key in (
+                "main_left",
+                "main_right",
+                "sidebar_right",
+                "title_left",
+                "title_right",
+                "control_left",
+                "control_right",
+            ):
+                assert type(item[key]) in (int, float) and math.isfinite(item[key])
+                record[key] = item[key]
+            geometry.append(record)
+        safe["layout_geometry"] = geometry
     output.mkdir(parents=True, exist_ok=True)
     (output / "bo-validation-receipt.json").write_text(
         json.dumps(safe, sort_keys=True, indent=2, allow_nan=False) + "\n",
@@ -71,6 +95,34 @@ def _digest(value: object) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, allow_nan=False).encode()
     ).hexdigest()
+
+
+def _settled_layout(page: Page) -> dict:
+    wait_for_layout_settled(page)
+    geometry = page.evaluate("""() => {
+        const rect = selector => document.querySelector(selector).getBoundingClientRect();
+        const main = rect('main.main'), sidebar = rect('#application-sidebar');
+        const title = rect('#bayesian-batch-result-title'), control = rect('#bo-noise-mode');
+        return {width: document.documentElement.clientWidth,
+            main_left: main.left, main_right: main.right,
+            sidebar_right: sidebar.right,
+            sidebar_hidden: document.querySelector('#application-sidebar').getAttribute('aria-hidden') === 'true',
+            title_left: title.left, title_right: title.right,
+            control_left: control.left, control_right: control.right};
+    }""")
+    width = geometry["width"]
+    assert geometry["main_left"] >= -1 and geometry["main_right"] <= width + 1, geometry
+    for name in ("title", "control"):
+        assert geometry[f"{name}_left"] >= max(0, geometry["main_left"]) - 1, geometry
+        assert (
+            geometry[f"{name}_right"] <= min(width, geometry["main_right"]) + 1
+        ), geometry
+    if width < 1100:
+        assert geometry["sidebar_hidden"] and geometry["sidebar_right"] <= 1, geometry
+    else:
+        assert not geometry["sidebar_hidden"], geometry
+        assert geometry["sidebar_right"] <= geometry["main_left"] + 1, geometry
+    return geometry
 
 
 def _seed(page: Page, base: str) -> dict:
@@ -197,6 +249,111 @@ def _observe_visible(page: Page, trials: list[dict]) -> None:
         ).to_have_count(0)
 
 
+def verify_bo_report_html(page: Page, path: Path, payload: dict) -> None:
+    page.goto(path.resolve().as_uri(), wait_until="domcontentloaded")
+    expect(page.locator("html")).to_have_attribute("lang", "en")
+    section = page.locator('[data-report-section="noise_summary"]')
+    expect(section).to_have_attribute("data-report-section-status", "rendered")
+    expect(section).to_contain_text("New-observation predictive SD (mg)")
+    expect(section).to_contain_text("Numerical jitter (not measurement noise)")
+    expect(section).to_contain_text("9 / 7 / 7")
+    attachment = payload["attachment"]
+    factors = payload["definition"]["factors"]
+    table = section.locator("table").nth(1)
+    expect(table.locator("tbody tr")).to_have_count(len(attachment["items"]))
+    for row_index, item in enumerate(attachment["items"]):
+        values = (
+            [item["rank"]]
+            + [item["actual_coordinates"][factor["factor_id"]] for factor in factors]
+            + [
+                item["predicted_objective_mean"],
+                item["latent_standard_deviation"],
+                item["predictive_standard_deviation"],
+                item["acquisition_value_standardized"],
+                item["acquisition_value_raw"],
+            ]
+        )
+        cells = table.locator("tbody tr").nth(row_index).locator("td")
+        for column, value in enumerate(values):
+            displayed = float(cells.nth(column).inner_text())
+            assert math.isclose(displayed, value, rel_tol=1e-9, abs_tol=1e-15)
+            if value != 0:
+                assert displayed != 0
+
+
+def _managed_report(page: Page, base: str, output: Path, batch: dict) -> dict:
+    previous_url = page.url
+    catalog = page.request.get(
+        base + "/api/v1/reports/sources?source_kind=bayesian_history_revision&limit=100"
+    )
+    assert catalog.status == 200, catalog.text()
+    source = next(
+        item
+        for item in catalog.json()["items"]
+        if item["source"].get("attachment", {}).get("batch_id") == batch["batch_id"]
+    )
+    reference = source["source_ref_sha256"]
+    page.goto(
+        base + "/reports?source_kind=bayesian_history_revision",
+        wait_until="domcontentloaded",
+    )
+    wait_for_app_ready(page, "ko", "/reports")
+    page.locator(".language-switcher button").filter(has_text="ENG").click()
+    page.locator(f'[data-report-source="{reference}"]').click()
+    selected = page.locator(f'[data-managed-report-selection="{reference}"]')
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and response.url.endswith("/reports/source-snapshot")
+    ) as saved_snapshot:
+        selected.locator("[data-view-stored-source]").click()
+    assert saved_snapshot.value.status == 200, saved_snapshot.value.text()
+    snapshot = saved_snapshot.value.json()
+    assert snapshot["source"] == source["source"] and snapshot["locale"] == "en"
+    assert snapshot["payload"]["attachment"]["batch_id"] == batch["batch_id"]
+    assert (
+        snapshot["payload"]["attachment"]["observation_view"]
+        == batch["observation_view"]
+    )
+    assert snapshot["payload"]["attachment"]["result_sha256"] == batch["result_sha256"]
+    shown = selected.locator(".managed-report-snapshot-json")
+    expect(shown).to_be_visible()
+    assert json.loads(shown.inner_text()) == snapshot["payload"]
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and urlsplit(response.url).path == "/api/v1/reports"
+    ) as created:
+        selected.locator("[data-create-managed-report]").click()
+    assert created.value.status == 201, created.value.text()
+    report = created.value.json()
+    assert report["source"] == source["source"] and report["locale"] == "en"
+    row = selected.locator(f'[data-managed-report="{report["export_id"]}"]')
+    with page.expect_download() as download:
+        row.get_by_role("button", name="Download", exact=True).click()
+    path = output / "bo-noise-managed-en.html"
+    download.value.save_as(path)
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == report["sha256"]
+    page.goto(
+        base + f'/reports?report_id={report["export_id"]}',
+        wait_until="domcontentloaded",
+    )
+    wait_for_app_ready(page, "en", "/reports")
+    expect(
+        page.locator(f'[data-managed-report-selection="{reference}"]')
+    ).to_be_visible()
+    expect(
+        page.locator(f'[data-managed-report="{report["export_id"]}"]')
+    ).to_be_visible()
+    page.locator(".language-switcher button").filter(has_text="KOR").click()
+    page.goto(previous_url, wait_until="domcontentloaded")
+    wait_for_app_ready(page, "ko", ROUTE)
+    return {
+        "source_ref_sha256": reference,
+        "source": source["source"],
+        "snapshot": snapshot,
+        "reports": [{"descriptor": report, "path": str(path.resolve())}],
+    }
+
+
 def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict:
     with diagnosed_page(browser, output, "bo-noise-workflow", locale="ko") as page:
         ui_posts: list[str] = []
@@ -266,6 +423,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             and restored["pending_trial_count"] == 1
         )
         snapshots = []
+        layout_geometry = []
         posts_before_display_changes = len(ui_posts)
         for locale, label in (("en", "ENG"), ("ko", "KOR")):
             page.locator(".language-switcher button").filter(has_text=label).click()
@@ -273,6 +431,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             for width in (1024, 1440):
                 page.set_viewport_size({"width": width, "height": 1000})
                 expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+                layout_geometry.append({"locale": locale, **_settled_layout(page)})
                 assert (
                     page.evaluate(
                         "document.documentElement.scrollWidth - document.documentElement.clientWidth"
@@ -292,6 +451,8 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             + f"/api/v1/bayesian-studies/{study['study_id']}/recommendation-batches/{compressed['batch_id']}"
         )
         assert saved.status == 200 and saved.json()["observation_view"] == view
+        managed_report = _managed_report(page, base, output, saved.json())
+        assert _digest(_study(page, base, study["study_id"])) == _digest(restored)
         return _record_receipt(
             output,
             {
@@ -310,9 +471,23 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
                 "raw_n": 9,
                 "effective_n": 7,
                 "locales_viewports": snapshots,
+                "layout_geometry": layout_geometry,
+                "batch_id": compressed["batch_id"],
+                "stored_batch_sha256": _digest(saved.json()),
+                "study_payload_sha256": _digest(restored),
+                "source_history_revision_id": compressed["source_history_revision_id"],
                 "source_history_sha256": compressed[
                     "source_observation_history_sha256"
                 ],
+                "current_history_revision_id": restored["observation_history"][
+                    "history_revision_id"
+                ],
+                "current_history_sha256": restored["observation_history"][
+                    "observation_history_sha256"
+                ],
+                "replicate_parent_trial_id": study["trials"][0]["trial_id"],
+                "replicate_trial_ids": [row["trial_id"] for row in replicates],
+                "managed_report": managed_report,
             },
         )
 
@@ -366,5 +541,16 @@ def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
                 "same_request_id_payload": True,
                 "no_duplicate_trials": True,
                 "history_unchanged": True,
+                "study_id": study["study_id"],
+                "request_id": retried.value.json()["request_id"],
+                "current_history_revision_id": restored["observation_history"][
+                    "history_revision_id"
+                ],
+                "current_history_sha256": restored["observation_history"][
+                    "observation_history_sha256"
+                ],
+                "replicate_trial_ids": [
+                    row["trial_id"] for row in retried.value.json()["trials"]
+                ],
             },
         )

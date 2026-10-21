@@ -146,6 +146,19 @@ def wait_for_app_ready(
             assert query in actual.query.split("&"), (expected_route, page.url)
 
 
+def wait_for_layout_settled(page: Page) -> None:
+    """Wait for applied viewport styles and the real drawer transition, not a timer."""
+    page.evaluate("""async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const sidebar = document.querySelector('#application-sidebar');
+        if (!sidebar) throw new Error('Application sidebar is not mounted');
+        await Promise.allSettled(
+            sidebar.getAnimations({subtree: true}).map(animation => animation.finished)
+        );
+        await new Promise(resolve => requestAnimationFrame(resolve));
+    }""")
+
+
 @contextmanager
 def diagnosed_page(
     browser: Browser,
