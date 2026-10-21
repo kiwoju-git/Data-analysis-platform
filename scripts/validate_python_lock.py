@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 REQUIRED_LOCK_PACKAGES = {
+    "certifi": "2026.10.19",
     "contourpy": "1.3.2",
     "editables": "0.5",
     "fastapi": "0.135.4",

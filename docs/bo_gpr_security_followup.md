@@ -29,3 +29,22 @@ It does not satisfy product/security/archive/release-ready gates. Generated
 locks must be reviewed and committed, followed by the normal complete CI.
 Native generation, post-change audits and browser/build results are pending
 until explicitly recorded. Existing published releases and tags are unchanged.
+
+## Executed Follow-up
+
+Native maintenance run39614860205 generated three locks on Windows/Python3.10.11,
+Ubuntu24.04/Python3.11.17 and3.12.15. Every target completed a fresh no-index,
+hash-verified wheel installation and pip check. Only certifi's version/hash
+changed in each dev lock; runtime locks are unchanged. Generated universal wheel
+SHA-256:42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b.
+The initial maintenance dispatch was rejected for an unquoted YAML colon; a
+workflow parsing regression was added,2 targeted tests passed and the corrected
+maintenance run succeeded. This was not a product test success.
+
+Vite8.1.6 requires a Rolldown1.1.x dependency subtree update; unrelated direct
+packages and numerical libraries were not upgraded. Local Node22.23.2 clean
+npm install, all973 frontend tests/112 files, TypeScript production build passed.
+Fresh `dependency_security.py --frontend frontend` runtime/all npm audits passed;
+targeted lock/security tests:11 passed,1 existing platform-scoped skip.
+The existing >500kB bundle warning remains. Final native audits and browser suites
+must still pass on the committed updated locks before publication.
