@@ -1,11 +1,11 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-08-29
+Last updated: 2026-10-21
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.6.0`. New studies use study schema `4`; readers retain study schemas `1`,
+`0.7.0`. New studies use study schema `4`; readers retain study schemas `1`,
 `2`, and `3` and their recorded method versions without rewriting checksums.
 Legacy definition verification reconstructs the schema-specific factor and
 initial-design field set; schema-4 defaults are never injected into a schema-1
@@ -36,6 +36,7 @@ Current routes are:
 - paged `GET .../{study_id}/trials`;
 - `PUT .../{study_id}/trials/{trial_id}/observation`;
 - `POST .../{study_id}/trials/{trial_id}/abandon`;
+- `POST .../{study_id}/trials/{trial_id}/replicates` (explicit completed-parent repeats);
 - paged immutable `GET .../{study_id}/history` and revision restore;
 - `POST/GET .../{study_id}/recommendations`;
 - `GET .../{study_id}/recommendations/latest`;
@@ -165,7 +166,40 @@ The app does not call equipment, external services, arbitrary Python, shell,
 `eval`, pickle, or joblib. It does not fabricate, average, impute, or infer an
 objective value.
 
-## Surrogate Policy
+## Current Noise-Aware Policy (API 26)
+
+New UI requests use schema 2 and `greedy_mc_joint_latent_improvement_v2`.
+The versioned numerical, storage and validation contract is
+[BO/GPR extension](bo_gpr_noise_validation_extension.md). BO and standalone
+GPR remain separate products with separate defaults and normalization.
+
+- BO signal is `ConstantKernel * Matern(nu=2.5)`. Estimated independent
+  observation noise adds `WhiteKernel`; fixed raw response SD and near-noiseless
+  modes are explicit alternatives. Estimate defaults are scaled variance
+  initial `0.01`, bounds `[1e-6, 1]`; jitter remains numerical only.
+- Normalization uses all raw completed observations and population SD (`ddof=0`).
+  EI uses the signal-only latent posterior and the largest posterior mean at
+  completed locations, not the largest noisy observation. Both incumbents are stored.
+- Target mode fits the original response and applies analytic expected target
+  improvement to the minimum latent target distance. It does not fit `-abs(y-target)`.
+- Batch selection uses common seeded joint latent samples and averaged conditional
+  marginal improvement; q=1 uses analytic EI/ETI without MC error. This is
+  plug-in-incumbent greedy improvement, not exact qNEI. Predictions in the table
+  always use the real-observation base posterior, not reduced planning uncertainty.
+- Raw observations are the default training view. Optional exact-replicate
+  compression retains counts and within-group SS in the likelihood. Nearby
+  diagnostics never merge training rows. Future single-observation variance uses
+  full measurement noise, not the variance of a training-group mean.
+- Mixed search fixes executable discrete levels and refines only continuous
+  coordinates. Canonical feasible coordinates are rescored before persistence.
+- Replicates require an explicit completed parent and confirmed count 1..8.
+  A pending trial blocks new repeats; request UUID/payload retries are idempotent.
+  New independent observations preserve parent identity and never overwrite history.
+
+Legacy request/result readers and numerical references below remain unchanged.
+They describe their recorded policy, not the default for new schema-2 requests.
+
+## Legacy V1 Surrogate Policy
 
 The calculation worker imports scikit-learn only inside the spawned CPU worker
 and limits numerical thread pools to one. It uses scikit-learn 1.7.2
@@ -187,7 +221,7 @@ NumPy/SciPy/scikit-learn/joblib/threadpoolctl versions. Posterior standard
 deviation is model uncertainty, not a process tolerance or guaranteed
 confidence interval.
 
-## Acquisition Policy
+## Legacy V1 Acquisition Policy
 
 For direction-normalized posterior mean `mu`, standard deviation `sigma`,
 incumbent completed observation `best`, and exploration `xi >= 0`:
@@ -231,7 +265,7 @@ The synchronous batch calculation and lifecycle are specified in
 
 ## Budgets And Failures
 
-Requests are bounded to six factors, 200 total trials, 200 completed
+Requests are bounded to ten factors, 200 total trials, 200 completed
 observations, 201 observation-history revisions including the initial empty
 revision, 4,096 initial acquisition candidates, 16 local starts, 20,000
 acquisition evaluations, three
@@ -342,6 +376,12 @@ zero files and bytes. Dataset/analysis/DOE/export cleanup is a later file-aware
 slice defined in `docs/workspace_retention_contract.md`.
 
 ## Version Decision
+
+Method `0.7.0` adds recommendation config/result/item schema 2, model schema 3,
+and the explicit V2 policy. V1 requests retain method `0.6.0` and their exact
+historical checksum fields. Metadata24 adds replicate parent/idempotency storage
+and the disjoint V1/V2 batch constraints; study JSON remains schema4 and history1.
+No existing recommendation, observation or model artifact is rewritten.
 
 Method `0.5.0` and study schema `4` add executable factor domains, mixed LHS
 initial design, grid-aware acquisition candidates, atomic multi-observation
@@ -480,13 +520,13 @@ Server or the current host.
 ## Explicit Non-Goals
 
 Objective execution, completed-observation correction, study-definition edits,
-multiobjective/Pareto optimization, noisy or heteroscedastic objectives,
-batches, categorical/integer factors, nonlinear or learned constraints,
+multiobjective/Pareto optimization, heteroscedastic objectives,
+nominal categorical factors, nonlinear or learned constraints,
 cost-aware or multi-fidelity optimization, Thompson sampling, knowledge
 gradient, guaranteed safe optimization, and guaranteed global optimum claims
 remain out of scope.
 
 Study-level completion and abandonment transitions are executable under
-`docs/bayesian_study_lifecycle_contract.md`. Retention/deletion, ownership-graph
-cleanup, and storage reclamation remain out of scope; close never removes an
-artifact.
+`docs/bayesian_study_lifecycle_contract.md`. Explicit closed-study retention
+deletion includes replicate request dependencies and managed reports. Close itself
+never removes an artifact.

@@ -1,6 +1,21 @@
 # Bayesian Study Lifecycle Contract
 
-Last updated: 2026-07-30
+Last updated: 2026-10-21
+
+## Explicit Replicates (API26 / Metadata24)
+
+`POST /api/v1/bayesian-studies/{study_id}/trials/{trial_id}/replicates`
+requires a completed parent, current history revision/hash, request UUID,
+count1..8, explicit intent and total trial budget. Active pending trials or a
+closed study reject new creation. One transaction creates the entire pending
+set with `origin=replicate` and `replicate_of_trial_id`. It does not add an
+observation/history revision or replace a parent's value.
+
+Identical request UUID/payload retries return the same trial IDs; changed payload
+is409. Each repeat gets one separately entered observation. Coordinate novelty
+checks remain enabled for normal recommendations. Replicate request records
+participate in closed-study deletion, schema24 backup/restore and ownership
+verification. Legacy trial coordinate hashes do not gain a default parent field.
 
 ## Scope And Current State
 

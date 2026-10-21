@@ -27,6 +27,7 @@ from app.statistics.gaussian_process_regression import (
     build_gaussian_process_state,
     predict_from_gaussian_process_state,
 )
+from app.statistics.gp_preprocessing import GpPreprocessingError, GpPreprocessor
 from app.storage.metadata import get_analysis_run_record
 
 EXPECTED_ARRAYS = {
@@ -53,12 +54,15 @@ def create_gaussian_process_point_predictions(
         and manifest.get("method_id") == "regression.gaussian_process"
         and manifest.get("model_family") == "gaussian_process_regression"
         and manifest.get("manifest_kind") == "gaussian_process_model_manifest"
-        and manifest.get("manifest_schema_version") in {1, 2, 3}
+        and manifest.get("manifest_schema_version") in {1, 2, 3, 4}
     ):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     if body.expected_model_manifest_sha256 != model.manifest_sha256:
         raise _error("gp_model_manifest_checksum_mismatch", status.HTTP_409_CONFLICT)
-    if manifest["manifest_schema_version"] in {2, 3}:
+    supported_versions = {1: "0.1.0", 2: "0.2.0", 3: "0.3.0", 4: "0.4.0"}
+    if manifest.get("method_version") != supported_versions[manifest["manifest_schema_version"]]:
+        raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
+    if manifest["manifest_schema_version"] in {2, 3, 4}:
         selection = manifest.get("kernel_selection")
         summaries = manifest.get("candidate_summaries")
         if not (
@@ -82,6 +86,13 @@ def create_gaussian_process_point_predictions(
         raise _error("gp_prediction_model_stale", status.HTTP_409_CONFLICT)
 
     predictors = _predictors(manifest)
+    if body.surface_view is not None:
+        from app.services.gp_surface_views import validate_gp_surface_view
+
+        try:
+            validate_gp_surface_view(body.surface_view, body.rows, predictors)
+        except GaussianProcessRegressionError as exc:
+            raise _error(exc.code, status.HTTP_400_BAD_REQUEST) from exc
     expected_ids = [str(item["column_id"]) for item in predictors]
     ranges = _training_ranges(manifest, expected_ids)
     state = _load_state(settings.workspace_root, manifest, len(expected_ids))
@@ -89,16 +100,28 @@ def create_gaussian_process_point_predictions(
     if len(set(client_ids)) != len(client_ids):
         raise _error("gp_prediction_input_invalid", status.HTTP_422_UNPROCESSABLE_ENTITY)
 
-    matrix: list[list[float]] = []
+    matrix: list[list[float | str]] = []
+    nominal_ids = {str(item["column_id"]) for item in predictors if item.get("kind") == "nominal"}
     row_warnings: list[list[str]] = []
     for row in body.rows:
         if set(row.values) != set(expected_ids):
             raise _error("gp_prediction_input_invalid", status.HTTP_422_UNPROCESSABLE_ENTITY)
-        values: list[float] = []
+        values: list[float | str] = []
         warnings: list[str] = []
         for column_id in expected_ids:
             value = row.values[column_id]
-            if isinstance(value, bool) or not isfinite(float(value)):
+            if column_id in nominal_ids:
+                if not isinstance(value, str) or not value:
+                    raise _error(
+                        "gp_prediction_input_invalid", status.HTTP_422_UNPROCESSABLE_ENTITY
+                    )
+                values.append(value)
+                continue
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int | float)
+                or not isfinite(float(value))
+            ):
                 raise _error("gp_prediction_input_invalid", status.HTTP_422_UNPROCESSABLE_ENTITY)
             numeric = float(value)
             values.append(numeric)
@@ -110,10 +133,15 @@ def create_gaussian_process_point_predictions(
     try:
         prediction = predict_from_gaussian_process_state(
             state,
-            np.asarray(matrix, dtype=np.float64),
+            matrix,
         )
     except GaussianProcessRegressionError as exc:
-        raise _error(exc.code, status.HTTP_409_CONFLICT) from exc
+        code = (
+            status.HTTP_422_UNPROCESSABLE_ENTITY
+            if exc.code == "gp_category_unknown"
+            else status.HTTP_409_CONFLICT
+        )
+        raise _error(exc.code, code) from exc
     output: list[GaussianProcessPointPredictionRow] = []
     for index, row in enumerate(body.rows):
         mean = float(prediction["mean"][index])
@@ -192,6 +220,34 @@ def _load_state(
         raise _error("gp_model_artifact_checksum_mismatch", status.HTTP_409_CONFLICT)
     arrays = _load_arrays(artifact_bytes, arrays_metadata)
     _validate_array_shapes(arrays, predictor_count)
+    resource = manifest.get("resource_budget")
+    row_limit = (
+        2000 if isinstance(resource, dict) and resource.get("profile") == "extended_exact" else 500
+    )
+    if arrays["x_train_scaled"].shape[0] > row_limit:
+        raise _error("gp_model_artifact_invalid", status.HTTP_409_CONFLICT)
+    preprocessing = manifest.get("preprocessing")
+    nominal = any(item.get("kind") == "nominal" for item in _predictors(manifest))
+    if nominal != (preprocessing is not None) or (
+        preprocessing is not None and manifest.get("manifest_schema_version") != 4
+    ):
+        raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
+    if preprocessing is not None:
+        try:
+            processor = GpPreprocessor.from_payload(preprocessing)
+            predictors = _predictors(manifest)
+            if (
+                [state.spec.column_id for state in processor.states]
+                != [item["column_id"] for item in predictors]
+                or any(
+                    state.spec.kind != item.get("kind")
+                    for state, item in zip(processor.states, predictors, strict=True)
+                )
+                or processor.training_row_count != arrays["x_train_scaled"].shape[0]
+            ):
+                raise GpPreprocessingError("gp_model_artifact_invalid")
+        except GpPreprocessingError as exc:
+            raise _error("gp_model_artifact_invalid", status.HTTP_409_CONFLICT) from exc
     y_mean = _finite(scaling.get("y_mean"))
     y_scale = _finite(scaling.get("y_scale"), positive=True)
     observation_noise = _finite(noise.get("observation_noise_variance_scaled"), nonnegative=True)
@@ -207,6 +263,7 @@ def _load_state(
             predictor_medians=arrays["predictor_medians"],
             signal_kernel_payload=prediction_state["signal_kernel"],
             observation_noise_variance_scaled=observation_noise,
+            preprocessing_payload=preprocessing,
         )
     except GaussianProcessRegressionError as exc:
         raise _error("gp_model_artifact_invalid", status.HTTP_409_CONFLICT) from exc
@@ -297,15 +354,26 @@ def _training_ranges(
     if not isinstance(value, list):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     ranges: dict[str, tuple[float, float]] = {}
+    categories: set[str] = set()
     for item in value:
         if not isinstance(item, dict) or not isinstance(item.get("column_id"), str):
             raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
+        if item.get("kind") == "nominal":
+            levels = item.get("levels")
+            if (
+                not isinstance(levels, list)
+                or not levels
+                or any(not isinstance(level, str) for level in levels)
+            ):
+                raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
+            categories.add(item["column_id"])
+            continue
         lower = _finite(item.get("minimum"))
         upper = _finite(item.get("maximum"))
         if lower > upper:
             raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
         ranges[item["column_id"]] = (lower, upper)
-    if set(ranges) != set(expected_ids):
+    if set(ranges) | categories != set(expected_ids):
         raise _error("gp_model_manifest_invalid", status.HTTP_409_CONFLICT)
     return ranges
 
@@ -345,6 +413,8 @@ def _error(code: str, status_code: int) -> ApiError:
             "Gaussian Process 예측 입력이 모델 predictor 계약과 일치하지 않습니다."
         ),
         "gp_prediction_failed": "Gaussian Process 예측을 계산할 수 없습니다.",
+        "gp_category_unknown": "학습에 없는 범주 수준은 예측할 수 없습니다.",
+        "gp_surface_view_invalid": "Surface grid의 축·고정값·행 identity를 확인하세요.",
     }
     return ApiError(
         code=code,

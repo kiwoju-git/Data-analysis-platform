@@ -36,7 +36,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "regression.xy_correlation": METHOD_VERSION,
     "regression.linear_model": "0.3.0",
     "regression.partial_least_squares": "0.1.0",
-    "regression.gaussian_process": "0.3.0",
+    "regression.gaussian_process": "0.4.0",
     "regression.linear_model_optimizer": "0.2.0",
     "regression.predict": "0.3.0",
     "regression.predict_pasted": "0.2.0",
@@ -53,7 +53,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "doe.latin_hypercube": "0.3.0",
     "doe.response_surface": "0.4.0",
     "doe.response_optimizer": "0.4.0",
-    "doe.bayesian_optimization": "0.6.0",
+    "doe.bayesian_optimization": "0.7.0",
 }
 
 LEGACY_METHOD_ID_ALIASES: dict[str, str] = {

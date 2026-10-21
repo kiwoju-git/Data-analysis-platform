@@ -188,10 +188,21 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
     from doe_rsm_completion import verify_doe_rsm_completion
     from doe_browser_zoom import verify_doe_browser_zoom
     from fractional_completion import verify_fractional_completion
+    from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
+    from gp_validation_extension import verify_gp_validation_extension
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
+            result["bo_noise_receipt"] = verify_bo_noise_extension(
+                browser, base, output / "bo-noise"
+            )
+            result["bo_context_receipt"] = verify_bo_noise_context(
+                browser, base, output / "bo-context"
+            )
+            result["gp_extension_receipt"] = verify_gp_validation_extension(
+                browser, base, output / "gp-extension", isolated_workspace=True
+            )
             result["fractional_receipt"] = verify_fractional_completion(
                 browser, base, output / "fractional"
             )
@@ -221,6 +232,7 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
         "pilot CSV and long-group visible forms",
         "pilot small-scale GP prediction and managed reports",
         "pilot visible BF/F Two Variances forms with preflight",
+        "visible noise-aware target/batch/replicate/aggregation and exact retry",
     ]
     result["offline_html_verified"] = False
     return result

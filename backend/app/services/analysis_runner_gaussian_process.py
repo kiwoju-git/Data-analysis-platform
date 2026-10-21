@@ -51,7 +51,7 @@ from app.storage.metadata import (
     insert_analysis_run_record_with_artifacts_and_regression_model,
 )
 
-GP_MODEL_MANIFEST_SCHEMA_VERSION = 3
+GP_MODEL_MANIFEST_SCHEMA_VERSION = 4
 GP_MODEL_ARTIFACT_KIND = "regression_model_manifest"
 GP_NUMERIC_ARTIFACT_KIND = "gaussian_process_model_numeric_state"
 GP_MODEL_MEDIA_TYPE = "application/json"
@@ -70,6 +70,7 @@ def run_gaussian_process_regression_analysis(
     options = _validate_options(request.options)
     context = get_dataset_rows_context(settings, request.dataset_version_id)
     response, predictors = _selected_columns(context, options)
+    metadata_columns = _selected_metadata_columns(context, options)
     analysis_id = uuid4()
     completed_at = utc_now()
     row_snapshot = create_row_snapshot_artifact(
@@ -81,14 +82,29 @@ def run_gaussian_process_regression_analysis(
     )
     try:
         try:
-            result = calculate_gaussian_process_regression(
-                iter_rows_for_snapshot(context, row_snapshot),
-                response,
-                predictors,
-                decimal=context.parsing.decimal,
-                thousands=context.parsing.thousands,
-                options=_statistics_options(options),
-            )
+            statistics_options = _statistics_options(options)
+            if options.resource_profile == "extended_exact":
+                from app.services.gp_worker import run_gp_worker
+
+                result = run_gp_worker(
+                    context,
+                    row_snapshot,
+                    response,
+                    predictors,
+                    statistics_options,
+                    metadata_columns,
+                )
+                cast(dict[str, Any], result["method"])["execution_mode"] = "spawn_worker"
+            else:
+                result = calculate_gaussian_process_regression(
+                    iter_rows_for_snapshot(context, row_snapshot),
+                    response,
+                    predictors,
+                    decimal=context.parsing.decimal,
+                    thousands=context.parsing.thousands,
+                    options=statistics_options,
+                    metadata_columns=metadata_columns,
+                )
         except GaussianProcessRegressionError as exc:
             raise _api_error(exc.code) from exc
         return _store_result_and_model(
@@ -117,6 +133,15 @@ def _validate_options(value: dict[str, Any]) -> GaussianProcessRegressionOptions
             "gp_kernel_candidates_invalid",
             "gp_kernel_policy_invalid",
             "gp_kernel_comparison_requires_validation",
+            "gp_validation_shuffle_unsupported",
+            "gp_group_column_required",
+            "gp_time_column_required",
+            "gp_time_unit_required",
+            "gp_time_options_invalid",
+            "gp_lag_options_invalid",
+            "gp_lag_requires_time_validation",
+            "gp_derived_predictor_count_limit",
+            "gp_validation_column_overlap",
         }
         code = next(
             (
@@ -152,7 +177,37 @@ def _selected_columns(
     return _column(response), predictors
 
 
+def _selected_metadata_columns(
+    context: DatasetRowsContext,
+    options: GaussianProcessRegressionOptions,
+) -> list[GaussianProcessColumn]:
+    by_id = {column.column_id: column for column in context.columns}
+    lag = options.lag_features
+    requested = [options.cv.group_column_id, options.cv.time_column_id]
+    if lag is not None:
+        requested.extend([lag.series_column_id, *lag.lagged_column_ids])
+    columns: list[GaussianProcessColumn] = []
+    for column_id in dict.fromkeys(item for item in requested if item is not None):
+        column = by_id.get(column_id)
+        if column is None:
+            raise _api_error("gp_validation_column_required")
+        if column_id == options.cv.time_column_id and options.cv.time_format == "numeric":
+            if column.data_type not in {"integer", "decimal"}:
+                raise _api_error("gp_validation_time_invalid")
+        if lag is not None and column_id in lag.lagged_column_ids:
+            if (
+                column.data_type not in {"integer", "decimal"}
+                or column.measurement_level == "nominal"
+                or column.role == "id"
+            ):
+                raise _api_error("gp_lag_source_type_unsupported")
+        columns.append(_column(column))
+    return columns
+
+
 def _validate_column(column: DatasetColumnRecord, *, response: bool) -> None:
+    if not response and column.measurement_level == "nominal" and column.role != "id":
+        return
     if (
         column.data_type not in {"integer", "decimal"}
         or column.role == "id"
@@ -205,6 +260,22 @@ def _statistics_options(options: GaussianProcessRegressionOptions) -> GaussianPr
         validation_method=options.cv.method,
         cv_folds=options.cv.folds,
         cv_shuffle=options.cv.shuffle,
+        group_column_id=options.cv.group_column_id,
+        time_column_id=options.cv.time_column_id,
+        time_format=options.cv.time_format,
+        time_unit=options.cv.time_unit,
+        timestamp_timezone=options.cv.timestamp_timezone,
+        gap_time_blocks=options.cv.gap_time_blocks,
+        lagged_column_ids=tuple(options.lag_features.lagged_column_ids)
+        if options.lag_features is not None
+        else (),
+        lags=tuple(options.lag_features.lags) if options.lag_features is not None else (),
+        series_column_id=options.lag_features.series_column_id
+        if options.lag_features is not None
+        else None,
+        resource_profile=options.resource_profile,
+        initial_surface_x_column_id=options.initial_surface_x_column_id,
+        initial_surface_y_column_id=options.initial_surface_y_column_id,
         plot_point_limit=options.plot_point_limit,
         profile_points=options.profile_points,
         surface_grid_size=options.surface_grid_size,
@@ -457,14 +528,18 @@ def _manifest_payload(
         },
         "training_ranges": result["training_ranges"],
         "model_summary": result["model_summary"],
+        "validation_plan": result.get("validation_plan"),
+        "feature_lineage": result.get("feature_lineage"),
+        "preprocessing": result.get("preprocessing"),
+        "resource_budget": result.get("resource_budget"),
         "package_versions": {
             "scikit-learn": result["method"]["engine_version"],  # type: ignore[index]
             "numpy": np.__version__,
             "scipy": result["method"]["package_versions"]["scipy"],  # type: ignore[index]
         },
         "limitations": [
-            "exact_gp_maximum_500_rows",
-            "numeric_predictors_only",
+            "exact_gp_resource_admission_required",
+            "nominal_equal_correlation_not_level_pair_model",
             "single_response",
             "homoscedastic_observation_noise",
             "uncertainty_conditional_on_kernel",
@@ -475,6 +550,29 @@ def _manifest_payload(
 
 def _analysis_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
     messages = {
+        "gp_group_validation_new_groups": (
+            "그룹 교차검증은 새로운 그룹/배치에 대한 일반화를 평가합니다."
+        ),
+        "gp_time_validation_partial_coverage": (
+            "시간순 검증은 초기 학습 행을 제외한 이후 관측만 평가합니다."
+        ),
+        "gp_lag_one_step_observed_history": (
+            "Lag 검증은 각 시점의 실제 결과 관측 후 다음 시점을 예측하는 1-step 평가입니다."
+        ),
+        "gp_lag_irregular_observation_intervals": (
+            "관측 순서 lag의 실제 시간 간격이 일정하지 않습니다."
+        ),
+        "gp_category_sparse_levels": "관측 수가 3개 미만인 범주 수준이 있습니다.",
+        "gp_category_high_cardinality": "수준 수가 많은 범주형 변수는 추정이 불안정할 수 있습니다.",
+        "gp_category_theta_bound": "범주형 상관 매개변수가 탐색 경계에 가깝습니다.",
+        "gp_nominal_only_signal": (
+            "숫자형 예측변수가 없어 신호 진폭과 범주 일치 커널만 사용합니다. "
+            "숫자형 kernel preset들은 이 모형에서 서로 다른 커널 계열을 뜻하지 않습니다."
+        ),
+        "gp_categorical_constant_training_fold": (
+            "학습 데이터에서 하나의 수준만 있는 범주형 성분은 상수 1로 고정합니다."
+        ),
+        "gp_numeric_constant_training_fold": "비표준화 학습 fold에 상수 숫자 변수가 있습니다.",
         "gp_kernel_selection_not_external_validation": (
             "Kernel 선택에 사용한 CV 성능은 독립적인 외부 검증 성능이 아닙니다."
         ),
@@ -514,6 +612,46 @@ def _analysis_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
 
 def _api_error(code: str) -> ApiError:
     messages = {
+        "gp_validation_column_required": "검증 또는 lag에 필요한 열을 선택하세요.",
+        "gp_group_column_required": "그룹 교차검증에 그룹 열이 필요합니다.",
+        "gp_validation_group_missing": "유효 분석 행에 그룹 값이 누락되었습니다.",
+        "gp_cv_group_count_invalid": "서로 다른 그룹 수가 요청한 fold 수보다 적습니다.",
+        "gp_category_unknown": "검증 데이터에 학습 fold에 없는 범주 수준이 있습니다.",
+        "gp_category_level_limit": "범주형 변수당 최대 32개 수준을 지원합니다.",
+        "gp_nominal_predictor_count_limit": "명목형 예측변수는 최대 4개를 지원합니다.",
+        "gp_numeric_predictor_constant": "학습 fold의 숫자 예측변수 분산이 0입니다.",
+        "gp_surface_axes_invalid": "Surface 축에는 서로 다른 숫자 예측변수 두 개가 필요합니다.",
+        "gp_memory_budget_exceeded": (
+            "예상 메모리가 512 MiB 예산을 넘습니다. 변수·후보·상세 보존 수를 줄이세요."
+        ),
+        "gp_resource_options_invalid": "Exact GP 자원 프로필 또는 작업 구성이 올바르지 않습니다.",
+        "gp_parse_memory_budget_exceeded": (
+            "Lag 입력 준비의 32 MiB 추정 작업 메모리 한도를 초과했습니다. "
+            "필터 또는 lag 구성을 줄이세요."
+        ),
+        "gp_worker_result_invalid": "GP worker 결과의 무결성을 확인할 수 없습니다.",
+        "gp_validation_metadata_column_missing": "검증 또는 lag에 필요한 열이 없습니다.",
+        "gp_validation_shuffle_unsupported": "그룹/시간순 검증은 shuffle=false로 요청해야 합니다.",
+        "gp_time_column_required": "시간순 검증에 시간 열과 형식이 필요합니다.",
+        "gp_validation_time_invalid": (
+            "시간 값은 유한한 수치 또는 선택한 규칙의 timestamp여야 합니다."
+        ),
+        "gp_validation_time_missing": "시간 값이 누락되었습니다.",
+        "gp_validation_timezone_required": (
+            "Timestamp에 시간대 offset이 필요합니다. UTC 해석은 명시적으로 선택하세요."
+        ),
+        "gp_validation_empty_fold_after_lag_gap": (
+            "Gap의 lag 정보 제외 후 평가 행이 없는 fold가 있습니다."
+        ),
+        "gp_lag_source_type_unsupported": "Lag 원본은 ID가 아닌 수치형 열이어야 합니다.",
+        "gp_lag_ambiguous_time": (
+            "같은 series와 시각의 여러 행에는 관측 순서 lag를 정의할 수 없습니다."
+        ),
+        "gp_lag_series_missing": "Lag series 식별자가 누락되었습니다.",
+        "gp_lag_requires_time_validation": "Lag 특성은 시간순 교차검증에서만 지원합니다.",
+        "gp_derived_predictor_count_limit": (
+            "원래 변수와 lag 파생 변수를 합한 예측변수 상한은 12개입니다."
+        ),
         "gp_length_scale_invalid": "길이 척도의 하한·초기값·상한을 확인하세요.",
         "gp_length_scale_coordinate_mismatch": "길이 척도 좌표와 예측변수 표준화 설정이 다릅니다.",
         "gp_bfgs_initial_on_boundary": "BFGS 초기값은 경계 안쪽이어야 합니다.",
@@ -535,7 +673,7 @@ def _api_error(code: str) -> ApiError:
         "gp_duplicate_predictor": "Gaussian Process 예측변수가 중복되었습니다.",
         "gp_response_in_predictors": "반응 변수를 예측변수로 동시에 사용할 수 없습니다.",
         "gp_usable_rows_too_few": "Gaussian Process 계산에 사용할 수 있는 완전한 행이 부족합니다.",
-        "gp_usable_rows_limit": "정확 Gaussian Process의 500행 실행 상한을 초과했습니다.",
+        "gp_usable_rows_limit": "선택한 Exact GP 프로필의 유효 행 상한을 초과했습니다.",
         "gp_predictor_count_limit": "Gaussian Process 예측변수 12개 상한을 초과했습니다.",
         "gp_constant_response": "Gaussian Process 반응 변수의 분산이 0입니다.",
         "gp_constant_predictor": "분산이 0인 Gaussian Process 예측변수가 있습니다.",

@@ -28,6 +28,13 @@ function response(): GaussianProcessPointPredictionResponse {
 const receivedAt = "2026-10-18T04:00:00.000Z";
 
 describe("GP completed prediction snapshot", () => {
+  it("preserves nominal identity and rejects unseen levels without numeric coercion", () => {
+    const nominal = { ...source(), nominalLevels: { x2: ["01", "1"] } };
+    const captured = captureGpPredictionRequest(nominal, [{ id: "r", values: { x1: "1e-6", x2: "01" } }]);
+    expect(captured.request.rows[0].values).toEqual({ x1: 1e-6, x2: "01" });
+    expect(() => captureGpPredictionRequest(nominal, [{ id: "r", values: { x1: "1", x2: " 01 " } }])).toThrow();
+    expect(gpPredictionSourceKey(nominal)).not.toBe(gpPredictionSourceKey(source()));
+  });
   it("requires explicit opt-in for managed persistence and preserves that request snapshot", () => {
     const unsaved = captureGpPredictionRequest(source(), drafts());
     const saved = captureGpPredictionRequest(source(), drafts(), true);

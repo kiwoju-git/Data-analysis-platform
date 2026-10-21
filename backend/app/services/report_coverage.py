@@ -38,7 +38,7 @@ INLINE_REPORT_CONTRACTS: dict[str, tuple[str, frozenset[int]]] = {
     "regression.xy_correlation": ("xy_correlation_matrix", frozenset({1})),
     "regression.linear_model": ("linear_model", frozenset({1, 2, 3, 4, 5, 6})),
     "regression.partial_least_squares": ("partial_least_squares_regression", frozenset({1})),
-    "regression.gaussian_process": ("gaussian_process_regression", frozenset({1, 2, 3})),
+    "regression.gaussian_process": ("gaussian_process_regression", frozenset({1, 2, 3, 4})),
     "quality.attribute_control_chart": ("attribute_control_chart", frozenset({1, 2, 3})),
     "quality.subgroup_chart": ("subgroup_chart", frozenset({1})),
     "quality.individuals_chart": ("individuals_chart", frozenset({1})),
@@ -84,6 +84,9 @@ def report_definitions() -> dict[str, ReportDefinition]:
                             "gp_uncertainty_plot",
                             "gp_profiles",
                             "gp_surface_values",
+                            "gp_validation_plan",
+                            "gp_feature_lineage",
+                            "gp_resource_budget",
                         )
                     ),
                     *GP_SURFACE_DEFINITIONS,
@@ -106,7 +109,7 @@ def report_definitions() -> dict[str, ReportDefinition]:
             summary_type=summary_type,
             accepted_schemas=tuple(sorted(schemas)),
             renderer_id=summary_type,
-            renderer_version="2.1.0",
+            renderer_version="2.2.0" if method_id == "regression.gaussian_process" else "2.1.0",
             variants=method_variants.get(
                 method_id,
                 variants.get(

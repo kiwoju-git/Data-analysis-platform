@@ -266,6 +266,7 @@ def test_closed_abandoned_study_deletes_its_exact_metadata_graph(tmp_path) -> No
         "recommendation_count": 0,
         "recommendation_batch_count": 0,
         "recommendation_batch_item_count": 0,
+        "replicate_request_count": 0,
         "lifecycle_event_count": 1,
         "metadata_record_count": 7,
         "report_count": 0,

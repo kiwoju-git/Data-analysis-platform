@@ -596,7 +596,7 @@ export interface GaussianProcessDiagnosticPoint {
 }
 
 export interface GaussianProcessProfilePoint {
-  value: number;
+  value: number | string;
   predicted_mean: number;
   latent_standard_deviation: number;
   latent_interval_95: GaussianProcessInterval;
@@ -626,7 +626,7 @@ export interface GpOptimizerRun {
   theta_gradient_inf_norm: number; optimizer_gradient_inf_norm: number; near_bound: boolean;
 }
 export interface GaussianProcessRegressionResult {
-  schema_version: 1 | 2 | 3;
+  schema_version: 1 | 2 | 3 | 4;
   optimization?: { final_runs: GpOptimizerRun[]; cv_folds: { fold: number; converged: boolean; seed: number; optimizer_runs: GpOptimizerRun[] }[] };
   kernel_selection?: { mode: "single" | "compare"; criterion: "cv_nlpd" | "cv_rmse" | "cv_mae" | null;
     candidate_presets: GpKernelPreset[]; selected_preset: GpKernelPreset; retain_candidate_details: boolean;
@@ -650,7 +650,8 @@ export interface GaussianProcessRegressionResult {
     optimizer_restarts: number;
     cv_optimizer_restarts: number;
     random_seed: number;
-    validation_method: "k_fold" | "leave_one_out" | "none";
+    validation_method: GpValidationMethod;
+    resource_profile?: "standard_exact" | "extended_exact";
     cv_folds: number;
     cv_shuffle: boolean;
     missing_policy: "complete_case";
@@ -658,7 +659,10 @@ export interface GaussianProcessRegressionResult {
     elapsed_seconds: number;
   };
   response: LinearModelColumnRef;
-  predictors: LinearModelColumnRef[];
+  predictors: Array<LinearModelColumnRef & { kind?: "numeric" | "nominal" }>;
+  validation_plan?: GpValidationPlan;
+  feature_lineage?: GpFeatureLineage | null;
+  surface_unavailable_reason?: string | null;
   sample: {
     n_total: number;
     n_used: number;
@@ -705,9 +709,10 @@ export interface GaussianProcessRegressionResult {
     points: GaussianProcessDiagnosticPoint[];
   };
   conditional_profiles: Array<{
+    kind?: "numeric" | "nominal";
     column_id: string;
     display_name: string;
-    fixed_values: number[];
+    fixed_values: Array<number | string>;
     points: GaussianProcessProfilePoint[];
   }>;
   two_predictor_surface: {
@@ -716,21 +721,39 @@ export interface GaussianProcessRegressionResult {
     y_column_id: string;
     y_display_name: string;
     grid_size: number;
-    fixed_values: number[];
+    fixed_values: Array<number | string>;
     points: Array<{
       x: number;
       y: number;
       predicted_mean: number;
       predictive_standard_deviation: number;
+      latent_standard_deviation?: number;
     }>;
   } | null;
-  training_ranges: Array<{
-    column_id: string;
-    display_name: string;
-    minimum: number;
-    maximum: number;
-    median: number;
-  }>;
+  training_ranges: GpTrainingRange[];
   warnings: string[];
   model_manifest?: LinearModelManifestPointer;
+}
+
+export type GpValidationMethod = "k_fold" | "group_k_fold" | "time_series_split" | "leave_one_out" | "none";
+export type GpTrainingRange = { column_id: string; display_name: string } & (
+  { kind?: "numeric"; minimum: number; maximum: number; median: number }
+  | { kind: "nominal"; levels: string[]; mode: string }
+);
+export interface GpValidationPlan {
+  requested_method?: GpValidationMethod; effective_method?: GpValidationMethod;
+  group_column_id?: string | null; time_column_id?: string | null;
+  time_format?: "numeric" | "timestamp"; time_unit?: string | null;
+  timestamp_timezone?: "require_offset" | "UTC"; gap_time_blocks?: number;
+  distinct_group_count?: number | null; split_plan_sha256?: string;
+  n_scored?: number; n_unscored?: number; scored_fraction?: number;
+  scored_row_indices?: number[]; unscored_row_indices?: number[];
+  evaluation_purpose?: string;
+  folds?: Array<{ fold: number; training_row_indices: number[]; validation_row_indices: number[]; training_group_count?: number | null; validation_group_count?: number | null }>;
+}
+export interface GpFeatureLineage {
+  series_column_id?: string | null; time_column_id?: string;
+  prediction_horizon?: 1; interval?: "observation_order";
+  gap_policy?: "exclude_embargo_sources"; irregular_intervals?: boolean;
+  definitions?: Array<{ column_id: string; source_column_id: string; lag: number; interval: "observation_order" }>;
 }

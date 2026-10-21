@@ -45,8 +45,8 @@ def test_runtime_info_reports_current_contract_without_workspace_details(tmp_pat
     assert response.json() == {
         "service": "datalab-studio-api",
         "app_version": "0.1.0",
-        "api_contract_version": 25,
-        "metadata_schema_version": 23,
+        "api_contract_version": 26,
+        "metadata_schema_version": 24,
         "build_commit": "unknown",
         "capabilities": {
             "asset_management": True,

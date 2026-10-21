@@ -83,7 +83,7 @@ def test_backend_inventory_joins_actual_execution_reports_and_subworkflows(
             )
     gp = methods["regression.gaussian_process"]["reports"]
     assert {item["source_kind"] for item in gp} == {"analysis_run", "regression_prediction"}
-    assert tuple(gp[0]["accepted_schemas"]) == (1, 2, 3)
+    assert tuple(gp[0]["accepted_schemas"]) == (1, 2, 3, 4)
     assert len(methods["doe.general_factorial_design"]["reports"]) == 2
 
 

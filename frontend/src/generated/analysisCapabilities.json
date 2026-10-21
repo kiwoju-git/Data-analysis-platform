@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 25,
-  "metadata_schema_version": 23,
+  "api_contract_version": 26,
+  "metadata_schema_version": 24,
   "methods": [
     {
       "method_id": "eda.descriptive",
@@ -1957,7 +1957,7 @@
             1
           ],
           "renderer_id": "completed_prediction_report",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.2.0",
           "variants": [
             {
               "variant_id": "completed_prediction",
@@ -1973,6 +1973,10 @@
                 {
                   "section_id": "predictions",
                   "core": true
+                },
+                {
+                  "section_id": "surface_view",
+                  "core": false
                 },
                 {
                   "section_id": "limitations",
@@ -1999,7 +2003,7 @@
     },
     {
       "method_id": "regression.gaussian_process",
-      "method_version": "0.3.0",
+      "method_version": "0.4.0",
       "module_id": "regression",
       "label_ko": "Gaussian Process 회귀",
       "label_en": "Gaussian Process Regression",
@@ -2021,6 +2025,30 @@
           "name": "max_usable_rows",
           "value": 500,
           "unit": "rows",
+          "variant": "standard_exact"
+        },
+        {
+          "name": "max_usable_rows",
+          "value": 2000,
+          "unit": "rows",
+          "variant": "extended_exact"
+        },
+        {
+          "name": "max_nominal_predictors",
+          "value": 4,
+          "unit": "predictors",
+          "variant": null
+        },
+        {
+          "name": "max_nominal_levels",
+          "value": 32,
+          "unit": "levels_per_predictor",
+          "variant": null
+        },
+        {
+          "name": "max_estimated_working_memory",
+          "value": 536870912,
+          "unit": "bytes",
           "variant": null
         },
         {
@@ -2067,10 +2095,11 @@
           "accepted_schemas": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "renderer_id": "gaussian_process_regression",
-          "renderer_version": "2.1.0",
+          "renderer_version": "2.2.0",
           "variants": [
             {
               "variant_id": "single",
@@ -2112,11 +2141,27 @@
                   "core": false
                 },
                 {
+                  "section_id": "gp_validation_plan",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_feature_lineage",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_resource_budget",
+                  "core": false
+                },
+                {
                   "section_id": "gp_surface_mean",
                   "core": false
                 },
                 {
                   "section_id": "gp_surface_sd",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_latent_sd",
                   "core": false
                 },
                 {
@@ -2165,11 +2210,27 @@
                   "core": false
                 },
                 {
+                  "section_id": "gp_validation_plan",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_feature_lineage",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_resource_budget",
+                  "core": false
+                },
+                {
                   "section_id": "gp_surface_mean",
                   "core": false
                 },
                 {
                   "section_id": "gp_surface_sd",
+                  "core": false
+                },
+                {
+                  "section_id": "gp_surface_latent_sd",
                   "core": false
                 },
                 {
@@ -2190,7 +2251,7 @@
             1
           ],
           "renderer_id": "completed_prediction_report",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.2.0",
           "variants": [
             {
               "variant_id": "completed_prediction",
@@ -2206,6 +2267,10 @@
                 {
                   "section_id": "predictions",
                   "core": true
+                },
+                {
+                  "section_id": "surface_view",
+                  "core": false
                 },
                 {
                   "section_id": "limitations",
@@ -2823,7 +2888,7 @@
     },
     {
       "method_id": "doe.bayesian_optimization",
-      "method_version": "0.6.0",
+      "method_version": "0.7.0",
       "module_id": "doe",
       "label_ko": "베이지안 최적화",
       "label_en": "Bayesian Optimization",
@@ -2849,7 +2914,7 @@
             1
           ],
           "renderer_id": "dedicated_bayesian",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.2.0",
           "variants": [
             {
               "variant_id": "bayesian",
@@ -2876,6 +2941,10 @@
                 },
                 {
                   "section_id": "attachment",
+                  "core": false
+                },
+                {
+                  "section_id": "noise_summary",
                   "core": false
                 },
                 {

@@ -15,6 +15,7 @@ from app.statistics.bayesian_optimization import (
     _constraints_satisfied,
     _finite_float,
     _has_discrete_factors,
+    _noise_aware_payload,
     _novel,
     _scipy_constraints,
     _SearchBudget,
@@ -34,6 +35,10 @@ BAYESIAN_BATCH_MODEL_SCHEMA_VERSION: Final[Literal[2]] = 2
 
 
 def calculate_bayesian_recommendation_batch(payload: dict[str, Any]) -> dict[str, Any]:
+    if _noise_aware_payload(payload):
+        from app.statistics.bo_recommendation_core import calculate_noise_aware_batch
+
+        return calculate_noise_aware_batch(payload)
     import numpy as np
     import scipy  # type: ignore[import-untyped]
     import sklearn  # type: ignore[import-untyped]
@@ -469,7 +474,9 @@ def _validated_objective(value: object) -> dict[str, Any]:
     return {"goal_type": goal_type, "target_value": target_value}
 
 
-def _validated_batch_options(payload: dict[str, Any]) -> dict[str, Any]:
+def _validated_batch_options(
+    payload: dict[str, Any], *, policy: str = BAYESIAN_BATCH_POLICY
+) -> dict[str, Any]:
     search = payload.get("search")
     acquisition = payload.get("acquisition")
     batch_size = payload.get("batch_size")
@@ -495,7 +502,7 @@ def _validated_batch_options(payload: dict[str, Any]) -> dict[str, Any]:
         "duplicate_tolerance",
         "batch_policy",
     }
-    if set(search) != required_search or search.get("batch_policy") != BAYESIAN_BATCH_POLICY:
+    if set(search) != required_search or search.get("batch_policy") != policy:
         raise BayesianOptimizationError("bayesian_optimization_budget_exhausted")
     profile = acquisition.get("exploration_profile")
     kind = acquisition.get("kind")

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 23
+SCHEMA_VERSION: Final = 24
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -17,6 +17,7 @@ class Migration:
     version: int
     name: str
     sql: str
+    requires_foreign_keys_off: bool = False
 
 
 @dataclass(frozen=True)
@@ -1587,6 +1588,127 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         ON experiment_design_analysis_assets(analysis_id, kind, created_at, asset_id);
         """,
     ),
+    Migration(
+        version=24,
+        name="explicit_bayesian_replicate_trials",
+        requires_foreign_keys_off=True,
+        sql="""
+        BEGIN IMMEDIATE;
+        CREATE TABLE bayesian_recommendation_batches_v24 (
+            batch_id TEXT PRIMARY KEY,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            source_history_revision_id TEXT NOT NULL
+                REFERENCES bayesian_observation_history_revisions(history_revision_id)
+                ON DELETE RESTRICT,
+            source_observation_history_sha256 TEXT NOT NULL
+                CHECK (length(source_observation_history_sha256)=64),
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            batch_size INTEGER NOT NULL CHECK (batch_size BETWEEN 1 AND 8),
+            batch_policy TEXT NOT NULL,
+            config_schema_version INTEGER NOT NULL,
+            result_schema_version INTEGER NOT NULL,
+            model_schema_version INTEGER NOT NULL,
+            item_schema_version INTEGER NOT NULL,
+            config_json TEXT NOT NULL,
+            config_sha256 TEXT NOT NULL CHECK (length(config_sha256)=64),
+            result_json TEXT NOT NULL,
+            result_sha256 TEXT NOT NULL CHECK (length(result_sha256)=64),
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL,
+            CHECK (
+                (batch_policy='greedy_posterior_mean_fantasy_ei_v1'
+                 AND config_schema_version=1 AND result_schema_version=1
+                 AND model_schema_version=2 AND item_schema_version=1)
+                OR
+                (batch_policy='greedy_mc_joint_latent_improvement_v2'
+                 AND config_schema_version=2 AND result_schema_version=2
+                 AND model_schema_version=3 AND item_schema_version=2)
+            )
+        );
+        INSERT INTO bayesian_recommendation_batches_v24
+            SELECT * FROM bayesian_recommendation_batches;
+        DROP TABLE bayesian_recommendation_batches;
+        ALTER TABLE bayesian_recommendation_batches_v24 RENAME TO bayesian_recommendation_batches;
+        CREATE INDEX idx_bayesian_recommendation_batches_version_created
+            ON bayesian_recommendation_batches(study_version_id, created_at, batch_id);
+        CREATE UNIQUE INDEX uq_bayesian_batch_report_owner
+            ON bayesian_recommendation_batches(
+                study_version_id,source_history_revision_id,batch_id);
+        CREATE TABLE bayesian_recommendation_batch_items_v24 (
+            item_id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL
+                REFERENCES bayesian_recommendation_batches(batch_id) ON DELETE CASCADE,
+            trial_id TEXT NOT NULL UNIQUE
+                REFERENCES bayesian_trials(trial_id) ON DELETE RESTRICT,
+            rank INTEGER NOT NULL CHECK (rank BETWEEN 1 AND 8),
+            item_schema_version INTEGER NOT NULL CHECK (item_schema_version IN (1,2)),
+            item_result_json TEXT NOT NULL,
+            item_result_sha256 TEXT NOT NULL CHECK (length(item_result_sha256)=64),
+            created_at TEXT NOT NULL,
+            UNIQUE(batch_id,rank)
+        );
+        INSERT INTO bayesian_recommendation_batch_items_v24
+            SELECT * FROM bayesian_recommendation_batch_items;
+        DROP TABLE bayesian_recommendation_batch_items;
+        ALTER TABLE bayesian_recommendation_batch_items_v24
+            RENAME TO bayesian_recommendation_batch_items;
+        CREATE INDEX idx_bayesian_recommendation_batch_items_batch_rank
+            ON bayesian_recommendation_batch_items(batch_id,rank);
+        CREATE TABLE bayesian_trials_v24 (
+            trial_id TEXT PRIMARY KEY,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            trial_number INTEGER NOT NULL CHECK (trial_number >= 1),
+            origin TEXT NOT NULL CHECK (origin IN ('initial_design','recommendation','replicate')),
+            state TEXT NOT NULL CHECK (state IN ('pending','completed','abandoned')),
+            actual_coordinates_json TEXT NOT NULL,
+            normalized_coordinates_json TEXT NOT NULL,
+            coordinates_sha256 TEXT NOT NULL CHECK (length(coordinates_sha256)=64),
+            objective_value REAL,
+            created_at TEXT NOT NULL,
+            closed_at TEXT,
+            replicate_of_trial_id TEXT,
+            UNIQUE(study_version_id, trial_number),
+            UNIQUE(study_version_id, trial_id),
+            CHECK ((origin='replicate' AND replicate_of_trial_id IS NOT NULL)
+                OR (origin!='replicate' AND replicate_of_trial_id IS NULL)),
+            CHECK (replicate_of_trial_id IS NULL OR replicate_of_trial_id!=trial_id),
+            FOREIGN KEY (study_version_id, replicate_of_trial_id)
+                REFERENCES bayesian_trials(study_version_id, trial_id) ON DELETE CASCADE
+        );
+        INSERT INTO bayesian_trials_v24 (
+            trial_id, study_version_id, trial_number, origin, state,
+            actual_coordinates_json, normalized_coordinates_json,
+            coordinates_sha256, objective_value, created_at, closed_at
+        ) SELECT trial_id, study_version_id, trial_number, origin, state,
+            actual_coordinates_json, normalized_coordinates_json,
+            coordinates_sha256, objective_value, created_at, closed_at FROM bayesian_trials;
+        DROP TABLE bayesian_trials;
+        ALTER TABLE bayesian_trials_v24 RENAME TO bayesian_trials;
+        CREATE INDEX idx_bayesian_trials_version_state
+            ON bayesian_trials(study_version_id, state, trial_number);
+        CREATE TABLE bayesian_replicate_requests (
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            request_id TEXT NOT NULL,
+            parent_trial_id TEXT NOT NULL,
+            source_history_revision_id TEXT NOT NULL,
+            source_history_sha256 TEXT NOT NULL CHECK (length(source_history_sha256)=64),
+            request_sha256 TEXT NOT NULL CHECK (length(request_sha256)=64),
+            request_json TEXT NOT NULL,
+            trial_ids_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (study_version_id, request_id),
+            FOREIGN KEY (study_version_id, parent_trial_id)
+                REFERENCES bayesian_trials(study_version_id, trial_id) ON DELETE CASCADE,
+            FOREIGN KEY (study_version_id, source_history_revision_id)
+                REFERENCES bayesian_observation_history_revisions(
+                    study_version_id, history_revision_id) ON DELETE CASCADE
+        );
+        """,
+    ),
 )
 
 
@@ -1681,14 +1803,30 @@ def _apply_migrations(connection: sqlite3.Connection) -> None:
                 ).fetchone()
                 if applied is not None:
                     continue
-            connection.executescript(migration.sql)
-            connection.execute(
-                """
-                INSERT OR IGNORE INTO schema_migrations (version, name)
-                VALUES (?, ?);
-                """,
-                (migration.version, migration.name),
-            )
+            if migration.requires_foreign_keys_off:
+                # SQLite table replacement must not cascade into existing child records.
+                # The replacement and FK validation still commit as one transaction.
+                connection.commit()
+                connection.execute("PRAGMA foreign_keys = OFF;")
+            try:
+                connection.executescript(migration.sql)
+                if (
+                    migration.requires_foreign_keys_off
+                    and connection.execute("PRAGMA foreign_key_check;").fetchone() is not None
+                ):
+                    raise MetadataSchemaCompatibilityError("workspace_metadata_invalid")
+                connection.execute(
+                    "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?);",
+                    (migration.version, migration.name),
+                )
+                if migration.requires_foreign_keys_off:
+                    connection.commit()
+            except Exception:
+                connection.rollback()
+                raise
+            finally:
+                if migration.requires_foreign_keys_off:
+                    connection.execute("PRAGMA foreign_keys = ON;")
         _backfill_legacy_response_revisions(connection)
 
 

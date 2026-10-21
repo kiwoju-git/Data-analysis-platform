@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GaussianProcessPointPredictionResponse, GaussianProcessRegressionResult } from "../api";
-import { gpResidualModel, gpScatterModel, gpUncertaintyModel, joinGpSurfaceRows, type GpSurfaceRequestSnapshot } from "./gpChartModels";
+import { gpResidualModel, gpScatterModel, gpSurfaceRequest, gpUncertaintyModel, joinGpSurfaceRows, type GpSurfaceRequestSnapshot } from "./gpChartModels";
 
 const snapshot: GpSurfaceRequestSnapshot = {
   modelId: "model", manifestHash: "hash", responseId: "y", xColumnId: "x1", yColumnId: "x2",
@@ -15,6 +15,20 @@ function response(): GaussianProcessPointPredictionResponse {
       latent_interval_95: { lower: 99, upper: 102 }, predictive_interval_95: { lower: 98, upper: 103 }, warnings: [] })) };
 }
 describe("GP stored chart adapters", () => {
+  it("uses numeric axes and exact category/numeric held values without mutating result", () => {
+    const result = { response: { column_id: "y" }, model_manifest: { model_id: "m", manifest_sha256: "h" }, two_predictor_surface: { grid_size: 2 }, training_ranges: [
+      { column_id: "category", display_name: "Category", kind: "nominal", levels: ["01", "1"], mode: "01" },
+      { column_id: "x", display_name: "X", minimum: 0, maximum: 1, median: .5 },
+      { column_id: "z", display_name: "Z", minimum: 10, maximum: 20, median: 15 },
+    ] } as GaussianProcessRegressionResult;
+    const before = JSON.stringify(result);
+    const captured = gpSurfaceRequest(result, "x", "z", { category: "1" });
+    expect(captured?.rows[0].values).toEqual({ category: "1", x: 0, z: 10 });
+    expect(captured?.fixedValues).toEqual(["1", .5, 15]);
+    expect(gpSurfaceRequest(result, "category", "x")).toBeNull();
+    expect(gpSurfaceRequest(result, "x", "z", { category: "unknown" })).toBeNull();
+    expect(JSON.stringify(result)).toBe(before);
+  });
   it("joins shuffled prediction responses by client ID and snapshot axis names", () => {
     const surface = joinGpSurfaceRows(snapshot, response());
     expect(surface.points.map(({ x, y, predicted_mean }) => [x, y, predicted_mean])).toEqual([[10, 1, 101], [20, 2, 100]]);

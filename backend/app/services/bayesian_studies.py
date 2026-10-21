@@ -20,6 +20,7 @@ from app.api.v1.schemas.bayesian import (
     MAX_BAYESIAN_TRIALS,
     MAX_COMPLETED_OBSERVATIONS,
     MAX_HISTORY_REVISIONS,
+    BayesianAnyTrialResponse,
     BayesianConstraintTermResponse,
     BayesianFactorResponse,
     BayesianHistoryListResponse,
@@ -32,6 +33,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianObservationCreateRequest,
     BayesianRecommendationBatchCreateRequest,
     BayesianRecommendationBatchResponse,
+    BayesianReplicateTrialResponse,
     BayesianStudyCloseRequest,
     BayesianStudyCloseResponse,
     BayesianStudyCreateRequest,
@@ -112,7 +114,7 @@ BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0"}
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"}
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
@@ -653,6 +655,13 @@ def _validate_recommendation_trial_history(
     bundle: _ValidatedStudy,
     trial: BayesianTrialRecord,
 ) -> None:
+    if trial.origin == "replicate":
+        from app.services.bayesian_replicates import validate_replicate_observation_history
+
+        validate_replicate_observation_history(
+            settings.workspace_root, trial, bundle.current_history, bundle.histories
+        )
+        return
     if trial.origin != "recommendation":
         return
     recommendation = get_bayesian_recommendation_record_for_trial(
@@ -1158,6 +1167,9 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
     if current_history is None:
         raise _artifact_error()
     _validate_histories(version, trials, histories, current_history)
+    from app.services.bayesian_replicates import validate_replicate_requests
+
+    validate_replicate_requests(settings.workspace_root, version, trials, histories)
     recommendations = list_bayesian_recommendation_records(
         settings.workspace_root,
         version.study_version_id,
@@ -1601,6 +1613,7 @@ def _validate_trials(
     if [item.trial_number for item in trials] != list(range(1, len(trials) + 1)):
         raise _artifact_error()
     seen_coordinates: set[str] = set()
+    prior_trials: dict[str, BayesianTrialRecord] = {}
     for trial in trials:
         try:
             actual = _numeric_json_dict(trial.actual_coordinates_json)
@@ -1611,9 +1624,9 @@ def _validate_trials(
         is_initial = initial_index < len(expected_actual)
         if (
             trial.study_version_id != version.study_version_id
-            or trial.origin not in {"initial_design", "recommendation"}
+            or trial.origin not in {"initial_design", "recommendation", "replicate"}
             or (is_initial and trial.origin != "initial_design")
-            or (not is_initial and trial.origin != "recommendation")
+            or (not is_initial and trial.origin not in {"recommendation", "replicate"})
             or trial.state not in {"pending", "completed", "abandoned"}
             or set(actual) != factor_ids
             or set(normalized) != factor_ids
@@ -1648,24 +1661,39 @@ def _validate_trials(
             )
             if not domain.is_executable(value):
                 raise _artifact_error()
-        expected_sha = _sha256(
-            {
-                "definition_sha256": version.definition_sha256,
-                "trial_number": trial.trial_number,
-                "origin": trial.origin,
-                "actual_coordinates": actual,
-                "normalized_coordinates": normalized,
-            }
-        )
+        coordinate_payload: dict[str, Any] = {
+            "definition_sha256": version.definition_sha256,
+            "trial_number": trial.trial_number,
+            "origin": trial.origin,
+            "actual_coordinates": actual,
+            "normalized_coordinates": normalized,
+        }
+        is_replicate = trial.origin == "replicate"
+        if is_replicate:
+            parent = prior_trials.get(trial.replicate_of_trial_id or "")
+            if (
+                parent is None
+                or parent.state != "completed"
+                or parent.actual_coordinates_json != trial.actual_coordinates_json
+                or parent.normalized_coordinates_json != trial.normalized_coordinates_json
+            ):
+                raise _artifact_error()
+            coordinate_payload["replicate_of_trial_id"] = trial.replicate_of_trial_id
+        elif trial.replicate_of_trial_id is not None:
+            raise _artifact_error()
+        expected_sha = _sha256(coordinate_payload)
         coordinate_fingerprint = _sha256(
             {
                 "actual_coordinates": actual,
                 "normalized_coordinates": normalized,
             }
         )
-        if expected_sha != trial.coordinates_sha256 or coordinate_fingerprint in seen_coordinates:
+        if expected_sha != trial.coordinates_sha256 or (
+            coordinate_fingerprint in seen_coordinates and not is_replicate
+        ):
             raise _artifact_error()
         seen_coordinates.add(coordinate_fingerprint)
+        prior_trials[trial.trial_id] = trial
         if trial.state == "pending" and (
             trial.objective_value is not None or trial.closed_at is not None
         ):
@@ -1809,10 +1837,31 @@ def _validate_recommendation_batches(
     pending_batch_count = 0
     total_items = 0
     for batch in batches:
+        if batch.result_schema_version == 2:
+            from app.services.bayesian_noise_recommendations import validate_noise_record
+
+            response_v2 = validate_noise_record(
+                settings,
+                version=version,
+                factors=factors,
+                objective=objective,
+                constraints=constraints,
+                trials=trials,
+                history=history_by_id.get(batch.source_history_revision_id),
+                record=batch,
+            )
+            v2_ids = {str(item.trial.trial_id) for item in response_v2.items}
+            if len(v2_ids) != batch.batch_size or v2_ids & mapped_trial_ids:
+                raise _artifact_error()
+            mapped_trial_ids.update(v2_ids)
+            total_items += batch.batch_size
+            if any(trial_by_id[trial_id].state == "pending" for trial_id in v2_ids):
+                pending_batch_count += 1
+            continue
         if (
             batch.study_version_id != version.study_version_id
             or batch.method_id != BAYESIAN_METHOD_ID
-            or batch.method_version != method_version
+            or batch.method_version not in {"0.4.0", "0.5.0", "0.6.0"}
             or batch.batch_policy != "greedy_posterior_mean_fantasy_ei_v1"
             or batch.config_schema_version != 1
             or batch.result_schema_version != 1
@@ -2036,6 +2085,7 @@ def _build_bayesian_study_deletion_preflight(
         recommendation_count=graph.recommendation_count,
         recommendation_batch_count=graph.recommendation_batch_count,
         recommendation_batch_item_count=graph.recommendation_batch_item_count,
+        replicate_request_count=graph.replicate_request_count,
         lifecycle_event_count=graph.lifecycle_event_count,
         metadata_record_count=(
             1
@@ -2046,6 +2096,7 @@ def _build_bayesian_study_deletion_preflight(
             + graph.recommendation_count
             + graph.recommendation_batch_count
             + graph.recommendation_batch_item_count
+            + graph.replicate_request_count
             + graph.lifecycle_event_count
             + graph.report_count
         ),
@@ -2171,7 +2222,22 @@ def _study_summary(bundle: _ValidatedStudy) -> BayesianStudySummaryResponse:
     )
 
 
-def _trial_response(trial: BayesianTrialRecord) -> BayesianTrialResponse:
+def _trial_response(trial: BayesianTrialRecord) -> BayesianAnyTrialResponse:
+    if trial.origin == "replicate":
+        return BayesianReplicateTrialResponse(
+            trial_id=UUID(trial.trial_id),
+            study_version_id=UUID(trial.study_version_id),
+            trial_number=trial.trial_number,
+            origin="replicate",
+            state=cast(Literal["pending", "completed", "abandoned"], trial.state),
+            actual_coordinates=_numeric_json_dict(trial.actual_coordinates_json),
+            normalized_coordinates=_numeric_json_dict(trial.normalized_coordinates_json),
+            coordinates_sha256=trial.coordinates_sha256,
+            objective_value=trial.objective_value,
+            created_at=trial.created_at,
+            closed_at=trial.closed_at,
+            replicate_of_trial_id=UUID(trial.replicate_of_trial_id or ""),
+        )
     return BayesianTrialResponse(
         trial_id=UUID(trial.trial_id),
         study_version_id=UUID(trial.study_version_id),
@@ -2391,7 +2457,9 @@ def _trial_counts(trials: list[BayesianTrialRecord]) -> dict[str, int]:
 
 
 def _surrogate_available(bundle: _ValidatedStudy) -> bool:
-    completed = sum(item.state == "completed" for item in bundle.trials)
+    completed = len(
+        {item.actual_coordinates_json for item in bundle.trials if item.state == "completed"}
+    )
     pending_initial = any(
         item.origin == "initial_design" and item.state == "pending" for item in bundle.trials
     )
@@ -2428,9 +2496,7 @@ def _recommendation_blockers(
         blockers.append("bayesian_study_not_active")
     if not _surrogate_available(bundle):
         blockers.append("bayesian_optimization_history_incomplete")
-    pending_recommendation = any(
-        item.origin == "recommendation" and item.state == "pending" for item in bundle.trials
-    )
+    pending_recommendation = any(item.state == "pending" for item in bundle.trials)
     if pending_recommendation:
         blockers.append("bayesian_optimization_pending_recommendation_exists")
     if len(bundle.trials) >= MAX_BAYESIAN_TRIALS:

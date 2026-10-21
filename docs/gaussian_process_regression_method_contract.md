@@ -4,19 +4,22 @@
 
 - Method ID: `regression.gaussian_process`
 - Backend module: `regression`
-- Method version: `0.3.0`
-- Result schema: `3` (schemas 1 and 2 remain readable)
+- Method version: `0.4.0`
+- Result schema: `4` (schemas 1, 2 and 3 remain readable)
 - Model manifest kind: `gaussian_process_model_manifest`
-- Model manifest schema: `3` (schemas 1 and 2 remain readable)
-- Execution: bounded synchronous analysis handler. The current analysis endpoint is a
-  synchronous FastAPI route and therefore runs outside the async event loop. It must
-  keep BLAS/OpenMP thread use at one and enforce the limits below.
+- Model manifest schema: `4` (schemas 1, 2 and 3 remain readable)
+- API contract: `26`; GPR itself adds no SQL migration.
+- Execution: a synchronous request handler outside the async event loop;
+  `standard_exact` retains its bounded inline path, while `extended_exact` fits
+  in an owned Windows-spawn-safe worker with parent wall-time enforcement.
+  Both cap BLAS/OpenMP thread use at one. Worker cancellation/timeout must not
+  commit a partial model; this does not advertise a new generic cancel button.
 
 This is a standalone supervised regression workflow. It is not the Gaussian Process
 surrogate workflow owned by Bayesian Optimization. Both workflows may use the same
 statistical family, but they have distinct user intent, configuration, results, model
-assets, and version contracts. Adding this method does not change
-`doe.bayesian_optimization` `0.6.0`.
+assets, and version contracts. BO's separately versioned noise/acquisition
+extension does not inherit standalone GPR defaults.
 
 The AI/ML domain labels that surrogate as `Used by Bayesian Optimization` and
 does not count it as available or planned work. It has no separate route or
@@ -45,13 +48,19 @@ jitter.
 ## 3. Supported inputs
 
 - One numeric response with nonzero finite sample variance.
-- One through twelve distinct numeric predictors with nonzero finite sample variance.
-- Integer and decimal columns are accepted unless their role is `id` or their
-  measurement level is nominal.
+- One through twelve distinct original predictors, numeric or nominal. Original
+  plus derived lag predictors are also limited to twelve.
+- Numeric integer/decimal predictors require nonzero finite sample variance.
+  ID-role columns are not predictors. Nominal measurement level uses full category
+  identity, including when the storage dtype is numeric; at most four nominal
+  predictors and 32 levels per nominal predictor are accepted.
 - Missing policy: `complete_case`. The result records total, used, missing-excluded,
   and nonnumeric-excluded row counts.
 - Minimum usable rows: `max(5, predictor_count + 2)`.
-- Maximum usable rows: 500. No sampling or silent truncation is permitted.
+- `standard_exact` (default): at most 500 usable rows.
+- Explicit `extended_exact`: at most 2,000 usable rows, subject to the working
+  memory, fit/start and wall-time budgets below. No sampling, option reduction or
+  silent truncation is permitted. Not every 2,000-row configuration is admissible.
 - Leave-One-Out maximum: 200 usable rows.
 - Diagnostic point limit: 100 through 2,000.
 - Conditional profile grid: at most 80 points per predictor.
@@ -59,20 +68,24 @@ jitter.
 - Stored-model prediction requests: at most 2,000 atomic rows, which includes a
   40 by 40 conditional surface without changing the analysis result.
 
-P0 does not support classification, multiple responses, categorical or datetime
+This version does not support classification, multiple responses, datetime
 predictors, custom kernel expressions, periodic-kernel search, sparse/variational GP,
 heteroscedastic noise, derivative observations, MCMC hyperparameter inference,
 process monitoring, or response optimization.
 
 ## 4. Preprocessing and leakage boundary
 
-Predictor standardization and response normalization are independent options and are
-enabled by default. A standard deviation of zero is an error; no epsilon-based fake
-variation is introduced.
+Numeric predictor standardization and response normalization are independent
+options, enabled by default, with the existing sample-SD (`ddof=1`) definitions.
+A numeric standard deviation of zero is an error; no epsilon-based fake variation
+is introduced. Category codes are equality identifiers, never scaled distances.
 
 For every validation fold, predictor means/scales, response mean/scale, kernel
 hyperparameters, observation noise, and Cholesky state are learned only from that
-fold's training rows. Validation rows are transformed with training-fold parameters.
+fold's training rows. Each training fold learns its categorical vocabulary too;
+an unseen validation category fails explicitly rather than dropping that row or
+mapping it to a different level. A constant training-fold category contributes
+kernel factor one. Validation rows use training-fold parameters only.
 The final stored model is refitted on all usable rows after validation. A validation
 model is never persisted as the final model.
 
@@ -89,6 +102,13 @@ Every preset contains a bounded constant signal amplitude and a base kernel:
 
 User-provided Python, callable optimizers, and arbitrary kernel strings are rejected.
 The default preset is `matern_5_2_ard`.
+
+For mixed inputs the numeric signal is multiplied by
+`exp(-sum(theta_j * I(category_j != category'_j)))`. Each active categorical
+theta starts at 1 with bounds `1e-4..1e2`; gradients use log-theta coordinates.
+If there are no numeric predictors, the numeric signal is amplitude alone.
+Vocabulary order has no distance meaning. This equal-correlation-per-predictor
+kernel is not a full level-pair correlation model or a claim of JMP equivalence.
 
 Default standardized-scale bounds are:
 
@@ -135,8 +155,36 @@ feature importance.
 
 ## 8. Cross-validation and metrics
 
-Validation choices are `k_fold`, `leave_one_out`, and `none`. K-Fold accepts two
-through ten folds, with shuffle enabled and seed `20260829` by default.
+Validation choices are `k_fold`, `group_k_fold`, `time_series_split`,
+`leave_one_out`, and `none`. Row K-Fold retains two through ten folds, shuffle
+enabled and seed `20260829` by default. Group and time validation require
+`shuffle=false`; the UI sends this explicitly rather than silently honoring the
+legacy true default.
+
+- Group K-Fold requires a metadata group column and at least as many distinct
+  full group identities as folds. ID-role batch columns are allowed as metadata.
+  Group identity is never truncated to a display label. Missing groups on usable
+  rows fail. This evaluates new-group generalization, not the next measurement
+  inside a known batch.
+- Time validation requires a time column with numeric unit or timestamp rule.
+  Offsets are required unless UTC interpretation is explicit. Expanding splits
+  retain equal timestamps together and satisfy training max time < validation
+  min time. Gap counts complete time blocks, not elapsed time or row count.
+- The shared split plan records source analysis-row indices, group counts,
+  actual time ranges, overlap checks and SHA-256. All compared kernels use the
+  same plan and scored rows. Warm-up rows and predeclared embargo exclusions
+  have null CV predictions; metrics including TSS/PRESS/NLPD use the same scored
+  subset. Metrics are row weighted, not group-macro metrics.
+
+Lag features default OFF. An explicit option permits positive observation-order
+lags 1..100, a fixed one-step horizon and optional series identity, with time
+validation required. Lags do not cross series or read current/future targets.
+Same-series duplicate times are ambiguous and fail. Missing prior values are
+not interpolated. Embargo source times are excluded before fitting and recorded;
+empty validation folds fail. This is rolling one-step evaluation after previous
+actual outcomes become known, not fixed-origin recursive forecasting. Irregular
+observation spacing remains irregular and is reported. Direct prediction requires
+explicit past lag values using stored virtual predictor IDs and lineage.
 
 For validation predictions, the result stores or derives:
 
@@ -185,15 +233,24 @@ Selected-model fields:
 4. cross-validation metrics;
 5. observed/fitted and observed/out-of-fold diagnostic points;
 6. residual, standardized predictive residual, and coverage diagnostics;
-7. conditional profiles varying one predictor over its training range while all other
-   predictors remain at training medians;
-8. an optional two-predictor mean and uncertainty surface, also at training medians for
-   other predictors;
+7. conditional numeric profiles and nominal level profiles, holding other numeric
+   predictors at training medians and nominal predictors at deterministic modes;
+8. an optional two-numeric-predictor mean/latent-SD/predictive-SD surface with
+   explicit applied axes and hold values;
 9. training ranges and stable warning codes;
 10. a model-manifest pointer.
 
 Profiles and surfaces are conditional slices, not partial causal effects. User column
 names and values are never localized.
+
+Schema 4 adds validation plan/coverage, feature lineage, mixed preprocessing and
+resource evidence. Initial surface axes default to the first two numeric
+predictors or an explicit numeric pair; fewer than two numeric predictors gives
+an explicit unavailable reason while profiles remain available. Existing X/Y
+selection and client-row-ID response joining remain in use. Editing hold/axis
+drafts invalidates pending responses without refitting. Explicit `surface_view`
+saving uses the completed-prediction owner/hash lifecycle; reports read that exact
+saved view, not an unrelated default pair.
 
 ## 11. Safe persistence and prediction
 
@@ -206,6 +263,12 @@ The artifact permits only numeric arrays and is loaded with `allow_pickle=False`
 The manifest records every array's name, shape, dtype, file checksum, predictor order,
 response, source dataset/version/schema hashes, scaling, kernel parameters, noise
 policy, training ranges, validation metrics, package versions, and limitations.
+Manifest 4 additionally records predictor kinds/order, category vocabularies,
+numeric preprocessing, lag lineage, validation plan and resource profile.
+Categorical train coordinates are bounded numeric equality codes in the same
+safe array format. Readers check code ranges and kernel/preprocessor mapping.
+Method-specific reader dispatch prevents GPR manifest 4 from being interpreted
+as OLS manifest 4. Legacy readers do not inject new defaults into old checksums.
 Loading rejects object dtypes, unexpected arrays, shapes, non-finite values, checksum
 mismatches, stale sources, or paths outside the workspace. No sklearn object is
 serialized.
@@ -215,6 +278,26 @@ scaled training coordinates, stored Cholesky factor, and dual coefficients. It r
 mean, latent standard deviation/interval, new-observation predictive standard
 deviation/interval, and extrapolation warnings for every atomic input row. Existing
 OLS and PLS prediction contracts are unchanged.
+Numeric values must be finite numbers; nominal values must be trained category
+strings. Numeric-looking category strings are not coerced. Unseen categories
+return a stable error. Query evaluation uses chunks of at most 256 rows without
+allocating full query-by-query covariance.
+
+## 11a. Resource admission and measured evidence
+
+`gp_resource_budget.py` estimates peak working memory from actual row count,
+fold training sizes, candidate parameter counts, restarts, retained refits and
+prediction sizes. The default estimate ceiling is 512 MiB. A 32 MiB conservative
+lag preparation estimate is included within its base reserve and rejects before
+retaining unbounded source rows. These are estimates, not OS memory enforcement.
+Extended execution has a parent-enforced wall timeout and owned-child cleanup.
+Final and fold fit elapsed times are measured, not inferred from row counts.
+
+The UI/backend defaults agree on standard profile, row K-Fold/5 folds/shuffle,
+lag OFF, seed 20260829, final restarts 3/CV restarts 0, profile points 50,
+surface grid 25, plot limit 1,000 and 120-second budget. The existing intentional
+length-scale difference remains: new standardized UI uses lower 0.5, while
+omitted legacy API settings use lower 0.01; both start at 1 and end at 100.
 
 Deleting a GP model through regression-model retention deletes the manifest and numeric
 artifact in the same validated lifecycle. Existing artifacts and checksums are not
@@ -253,7 +336,11 @@ Bayesian code path remains unchanged and consolidation is deferred.
 
 ## 14. P1 roadmap
 
-Separate contracts and method versions are required for categorical kernels, periodic
-models, sparse/variational GP, heteroscedastic noise, multi-output GP, classification,
+Separate contracts and method versions are required for richer category correlation,
+periodic models, sparse/variational GP, heteroscedastic noise, multi-output GP, classification,
 MCMC hyperparameter uncertainty, GP-based process monitoring, and GP response
-optimization. None is advertised as available in P0.
+optimization, automatic recursive multi-step forecasting and combined group-time
+validation. None is advertised by the current extension. Unit/API execution
+evidence and unrun browser/archive gates are distinguished in
+`gp_validation_extension_evidence.md`; performance evidence comes from the native
+resource benchmark rather than an assertion that every admitted fit is fast.

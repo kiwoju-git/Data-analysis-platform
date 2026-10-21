@@ -70,7 +70,7 @@ _EXPORT_KINDS = {
     "pls_completed_prediction": "completed-prediction.json",
     "managed_source_html_report": "managed-report.html",
 }
-SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22, 23})
+SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22, 23, 24})
 
 
 def _check_limits(limits: BackupLimits) -> None:
@@ -249,14 +249,17 @@ def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimi
             or source_hash != actual_source
         ):
             raise WorkspaceBackupError("workspace_backup_asset_corrupt")
-    for table, content_column, hash_column in (
+    hash_columns = [
         ("experiment_design_analyses", "result_json", "result_sha256"),
         ("bayesian_recommendations", "config_json", "config_sha256"),
         ("bayesian_recommendations", "result_json", "result_sha256"),
         ("bayesian_recommendation_batches", "config_json", "config_sha256"),
         ("bayesian_recommendation_batches", "result_json", "result_sha256"),
         ("bayesian_recommendation_batch_items", "item_result_json", "item_result_sha256"),
-    ):
+    ]
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 24:
+        hash_columns.append(("bayesian_replicate_requests", "request_json", "request_sha256"))
+    for table, content_column, hash_column in hash_columns:
         if connection.execute(
             f"SELECT 1 FROM {table} WHERE length(CAST({content_column} AS BLOB)) > ? LIMIT 1",
             (limits.max_manifest_bytes,),

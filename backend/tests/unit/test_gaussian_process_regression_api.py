@@ -64,7 +64,7 @@ def _create_gp_analysis(
         "/api/v1/analysis-runs",
         json={
             "method_id": "regression.gaussian_process",
-            "method_version": "0.3.0",
+            "method_version": "0.4.0",
             "dataset_version_id": version["version_id"],
             "filter_snapshot": {"expression_version": 1, "conditions": []},
             "roles": {"response": response_id, "predictors": ",".join(predictor_ids)},
@@ -140,7 +140,7 @@ def test_gp_analysis_persists_safe_numeric_state_and_predicts(tmp_path) -> None:
         )
 
         assert payload["method_id"] == "regression.gaussian_process"
-        assert result["schema_version"] == 3
+        assert result["schema_version"] == 4
         assert result["summary_type"] == "gaussian_process_regression"
         assert "prediction_basis" not in result
         assert result["conditional_profiles"]
@@ -303,7 +303,7 @@ def test_gp_comparison_saves_only_selected_model_and_reports_candidates(tmp_path
         model = get_regression_model_record(tmp_path, pointer["model_id"])
         manifest_bytes = (tmp_path / model.manifest_path).read_bytes()
         manifest = json.loads(manifest_bytes)
-        assert manifest["manifest_schema_version"] == 3
+        assert manifest["manifest_schema_version"] == 4
         assert manifest["kernel_selection"]["selected_preset"] == result["kernel"]["preset"]
         assert (
             manifest["candidate_summary_sha256"]
@@ -336,7 +336,7 @@ def test_gp_comparison_saves_only_selected_model_and_reports_candidates(tmp_path
         assert (tmp_path / model.manifest_path).read_bytes() == manifest_bytes
 
 
-@pytest.mark.parametrize("legacy_schema", [1, 2])
+@pytest.mark.parametrize("legacy_schema", [1, 2, 3])
 def test_gp_legacy_manifest_restore_preserves_bytes_and_predictions(
     tmp_path, legacy_schema
 ) -> None:
@@ -361,14 +361,20 @@ def test_gp_legacy_manifest_restore_preserves_bytes_and_predictions(
         assert before.status_code == 200
         manifest = json.loads(path.read_bytes())
         manifest["manifest_schema_version"] = legacy_schema
-        manifest["method_version"] = "0.1.0" if legacy_schema == 1 else "0.2.0"
+        manifest["method_version"] = f"0.{legacy_schema}.0"
+        for key in ("validation_plan", "feature_lineage", "preprocessing", "resource_budget"):
+            manifest.pop(key, None)
+        for item in manifest["predictors"]:
+            item.pop("kind", None)
+        for item in manifest["training_ranges"]:
+            item.pop("kind", None)
         for key in (
             "kernel_selection",
             "candidate_summaries",
             "candidate_summary_sha256",
             "optimizer_policy",
         ):
-            if legacy_schema == 1 or key == "optimizer_policy":
+            if legacy_schema == 1 or (legacy_schema == 2 and key == "optimizer_policy"):
                 manifest.pop(key, None)
         legacy_bytes = canonical_json_bytes(manifest)
         sha = hashlib.sha256(legacy_bytes).hexdigest()
@@ -406,7 +412,7 @@ def test_gp_applied_settings_survive_restart_and_report(tmp_path, optimizer) -> 
         path = tmp_path / record.manifest_path
         saved = path.read_bytes()
         manifest = json.loads(saved)
-        assert manifest["manifest_schema_version"] == 3
+        assert manifest["manifest_schema_version"] == 4
         assert manifest["optimizer_policy"]["optimizer"] == optimizer
         assert manifest["optimizer_policy"]["length_scale"]["lower"] == 0.5
         route = f"/api/v1/regression-models/{pointer['model_id']}/gaussian-process-predictions"

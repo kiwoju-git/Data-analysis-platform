@@ -187,9 +187,13 @@ export interface PlsPointPredictionResponse {
 export interface GaussianProcessPointPredictionRequest {
   expected_model_manifest_sha256: string;
   save_result?: boolean;
+  surface_view?: {
+    x_column_id: string; y_column_id: string; hold_values: Record<string, number | string>;
+    grid_size: number; display_mode: "mean" | "latent_sd" | "predictive_sd";
+  };
   rows: Array<{
     client_row_id: string;
-    values: Record<string, number>;
+    values: Record<string, number | string>;
   }>;
 }
 

@@ -12,6 +12,7 @@ export interface GpPredictionSource {
   readonly manifestSha256: string;
   readonly responseColumnId: string;
   readonly predictorColumnIds: readonly string[];
+  readonly nominalLevels?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface GpPredictionDraftRow {
@@ -42,6 +43,7 @@ export function gpPredictionSourceKey(source: GpPredictionSource): string {
     source.manifestSha256,
     source.responseColumnId,
     source.predictorColumnIds,
+    source.nominalLevels ?? {},
   ]);
 }
 
@@ -62,8 +64,13 @@ export function captureGpPredictionRequest(
     }
     ids.add(row.id);
     const draftValues = row.values;
-    const values = Object.fromEntries(source.predictorColumnIds.map((id) => {
+    const values = Object.fromEntries(source.predictorColumnIds.map((id): [string, number | string] => {
       const value: unknown = draftValues[id];
+      const levels = source.nominalLevels?.[id];
+      if (levels !== undefined) {
+        if (typeof value !== "string" || !levels.includes(value)) throw new Error("gp_prediction_input_invalid");
+        return [id, value];
+      }
       if (typeof value !== "string" || value.trim() === "" || !Number.isFinite(Number(value))) {
         throw new Error("gp_prediction_input_invalid");
       }
@@ -72,7 +79,7 @@ export function captureGpPredictionRequest(
     return { client_row_id: row.id, values };
   });
   return {
-    source: { ...source, predictorColumnIds: [...source.predictorColumnIds] },
+    source: { ...source, predictorColumnIds: [...source.predictorColumnIds], ...(source.nominalLevels ? { nominalLevels: Object.fromEntries(Object.entries(source.nominalLevels).map(([key, levels]) => [key, [...levels]])) } : {}) },
     request: { expected_model_manifest_sha256: source.manifestSha256, save_result: saveResult, rows: requestRows },
   };
 }
@@ -158,6 +165,9 @@ function validateSource(source: GpPredictionSource): void {
     || new Set(source.predictorColumnIds).size !== source.predictorColumnIds.length) {
     throw new Error("gp_model_manifest_invalid");
   }
+  if (source.nominalLevels !== undefined && (!isRecord(source.nominalLevels)
+    || Object.entries(source.nominalLevels).some(([id, levels]) => !source.predictorColumnIds.includes(id) || !Array.isArray(levels) || levels.length < 1 || levels.length > 32
+      || levels.some((value) => typeof value !== "string" || value.length === 0) || new Set(levels).size !== levels.length))) throw new Error("gp_model_manifest_invalid");
 }
 
 function sameKeys(values: Record<string, unknown>, keys: readonly string[]): boolean {

@@ -167,7 +167,7 @@ def test_recommendation_create_restore_complete_and_tamper_detection(tmp_path) -
         assert completed_study["completed_trial_count"] == 3
         assert completed_study["recommendation_available"] is True
 
-        assert created["method_version"] == METHOD_VERSIONS["doe.bayesian_optimization"]
+        assert study["method_version"] == METHOD_VERSIONS["doe.bayesian_optimization"]
         assert created["method_version"] == "0.6.0"
         assert created["config_schema_version"] == 1
         assert created["result_schema_version"] == 1
@@ -353,6 +353,12 @@ def test_time_budget_internal_code_is_public_budget_error() -> None:
 
 def test_worker_hard_timeout_is_public_budget_error(monkeypatch) -> None:
     class FakeQueue:
+        def get(self, timeout: float):
+            import queue
+
+            assert timeout > 0
+            raise queue.Empty
+
         def close(self) -> None:
             return None
 

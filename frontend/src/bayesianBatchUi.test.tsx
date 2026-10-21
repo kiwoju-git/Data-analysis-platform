@@ -36,7 +36,9 @@ describe("Bayesian batch and DOE presentation", () => {
     expect(html).toContain("전체 trial 예산");
     expect(html).toContain("Expected Improvement (EI)");
     expect(html).toContain("탐색 우선");
-    expect(html).toContain("posterior-mean fantasy");
+    expect(html).toContain("상관된 joint latent 표본");
+    expect(html).toContain("exact noisy EI/qNEI");
+    expect(html).not.toContain("posterior-mean fantasy");
     expect(html).toContain('class="bayesian-exploration-section"');
     expect(html).toContain('class="bayesian-exploration-options"');
     expect(html).toContain('class="result-table doe-settings-table');

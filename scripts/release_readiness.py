@@ -17,6 +17,7 @@ REQUIRED_JOBS = {
         "python311",
         "linux-release",
         "dependency-security",
+        "gp-resources",
     ),
     "dependencies": ("security-python", "security-npm"),
     "windows-e2e": ("windows-e2e",),

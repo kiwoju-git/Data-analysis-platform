@@ -3932,9 +3932,14 @@ export default function App() {
           cv: {
             method: config.validationMethod,
             folds: config.cvFolds,
-            shuffle: config.cvShuffle,
+            shuffle: config.validationMethod === "k_fold" ? config.cvShuffle : false,
             seed: config.randomSeed,
+            ...config.extensionOptions?.cv,
           },
+          lag_features: config.extensionOptions?.lag_features ?? null,
+          resource_profile: config.extensionOptions?.resource_profile ?? "standard_exact",
+          initial_surface_x_column_id: config.extensionOptions?.initial_surface_x_column_id ?? null,
+          initial_surface_y_column_id: config.extensionOptions?.initial_surface_y_column_id ?? null,
           plot_point_limit: config.plotPointLimit,
           profile_points: config.profilePoints,
           surface_grid_size: config.surfaceGridSize,
@@ -5867,7 +5872,7 @@ function isGaussianProcessRegressionResult(
   if (value === null || value === undefined || typeof value !== "object") return false;
   const candidate = value as Partial<GaussianProcessRegressionResult>;
   return (
-    (candidate.schema_version === 1 || candidate.schema_version === 2 || candidate.schema_version === 3) &&
+    (candidate.schema_version === 1 || candidate.schema_version === 2 || candidate.schema_version === 3 || candidate.schema_version === 4) &&
     candidate.summary_type === "gaussian_process_regression" &&
     candidate.model_summary !== undefined &&
     candidate.kernel !== undefined

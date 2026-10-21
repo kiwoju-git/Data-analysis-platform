@@ -218,6 +218,13 @@ _TRANSLATIONS: dict[str, tuple[str, str]] = {
         "A Gaussian Process predictive relationship does not imply causation "
         "from observational data.",
     ),
+    "gp_nominal_only_signal": (
+        "숫자형 예측변수가 없어 신호 진폭과 범주 일치 커널만 사용합니다. "
+        "숫자형 kernel preset들은 이 모형에서 서로 다른 커널 계열을 뜻하지 않습니다.",
+        "There are no numeric predictors: the signal uses amplitude and categorical "
+        "equality only. Numeric kernel presets do not represent distinct kernel "
+        "families for this model.",
+    ),
     "gp_uncertainty_conditional_on_kernel": (
         "예측 불확실성은 선택한 kernel과 적합된 hyperparameter에 조건부입니다.",
         "Predictive uncertainty is conditional on the selected kernel and fitted hyperparameters.",

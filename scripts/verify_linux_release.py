@@ -393,11 +393,87 @@ def require_browser_evidence(evidence: object, filename: str) -> None:
             raise ValueError("Initial application journey evidence is incomplete")
         require_doe_rsm_receipt(evidence.get("doe_rsm_receipt"))
         require_fractional_receipt(evidence.get("fractional_receipt"))
+        require_bo_noise_receipts(
+            evidence.get("bo_noise_receipt"), evidence.get("bo_context_receipt")
+        )
+        require_gp_extension_receipt(evidence.get("gp_extension_receipt"))
         require_doe_zoom_receipt(
             evidence.get("doe_zoom_receipt"), evidence["doe_rsm_receipt"]
         )
     else:
         raise ValueError("Unknown browser evidence phase")
+
+
+def require_gp_extension_receipt(receipt: object) -> None:
+    required = (
+        "group_form",
+        "time_form",
+        "lag_form",
+        "mixed_restore_prediction",
+        "unknown_category_api_rejected",
+        "surface_hold_saved",
+        "managed_report_reopened",
+        "source_checksums_unchanged",
+    )
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema_version") != 1
+        or receipt.get("synthetic") is not True
+        or receipt.get("status") != "succeeded"
+        or any(receipt.get(key) is not True for key in required)
+        or receipt.get("group_count") != 6
+        or receipt.get("raw_n") != 36
+        or receipt.get("forbidden_resize_locale_requests") != []
+        or {
+            (item.get("locale"), item.get("width"))
+            for item in receipt.get("locales_viewports", [])
+        }
+        != {("ko", 1024), ("ko", 1440), ("en", 1024), ("en", 1440)}
+    ):
+        raise ValueError(
+            "GPR built-UI validation/mixed/saved-view evidence is incomplete"
+        )
+
+
+def require_bo_noise_receipts(workflow: object, context: object) -> None:
+    required_workflow = (
+        "q1_target_ui",
+        "joint_batch_ui",
+        "replicate_ui",
+        "individual_observations_ui",
+        "exact_aggregation_ui",
+        "legacy_observations_unchanged",
+        "restore_ui",
+        "locale_resize_restore_do_not_post",
+    )
+    required_context = (
+        "committed_post_replayed_only_by_explicit_action",
+        "same_request_id_payload",
+        "no_duplicate_trials",
+        "history_unchanged",
+    )
+    for receipt, required in (
+        (workflow, required_workflow),
+        (context, required_context),
+    ):
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("schema_version") != 1
+            or receipt.get("synthetic") is not True
+            or receipt.get("status") != "succeeded"
+            or any(receipt.get(key) is not True for key in required)
+        ):
+            raise ValueError("BO built-UI noise/replicate evidence is incomplete")
+    if (
+        workflow.get("raw_n") != 9
+        or workflow.get("effective_n") != 7
+        or {
+            (item.get("locale"), item.get("width"))
+            for item in workflow.get("locales_viewports", [])
+        }
+        != {("ko", 1024), ("ko", 1440), ("en", 1024), ("en", 1440)}
+    ):
+        raise ValueError("BO built-UI aggregation or locale evidence is incomplete")
 
 
 def _receipt_uuid(value: object) -> bool:

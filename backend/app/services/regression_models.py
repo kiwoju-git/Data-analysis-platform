@@ -384,7 +384,10 @@ def get_regression_model_manifest(
             status_code=status.HTTP_409_CONFLICT,
         )
 
-    if manifest.get("manifest_schema_version") == 4:
+    if (
+        record.method_id == "regression.linear_model"
+        and manifest.get("manifest_schema_version") == 4
+    ):
         _validated_prediction_basis(manifest)
         try:
             LINEAR_MODEL_MANIFEST_ADAPTER.validate_python(manifest)

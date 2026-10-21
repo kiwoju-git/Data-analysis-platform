@@ -162,10 +162,10 @@ def test_schema22_upgrade_preserves_all_existing_doe_asset_bytes_and_hashes(tmp_
         assert len(before_assets) == 3
 
     upgraded = initialize_metadata_store(root)
-    assert SCHEMA_VERSION == 23
-    assert upgraded.schema_version == 23
+    assert SCHEMA_VERSION == 24
+    assert upgraded.schema_version == SCHEMA_VERSION
     with closing(sqlite3.connect(metadata_db_path(root))) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 23
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert (
             connection.execute(

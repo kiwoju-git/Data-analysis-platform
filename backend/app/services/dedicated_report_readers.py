@@ -366,18 +366,16 @@ def _verified_trial(
             )
         ):
             raise invalid()
-    if (
-        digest(
-            {
-                "definition_sha256": definition_sha256,
-                "trial_number": trial.trial_number,
-                "origin": trial.origin,
-                "actual_coordinates": actual,
-                "normalized_coordinates": normalized,
-            }
-        )
-        != trial.coordinates_sha256
-    ):
+    coordinate_payload = {
+        "definition_sha256": definition_sha256,
+        "trial_number": trial.trial_number,
+        "origin": trial.origin,
+        "actual_coordinates": actual,
+        "normalized_coordinates": normalized,
+    }
+    if trial.origin == "replicate":
+        coordinate_payload["replicate_of_trial_id"] = trial.replicate_of_trial_id
+    if digest(coordinate_payload) != trial.coordinates_sha256:
         raise invalid("report_source_changed")
     return response
 
@@ -406,8 +404,24 @@ def _batch_snapshot(
     ):
         raise invalid("report_source_changed")
     config = parsed(record.config_json)
-    request = BayesianRecommendationBatchCreateRequest.model_validate(config["request"])
-    response = BayesianRecommendationBatchResponse.model_validate(parsed(record.result_json))
+    request: Any
+    response: Any
+    if record.result_schema_version == 2:
+        from app.api.v1.schemas.bayesian_noise import (
+            BayesianNoiseBatchCreateRequest,
+            BayesianNoiseBatchResponse,
+        )
+        from app.services.bayesian_studies import get_bayesian_study
+
+        # Validate the saved graph, never regenerate the recommendation for export.
+        get_bayesian_study(settings, source.study_id)
+        request = BayesianNoiseBatchCreateRequest.model_validate(config["request"])
+        response = BayesianNoiseBatchResponse.model_validate(parsed(record.result_json))
+        completed_count = response.shared_model.raw_observation_count
+    else:
+        request = BayesianRecommendationBatchCreateRequest.model_validate(config["request"])
+        response = BayesianRecommendationBatchResponse.model_validate(parsed(record.result_json))
+        completed_count = response.shared_model.completed_observation_count
     expected_context = {
         "study_id": str(source.study_id),
         "study_version_id": str(source.study_version_id),
@@ -428,7 +442,7 @@ def _batch_snapshot(
         or provenance.get("method_id") != record.method_id
         or provenance.get("method_version") != record.method_version
         or str(request.expected_history_revision_id) != str(source.history_revision_id)
-        or response.shared_model.completed_observation_count != observation_count
+        or completed_count != observation_count
         or response.shared_model.objective_goal_type != objective_goal
     ):
         raise invalid()

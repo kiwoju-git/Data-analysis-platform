@@ -45,6 +45,8 @@ export function useGpPointPrediction(source: GpPredictionSource) {
   const isStale = staleOwner !== null && owns(staleOwner);
   const valid = rows.length > 0 && rows.length <= GP_POINT_PREDICTION_ROW_LIMIT && rows.every((row) => source.predictorColumnIds.every((id) => {
     const value = row.values[id];
+    const levels = source.nominalLevels?.[id];
+    if (levels !== undefined) return value !== undefined && levels.includes(value);
     return value !== undefined && value.trim() !== "" && Number.isFinite(Number(value));
   }));
 

@@ -43,6 +43,7 @@ from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
 from app_readiness import wait_for_app_ready
 from gp_prediction_context import verify_gp_prediction_context
+from gp_validation_extension import verify_gp_validation_extension
 from schema_concurrency import verify_schema_concurrency
 from analysis_completion import verify_analysis_completion
 from regularized_regression import verify_regularized_regression
@@ -50,6 +51,7 @@ from result_charts import verify_chart_interactions, verify_result_chart_models
 from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
 from rsm_context import verify_rsm_context
+from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from doe_rsm_completion import verify_doe_rsm_completion
 from doe_browser_zoom import verify_doe_browser_zoom
 from fractional_completion import verify_fractional_completion
@@ -217,21 +219,21 @@ C\t96.0\t89\t19.5
 
 SUITE_STAGES = {
     "context": (
-        "analysis_completion", "report_center_context", "api_translation", "chart_formatting",
-        "pilot_feedback", "rsm_context",
+        "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "chart_formatting",
+        "pilot_feedback",
     ),
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
-    "prediction": ("gp_prediction_context", "pilot_prediction"),
+    "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "legacy_workflow",
+        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "api_translation", "dataset_context",
-    "gp_prediction_context", "schema_concurrency", "chart_interactions", "result_chart_models",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "dataset_context",
+    "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
@@ -766,6 +768,9 @@ def run_browser_flow(
                 if "rsm_context" in stages:
                     diagnostics.step("verify RSM response validation and source ownership")
                     verify_rsm_context(browser, frontend_base_url, diagnostics.root / "rsm-context")
+                if "bo_noise_context" in stages:
+                    diagnostics.step("verify explicit replicate retry ownership")
+                    verify_bo_noise_context(browser, frontend_base_url, diagnostics.root / "bo-noise-context")
                 if "api_translation" in stages:
                     diagnostics.step("verify API translation boundary with synthetic inputs")
                     verify_api_translation_boundary(browser, frontend_base_url, diagnostics.root / "api-boundary", isolated_workspace=True)
@@ -775,6 +780,9 @@ def run_browser_flow(
                 if "gp_prediction_context" in stages:
                     diagnostics.step("verify saved GP prediction request context")
                     verify_gp_prediction_context(browser, frontend_base_url, diagnostics.root / "gp-prediction-context", isolated_workspace=True)
+                if "gp_validation_extension" in stages:
+                    diagnostics.step("verify GPR group/time/lag, mixed restore and saved surface forms")
+                    verify_gp_validation_extension(browser, frontend_base_url, diagnostics.root / "gp-validation-extension", isolated_workspace=True)
                 if "schema_concurrency" in stages:
                     diagnostics.step("verify two-editor schema concurrency")
                     verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
@@ -809,6 +817,9 @@ def run_browser_flow(
                     playwright, frontend_base_url, diagnostics.root,
                     rsm_receipt["design_id"], rsm_receipt["analysis_id"],
                 )
+            if "bo_noise_extension" in stages:
+                diagnostics.step("verify noise-aware target/batch/replicate visible workflow")
+                verify_bo_noise_extension(browser, frontend_base_url, diagnostics.root / "bo-noise-extension")
             if "legacy_workflow" not in stages:
                 return
             verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
@@ -4177,7 +4188,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     diagnostics.capture_page(page, "bayesian-batch-result.png")
     expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
     expect(page.get_by_text("추천", exact=True)).to_be_visible()
-    result_section.get_by_text("왜 이 조건?", exact=True).click()
+    result_section.get_by_text("계산 근거", exact=True).click()
     expect(result_section).to_contain_text("constraint_1")
     expect(result_section).to_contain_text("충족")
     expect(

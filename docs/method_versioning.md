@@ -1,5 +1,21 @@
 # Method Versioning Policy
 
+## BO/GPR Extension (2026-10-21)
+
+API26 / metadata24. BO method0.7.0 writes noise-aware config/result/item2 and
+model3 under `greedy_mc_joint_latent_improvement_v2`; the explicit V1 adapter
+retains method0.6.0 and legacy numerical semantics. Study schema4 and history1
+are unchanged. Replicate parent/idempotency and V1/V2 SQL constraints require
+the additive metadata24 migration; historical JSON hashes are unchanged.
+
+Standalone GPR method0.4.0 writes result4/manifest4 for group/time validation,
+one-step lag lineage, mixed categorical kernels and explicit resource profiles.
+Readers preserve numeric result/manifest1..3. The GPR HTML renderer is2.2.0;
+completed prediction renderer1.2.0 and BO history renderer1.2.0 expose saved
+surface/noise details without refit. Existing export artifacts are never overwritten.
+Other statistical methods retain their versions. See
+[extension contract](bo_gpr_noise_validation_extension.md).
+
 ## F01 Group Identity Correction
 
 New writes use `eda.equal_variances` 0.3.0/result schema 3,

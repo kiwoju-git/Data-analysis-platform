@@ -203,7 +203,11 @@ def test_resource_limits_match_enforced_constants_and_option_bounds():
 
     assert actual["regression.gaussian_process"] == {
         ("max_predictors", None): gp.MAX_GP_PREDICTORS,
-        ("max_usable_rows", None): gp.MAX_GP_USABLE_ROWS,
+        ("max_usable_rows", "standard_exact"): gp.MAX_GP_USABLE_ROWS,
+        ("max_usable_rows", "extended_exact"): 2000,
+        ("max_nominal_predictors", None): 4,
+        ("max_nominal_levels", None): 32,
+        ("max_estimated_working_memory", None): 512 * 1024**2,
         ("max_usable_rows", "leave_one_out"): gp.MAX_GP_LOO_ROWS,
         ("max_optimizer_starts", None): gp.MAX_GP_OPTIMIZER_STARTS,
         ("max_optimizer_restarts", "final_refit"): upper_bound(

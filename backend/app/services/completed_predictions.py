@@ -58,6 +58,8 @@ def save_completed_prediction(
     created_at = datetime.now(timezone.utc).isoformat()
     artifact_id = uuid4()
     request_payload = request.model_dump(mode="json")
+    if family == "gaussian_process" and request_payload.get("surface_view") is None:
+        request_payload.pop("surface_view", None)
     response_payload = response.model_dump(mode="json", exclude={"saved_prediction"})
     payload = {
         "schema_version": 1,
@@ -236,6 +238,11 @@ def _validate_completed_payload(
     ):
         raise ValueError("prediction rows or model mismatch")
     if isinstance(result, GaussianProcessPointPredictionResponse):
+        from app.services.gp_surface_views import validate_gp_surface_view
+
+        if not isinstance(request, GaussianProcessPointPredictionRequest):
+            raise ValueError("prediction family mismatch")
+        validate_gp_surface_view(request.surface_view, request.rows, predictors)
         for row in result.rows:
             if (
                 row.predictive_standard_deviation < row.latent_standard_deviation

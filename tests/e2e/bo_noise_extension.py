@@ -1,0 +1,308 @@
+"""Synthetic, visible BO V2 journeys shared by native CI and the exact archive."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from playwright.sync_api import Browser, Page, Route, expect
+
+from app_readiness import diagnosed_page, wait_for_app_ready
+
+ROUTE = "/analysis/doe/doe.bayesian_optimization"
+
+
+def _digest(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, allow_nan=False).encode()
+    ).hexdigest()
+
+
+def _seed(page: Page, base: str) -> dict:
+    created = page.request.post(
+        base + "/api/v1/bayesian-studies",
+        data={
+            "name": "Synthetic noise-aware target study",
+            "factors": [
+                {
+                    "factor_id": "x",
+                    "name": "Synthetic input",
+                    "low": 0,
+                    "high": 1,
+                    "unit": None,
+                }
+            ],
+            "objective": {
+                "name": "Synthetic response",
+                "unit": "mg",
+                "goal_type": "match_target",
+                "target_value": 1.5,
+                "target_tolerance": 0.05,
+                "observation_policy": "manual_single_observation",
+            },
+            "constraints": [],
+            "initial_design_seed": 17,
+            "initial_design_size": 4,
+        },
+    )
+    assert created.status == 201, created.text()
+    study = created.json()
+    revision = study["observation_history"]["history_revision_id"]
+    for index, trial in enumerate(study["trials"]):
+        saved = page.request.put(
+            base
+            + f"/api/v1/bayesian-studies/{study['study_id']}/trials/{trial['trial_id']}/observation",
+            data={
+                "objective_value": 1
+                + 2 * trial["actual_coordinates"]["x"]
+                + 0.01 * (index % 2),
+                "expected_history_revision_id": revision,
+            },
+        )
+        assert saved.status == 200, saved.text()
+        revision = saved.json()["observation_history"]["history_revision_id"]
+    return _study(page, base, study["study_id"])
+
+
+def _study(page: Page, base: str, study_id: str) -> dict:
+    response = page.request.get(base + f"/api/v1/bayesian-studies/{study_id}")
+    assert response.status == 200
+    return response.json()
+
+
+def _open(page: Page, base: str, study_id: str) -> None:
+    page.goto(base + ROUTE + f"?study_id={study_id}", wait_until="domcontentloaded")
+    wait_for_app_ready(page, "ko", ROUTE)
+    expect(page.locator("#bo-noise-mode")).to_be_enabled(timeout=20_000)
+
+
+def _recommend(page: Page) -> dict:
+    button = page.get_by_role("button", name="추천 batch 생성", exact=True)
+    expect(button).to_be_enabled(timeout=20_000)
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and urlsplit(response.url).path.endswith("/recommendation-batches"),
+        timeout=90_000,
+    ) as response:
+        button.click()
+    assert response.value.status == 201, response.value.text()
+    payload = response.value.request.post_data_json
+    result = response.value.json()
+    assert (
+        payload["schema_version"] == 2 and len(payload["expected_history_sha256"]) == 64
+    )
+    assert result["result_schema_version"] == 2
+    assert result["batch_policy"] == "greedy_mc_joint_latent_improvement_v2"
+    assert result["acquisition"]["kind"] == "expected_target_improvement"
+    expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+    for item in result["items"]:
+        assert (
+            item["trial"]["state"] == "pending"
+            and item["trial"]["objective_value"] is None
+        )
+        assert math.isfinite(item["latent_standard_deviation"])
+        assert (
+            item["predictive_standard_deviation"] >= item["latent_standard_deviation"]
+        )
+        noise = result["shared_model"]["observation_noise_sd_raw"]
+        assert math.isclose(
+            item["predictive_standard_deviation"] ** 2
+            - item["latent_standard_deviation"] ** 2,
+            noise**2,
+            abs_tol=1e-10,
+            rel_tol=1e-8,
+        )
+        assert (
+            item["planning"]["representative_prediction_source"]
+            == "completed_observations_base_posterior"
+        )
+    return result
+
+
+def _observe_visible(page: Page, trials: list[dict]) -> None:
+    for index, trial in enumerate(trials):
+        field = page.get_by_label(f"Trial {trial['trial_number']} 관측값", exact=True)
+        expect(field).to_be_visible(timeout=20_000)
+        field.fill(str(1 + 2 * trial["actual_coordinates"]["x"] + 0.02 * index))
+    count = len(trials)
+    page.get_by_role("button", name=f"입력한 관측 {count}건 저장", exact=True).click()
+    with page.expect_response(
+        lambda response: response.request.method == "PUT"
+        and response.url.endswith("/observations/batch")
+    ) as saved:
+        page.get_by_role("alertdialog").get_by_role(
+            "button", name=f"{count}건 저장", exact=True
+        ).click()
+    assert saved.value.status == 200
+    for trial in trials:
+        expect(
+            page.get_by_label(f"Trial {trial['trial_number']} 관측값", exact=True)
+        ).to_have_count(0)
+
+
+def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict:
+    with diagnosed_page(browser, output, "bo-noise-workflow", locale="ko") as page:
+        ui_posts: list[str] = []
+        page.on(
+            "request",
+            lambda request: ui_posts.append(urlsplit(request.url).path)
+            if request.method == "POST"
+            else None,
+        )
+        study = _seed(page, base)
+        original = _digest(study["trials"])
+        _open(page, base, study["study_id"])
+        expect(page.locator("#bo-noise-mode")).to_have_value("estimate")
+        first = _recommend(page)
+        assert (
+            first["batch_size"] == 1
+            and first["items"][0]["planning"]["effective_sample_count"] == 0
+        )
+        _observe_visible(page, [item["trial"] for item in first["items"]])
+        page.locator(
+            'input[name="bayesian-execution-mode"][value="parallel_batch"]'
+        ).check()
+        page.locator("#bayesian-recommendation-batch-size").fill("2")
+        batch = _recommend(page)
+        assert batch["batch_size"] == 2
+        assert batch["items"][1]["planning"]["effective_sample_count"] == 64
+        assert batch["items"][1]["planning"]["conditioned_on_selected_ranks"] == [1]
+        _observe_visible(page, [item["trial"] for item in batch["items"]])
+        page.locator("#bo-replicate-parent").select_option(
+            study["trials"][0]["trial_id"]
+        )
+        page.locator("#bo-replicate-count").fill("2")
+        page.get_by_label(
+            "같은 조건의 독립적인 추가 실험을 의도했음을 확인합니다."
+        ).check()
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/replicates")
+        ) as replicated:
+            page.get_by_role("button", name="반복 실험 등록", exact=True).click()
+        assert replicated.value.status == 201
+        replicates = replicated.value.json()["trials"]
+        assert len(replicates) == 2 and all(
+            row["origin"] == "replicate" for row in replicates
+        )
+        _observe_visible(page, replicates)
+        page.locator("#bo-observation-policy").select_option("exact_replicates")
+        page.locator(
+            'input[name="bayesian-execution-mode"][value="sequential_single"]'
+        ).check()
+        compressed = _recommend(page)
+        view = compressed["observation_view"]
+        assert view["mode"] == "exact_replicates" and view["raw_observation_count"] == 9
+        assert (
+            view["effective_training_count"] == 7
+            and view["unique_condition_count"] == 7
+        )
+        assert any(
+            group["n"] == 3
+            and study["trials"][0]["trial_id"] in group["member_trial_ids"]
+            for group in view["groups"]
+        )
+        restored = _study(page, base, study["study_id"])
+        assert _digest(restored["trials"][:4]) == original
+        assert (
+            restored["completed_trial_count"] == 9
+            and restored["pending_trial_count"] == 1
+        )
+        snapshots = []
+        posts_before_display_changes = len(ui_posts)
+        for locale, label in (("en", "ENG"), ("ko", "KOR")):
+            page.locator(".language-switcher button").filter(has_text=label).click()
+            expect(page.locator("html")).to_have_attribute("lang", locale)
+            for width in (1024, 1440):
+                page.set_viewport_size({"width": width, "height": 1000})
+                expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+                assert (
+                    page.evaluate(
+                        "document.documentElement.scrollWidth - document.documentElement.clientWidth"
+                    )
+                    <= 1
+                )
+                path = output / f"bo-noise-{locale}-{width}.png"
+                page.screenshot(path=str(path), full_page=True)
+                snapshots.append({"locale": locale, "width": width})
+        page.reload(wait_until="domcontentloaded")
+        wait_for_app_ready(page, "ko", ROUTE)
+        expect(page.locator("#bo-observation-policy")).to_have_value("exact_replicates")
+        expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+        assert len(ui_posts) == posts_before_display_changes
+        saved = page.request.get(
+            base
+            + f"/api/v1/bayesian-studies/{study['study_id']}/recommendation-batches/{compressed['batch_id']}"
+        )
+        assert saved.status == 200 and saved.json()["observation_view"] == view
+        return {
+            "schema_version": 1,
+            "synthetic": True,
+            "status": "succeeded",
+            "study_id": study["study_id"],
+            "q1_target_ui": True,
+            "joint_batch_ui": True,
+            "replicate_ui": True,
+            "individual_observations_ui": True,
+            "exact_aggregation_ui": True,
+            "legacy_observations_unchanged": True,
+            "restore_ui": True,
+            "locale_resize_restore_do_not_post": True,
+            "raw_n": 9,
+            "effective_n": 7,
+            "locales_viewports": snapshots,
+            "source_history_sha256": compressed["source_observation_history_sha256"],
+        }
+
+
+def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
+    with diagnosed_page(browser, output, "bo-replicate-context", locale="ko") as page:
+        study = _seed(page, base)
+        _open(page, base, study["study_id"])
+        page.locator("#bo-replicate-parent").select_option(
+            study["trials"][0]["trial_id"]
+        )
+        page.get_by_label(
+            "같은 조건의 독립적인 추가 실험을 의도했음을 확인합니다."
+        ).check()
+        requests: list[dict] = []
+
+        def committed_but_disconnected(route: Route) -> None:
+            requests.append(route.request.post_data_json)
+            result = route.fetch()
+            assert result.status == 201
+            route.fulfill(
+                status=503,
+                content_type="application/json",
+                json={"error": {"code": "synthetic_connection_lost"}},
+            )
+
+        pattern = "**/api/v1/bayesian-studies/*/trials/*/replicates"
+        page.route(pattern, committed_but_disconnected)
+        page.get_by_role("button", name="반복 실험 등록", exact=True).click()
+        retry = page.get_by_role("button", name="동일 요청 확인/재시도", exact=True)
+        expect(retry).to_be_enabled()
+        assert len(requests) == 1
+        page.unroute(pattern)
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/replicates")
+        ) as retried:
+            retry.click()
+        assert retried.value.status == 201 and retried.value.json()["replayed"] is True
+        assert retried.value.request.post_data_json == requests[0]
+        restored = _study(page, base, study["study_id"])
+        assert len(restored["trials"]) == 5 and restored["pending_trial_count"] == 1
+        assert restored["observation_history"] == study["observation_history"]
+        return {
+            "schema_version": 1,
+            "synthetic": True,
+            "status": "succeeded",
+            "committed_post_replayed_only_by_explicit_action": True,
+            "same_request_id_payload": True,
+            "no_duplicate_trials": True,
+            "history_unchanged": True,
+        }

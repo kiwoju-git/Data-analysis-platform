@@ -177,6 +177,9 @@ def verify_prediction_html(page: Page, path: Path, payload: dict, locale: str) -
     for shown, saved in zip(inputs, payload["request"]["rows"], strict=True):
         assert shown[0] == saved["client_row_id"]
         for value, predictor in zip(shown[1:], payload["predictors"], strict=True):
+            if predictor.get("kind") == "nominal":
+                assert value == saved["values"][predictor["column_id"]]
+                continue
             assert math.isclose(
                 float(value),
                 saved["values"][predictor["column_id"]],

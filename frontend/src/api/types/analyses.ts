@@ -60,7 +60,7 @@ export interface AnalysisExecutionCapability {
 export interface AnalysisResourceLimit {
   name: string;
   value: number;
-  unit: "predictors" | "rows" | "components" | "starts" | "restarts" | "seconds" | "workers" | "points_per_group";
+  unit: "predictors" | "rows" | "components" | "starts" | "restarts" | "seconds" | "workers" | "points_per_group" | "levels_per_predictor" | "bytes";
   variant?: string | null;
 }
 

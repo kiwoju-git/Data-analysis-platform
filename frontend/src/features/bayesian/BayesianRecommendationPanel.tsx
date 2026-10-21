@@ -3,6 +3,7 @@ import type {
   BayesianExplorationProfile,
   BayesianRecommendationBatchItemResponse,
   BayesianRecommendationBatchResponse,
+  BayesianLegacyRecommendationBatchResponse,
   BayesianRecommendationResponse,
   BayesianStudyResponse,
 } from "../../api";
@@ -19,6 +20,9 @@ import { DoeSettingsTable } from "../../doe/DoeSettingsTable";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { translateSystemText } from "../../i18n/translate";
 import type { AppLocale } from "../../i18n/types";
+import { BayesianNoiseSettings } from "./BayesianNoiseSettings";
+import { BayesianNoiseBatchResult } from "./BayesianNoiseBatchResult";
+import { boText, buildNoisePolicy, defaultNoiseDraft, type BayesianNoiseDraft } from "./boNoisePolicy";
 
 const EXPLORATION_OPTIONS: Array<{
   value: BayesianExplorationProfile;
@@ -64,6 +68,9 @@ export function BayesianRecommendationPanel({
   onCustomXiChange,
   onBudgetChange,
   onRecommend,
+  noiseDraft = defaultNoiseDraft,
+  onNoiseDraftChange = () => undefined,
+  draftChanged = false,
 }: {
   study: BayesianStudyResponse;
   batch: BayesianRecommendationBatchResponse | null;
@@ -81,6 +88,9 @@ export function BayesianRecommendationPanel({
   onCustomXiChange: (value: string) => void;
   onBudgetChange: (value: string) => void;
   onRecommend: () => void;
+  noiseDraft?: BayesianNoiseDraft;
+  onNoiseDraftChange?: (value: BayesianNoiseDraft) => void;
+  draftChanged?: boolean;
 }) {
   const { locale } = useI18n();
   const parsedBatchSize =
@@ -109,6 +119,7 @@ export function BayesianRecommendationPanel({
     budgetBlocker !== null ||
     batchSizeInvalid ||
     customXiInvalid ||
+    buildNoisePolicy(noiseDraft, study.factors).payload === null ||
     isRecommending;
   const settingsDisabled =
     actionsDisabled || study.status !== "active" || isRecommending;
@@ -127,6 +138,7 @@ export function BayesianRecommendationPanel({
       </div>
 
       <div className="bayesian-recommendation-settings">
+        <BayesianNoiseSettings study={study} draft={noiseDraft} disabled={settingsDisabled} onChange={onNoiseDraftChange} />
         <DoeSettingsTable
           ariaLabel="Bayesian 다음 실험 추천 설정"
           fields={[
@@ -260,14 +272,10 @@ export function BayesianRecommendationPanel({
           <summary>EI와 고급 탐색 설정</summary>
           <div className="info-box">
             <p>
-              μ는 GP 예측 평균, σ는 posterior 불확실성, incumbent는 현재
-              최선의 실제 관측, ξ는 추가 개선 요구량입니다. 알고리즘은 실행
-              가능한 새 후보 중 acquisition 값이 큰 조건을 찾습니다.
+              {boText(locale, "EI/ETI는 latent 평균과 SD를 사용하며, 기준값은 실제 관측 위치의 posterior 평균입니다. 관측 최선값과는 다릅니다. ξ는 표준화 Y 단위입니다.", "EI/ETI use latent mean and SD, with a posterior-mean incumbent at completed locations. This differs from the best observation. Xi is in standardized Y units.")}
             </p>
             <p>
-              내부 후보 풀은 단계당 256개이며 추천 개수와 다른 값입니다.
-              batch는 exact joint qEI가 아니라 앞선 조건을 posterior-mean
-              fantasy로 조건화하는 deterministic greedy 정책입니다.
+              {boText(locale, "내부 후보 풀은 단계당 256개입니다. 새 배치는 상관된 joint latent 표본의 한계 개선량을 평균하며, exact noisy EI/qNEI나 JMP 내부 알고리즘으로 표시하지 않습니다.", "The pool contains 256 candidates per step. New batches average marginal improvement over correlated joint latent samples; this is not exact noisy EI/qNEI or JMP's internal algorithm.")}
             </p>
           </div>
         </details>
@@ -301,8 +309,9 @@ export function BayesianRecommendationPanel({
         </button>
       </div>
 
+      {draftChanged && batch !== null ? <p className="notice-box" role="status">{boText(locale, "설정이 변경되었습니다. 아래는 이전에 저장된 추천이며 현재 설정의 계산 결과가 아닙니다.", "Settings changed. The saved recommendation below does not represent the current draft.")}</p> : null}
       {batch !== null ? (
-        <BayesianBatchResult batch={batch} />
+        batch.result_schema_version === 2 ? <BayesianNoiseBatchResult batch={batch} study={study} /> : <BayesianBatchResult batch={batch} />
       ) : recommendation !== null ? (
         <LegacyRecommendationResult recommendation={recommendation} />
       ) : null}
@@ -313,7 +322,7 @@ export function BayesianRecommendationPanel({
 function BayesianBatchResult({
   batch,
 }: {
-  batch: BayesianRecommendationBatchResponse;
+  batch: BayesianLegacyRecommendationBatchResponse;
 }) {
   const { locale } = useI18n();
   return (

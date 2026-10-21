@@ -8,7 +8,17 @@ def method_resource_limits(method_id: str) -> list[AnalysisResourceLimit] | None
     entries: dict[str, list[AnalysisResourceLimit]] = {
         "regression.gaussian_process": [
             AnalysisResourceLimit(name="max_predictors", value=12, unit="predictors"),
-            AnalysisResourceLimit(name="max_usable_rows", value=500, unit="rows"),
+            AnalysisResourceLimit(
+                name="max_usable_rows", value=500, unit="rows", variant="standard_exact"
+            ),
+            AnalysisResourceLimit(
+                name="max_usable_rows", value=2000, unit="rows", variant="extended_exact"
+            ),
+            AnalysisResourceLimit(name="max_nominal_predictors", value=4, unit="predictors"),
+            AnalysisResourceLimit(name="max_nominal_levels", value=32, unit="levels_per_predictor"),
+            AnalysisResourceLimit(
+                name="max_estimated_working_memory", value=512 * 1024**2, unit="bytes"
+            ),
             AnalysisResourceLimit(
                 name="max_usable_rows", value=200, unit="rows", variant="leave_one_out"
             ),

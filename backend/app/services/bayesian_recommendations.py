@@ -10,7 +10,6 @@ from uuid import UUID, uuid4
 from fastapi import status
 from pydantic import ValidationError
 
-from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
     MAX_BAYESIAN_TRIALS,
     MAX_COMPLETED_OBSERVATIONS,
@@ -69,7 +68,7 @@ def create_bayesian_recommendation(
         raise _optimization_error("bayesian_optimization_history_stale")
     if any(trial.origin == "initial_design" and trial.state == "pending" for trial in study.trials):
         raise _optimization_error("bayesian_optimization_history_incomplete")
-    if any(trial.origin == "recommendation" and trial.state == "pending" for trial in study.trials):
+    if any(trial.state == "pending" for trial in study.trials):
         raise _optimization_error("bayesian_optimization_pending_recommendation_exists")
     completed = [trial for trial in study.trials if trial.state == "completed"]
     if (
@@ -144,7 +143,7 @@ def create_bayesian_recommendation(
         created_at=created_at,
         closed_at=None,
     )
-    method_version = METHOD_VERSIONS[BAYESIAN_METHOD_ID]
+    method_version = "0.6.0"
     config_payload = {
         "schema_version": BAYESIAN_RECOMMENDATION_CONFIG_SCHEMA_VERSION,
         "study_id": str(study.study_id),
@@ -387,7 +386,7 @@ def _with_current_context(
 def _recommendation_worker_payload(
     study: Any,
     body: BayesianRecommendationCreateRequest,
-    completed: list[BayesianTrialResponse],
+    completed: list[Any],
 ) -> dict[str, Any]:
     return {
         "factors": [
@@ -462,19 +461,15 @@ def _run_worker(payload: dict[str, Any], *, timeout_ms: int) -> dict[str, Any]:
     output_queue = context.Queue(maxsize=1)
     process = context.Process(target=bayesian_worker_entry, args=(output_queue, payload))
     process.start()
-    process.join(timeout_ms / 1000.0)
-    if process.is_alive():
-        process.terminate()
-        process.join(timeout=5.0)
-        output_queue.close()
-        output_queue.join_thread()
-        process.close()
-        raise _optimization_error("bayesian_optimization_budget_exhausted")
     try:
-        message = output_queue.get(timeout=2.0)
+        message = output_queue.get(timeout=timeout_ms / 1000.0)
+        process.join(timeout=5.0)
     except queue.Empty as exc:
-        raise _optimization_error("bayesian_optimization_surrogate_fit_failed") from exc
+        raise _optimization_error("bayesian_optimization_budget_exhausted") from exc
     finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5.0)
         output_queue.close()
         output_queue.join_thread()
         process.close()

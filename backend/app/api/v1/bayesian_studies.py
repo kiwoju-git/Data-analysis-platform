@@ -5,17 +5,16 @@ from fastapi import APIRouter, Query, Request, Response, status
 from app.api.v1.schemas.bayesian import (
     BayesianHistoryListResponse,
     BayesianHistoryRevisionResponse,
-    BayesianLatestRecommendationBatchResponse,
     BayesianLatestRecommendationResponse,
     BayesianObservationBatchCreateRequest,
     BayesianObservationBatchCreateResponse,
     BayesianObservationCreateRequest,
     BayesianRecommendationBatchCreateRequest,
-    BayesianRecommendationBatchListResponse,
-    BayesianRecommendationBatchResponse,
     BayesianRecommendationCreateRequest,
     BayesianRecommendationListResponse,
     BayesianRecommendationResponse,
+    BayesianReplicateCreateRequest,
+    BayesianReplicateCreateResponse,
     BayesianStudyCloseRequest,
     BayesianStudyCloseResponse,
     BayesianStudyCreateRequest,
@@ -27,6 +26,14 @@ from app.api.v1.schemas.bayesian import (
     BayesianTrialAbandonRequest,
     BayesianTrialListResponse,
     BayesianTrialTransitionResponse,
+)
+from app.api.v1.schemas.bayesian_noise import (
+    BayesianAnyBatchListResponse,
+    BayesianAnyBatchResponse,
+    BayesianAnyLatestBatchResponse,
+    BayesianNoiseBatchCreateRequest,
+    BayesianNoiseBatchResponse,
+    BayesianNoiseSingleCreateRequest,
 )
 from app.services.bayesian_recommendation_batches import (
     create_bayesian_recommendation_batch,
@@ -40,6 +47,7 @@ from app.services.bayesian_recommendations import (
     get_latest_bayesian_recommendation,
     list_bayesian_recommendations,
 )
+from app.services.bayesian_replicates import create_bayesian_replicates
 from app.services.bayesian_studies import (
     abandon_bayesian_trial,
     bayesian_initial_design_csv,
@@ -57,6 +65,20 @@ from app.services.bayesian_studies import (
 )
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
+
+
+@router.post(
+    "/{study_id}/trials/{trial_id}/replicates",
+    response_model=BayesianReplicateCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_bayesian_replicates_route(
+    request: Request,
+    study_id: UUID,
+    trial_id: UUID,
+    body: BayesianReplicateCreateRequest,
+) -> BayesianReplicateCreateResponse:
+    return create_bayesian_replicates(request.app.state.settings, study_id, trial_id, body)
 
 
 @router.post(
@@ -210,14 +232,18 @@ def get_bayesian_history_route(
 
 @router.post(
     "/{study_id}/recommendations",
-    response_model=BayesianRecommendationResponse,
+    response_model=BayesianRecommendationResponse | BayesianNoiseBatchResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_recommendation_route(
     request: Request,
     study_id: UUID,
-    body: BayesianRecommendationCreateRequest,
-) -> BayesianRecommendationResponse:
+    body: BayesianRecommendationCreateRequest | BayesianNoiseSingleCreateRequest,
+) -> BayesianRecommendationResponse | BayesianNoiseBatchResponse:
+    if isinstance(body, BayesianNoiseSingleCreateRequest):
+        from app.services.bayesian_noise_recommendations import create_noise_single
+
+        return create_noise_single(request.app.state.settings, study_id, body)
     return create_bayesian_recommendation(request.app.state.settings, study_id, body)
 
 
@@ -271,14 +297,14 @@ def get_bayesian_recommendation_route(
 
 @router.post(
     "/{study_id}/recommendation-batches",
-    response_model=BayesianRecommendationBatchResponse,
+    response_model=BayesianAnyBatchResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_recommendation_batch_route(
     request: Request,
     study_id: UUID,
-    body: BayesianRecommendationBatchCreateRequest,
-) -> BayesianRecommendationBatchResponse:
+    body: BayesianRecommendationBatchCreateRequest | BayesianNoiseBatchCreateRequest,
+) -> BayesianAnyBatchResponse:
     return create_bayesian_recommendation_batch(
         request.app.state.settings,
         study_id,
@@ -288,14 +314,14 @@ def create_bayesian_recommendation_batch_route(
 
 @router.get(
     "/{study_id}/recommendation-batches",
-    response_model=BayesianRecommendationBatchListResponse,
+    response_model=BayesianAnyBatchListResponse,
 )
 def list_bayesian_recommendation_batches_route(
     request: Request,
     study_id: UUID,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
-) -> BayesianRecommendationBatchListResponse:
+) -> BayesianAnyBatchListResponse:
     return list_bayesian_recommendation_batches(
         request.app.state.settings,
         study_id,
@@ -306,12 +332,12 @@ def list_bayesian_recommendation_batches_route(
 
 @router.get(
     "/{study_id}/recommendation-batches/latest",
-    response_model=BayesianLatestRecommendationBatchResponse,
+    response_model=BayesianAnyLatestBatchResponse,
 )
 def get_latest_bayesian_recommendation_batch_route(
     request: Request,
     study_id: UUID,
-) -> BayesianLatestRecommendationBatchResponse:
+) -> BayesianAnyLatestBatchResponse:
     return get_latest_bayesian_recommendation_batch(
         request.app.state.settings,
         study_id,
@@ -320,13 +346,13 @@ def get_latest_bayesian_recommendation_batch_route(
 
 @router.get(
     "/{study_id}/recommendation-batches/{batch_id}",
-    response_model=BayesianRecommendationBatchResponse,
+    response_model=BayesianAnyBatchResponse,
 )
 def get_bayesian_recommendation_batch_route(
     request: Request,
     study_id: UUID,
     batch_id: UUID,
-) -> BayesianRecommendationBatchResponse:
+) -> BayesianAnyBatchResponse:
     return get_bayesian_recommendation_batch(
         request.app.state.settings,
         study_id,

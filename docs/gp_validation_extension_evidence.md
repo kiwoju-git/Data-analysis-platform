@@ -1,0 +1,150 @@
+# GPR validation extension evidence
+
+## Contract
+
+This extends standalone GPR validation, not the BO surrogate policy. Existing
+numeric K-fold, LOO, normalization, kernel optimization and fitted-model values
+retain their existing calculation paths.
+
+- `group_k_fold` requires `cv.group_column_id`, `shuffle=false`, 2-10 folds and
+  at least as many distinct full group identities. An ID-role column is valid
+  metadata and is not automatically a predictor. Missing group identity on an
+  otherwise usable row is an error. This evaluates new-group generalization.
+- `time_series_split` requires a time column, explicit numeric unit or timestamp
+  format, and `shuffle=false`. Timestamps require an offset unless UTC is
+  explicitly requested. Equal timestamps remain in one block. Expanding folds
+  have strictly earlier training times. `gap_time_blocks` counts time blocks,
+  not rows or elapsed time. Unequal elapsed time spans are retained in evidence.
+- Optional `lag_features` has positive observation-order lags 1-100, a fixed
+  one-step horizon, optional series ID, and time validation only. Lags never
+  cross series, use current/future targets, or interpolate missing observations.
+  Duplicate timestamps within a series are ambiguous and rejected. Irregular
+  observation spacing is reported. This is rolling one-step evaluation after
+  prior actual outcomes become known, not fixed-origin recursive forecasting.
+- Lag sources in the fold's embargo interval are forbidden. Affected validation
+  rows are excluded by the shared plan before fitting and recorded explicitly;
+  an empty validation fold fails. No failed fitted fold is silently removed.
+- Original and derived predictors together are limited to 12. Lag input sources
+  must be numeric, non-nominal, non-ID columns. Response lag is permitted only
+  with positive lag. Direct prediction requires explicit derived past-lag values;
+  it does not read the unknown response of the prediction target.
+
+The split plan is created once and shared by all compared kernels. Numeric
+scaling, response normalization and kernel/noise fitting remain fold-local.
+Initial training-only and embargo-excluded rows have null CV diagnostics. PRESS,
+TSS, RMSE, MAE, NLPD and interval metrics use exactly the scored-row mask. Stored
+metrics remain row weighted, not group macro metrics.
+
+Result and manifest carry the plan, hash, fold row indices/group counts/time
+ranges, scored coverage, and lag lineage. Row indices retain the established
+filtered-snapshot, zero-based analysis-row meaning. They are not invented
+canonical dataset row identifiers. Lag lineage records past source indices and
+times, target time and explicit exclusion reasons.
+
+## Implementation boundaries
+
+Pure helpers: `gp_validation.py`, `gp_time_features.py`.
+Integration: `gaussian_process_regression.py`,
+`gaussian_process_kernel_selection.py`,
+`analysis_runner_gaussian_process.py`, and typed options in `schemas/analyses.py`.
+No SQL change or old artifact rewrite is required. The overall change owns the
+new GPR result/manifest version and legacy 1/2/3 reader dispatch separately.
+
+GPR method 0.4.0/result 4/manifest 4 use explicit readers alongside manifests
+1/2/3. Numeric-only calculations keep the existing numerical path. Mixed
+predictors use numeric-only scaling and full categorical identities; each fold
+learns its own vocabulary. Unseen validation or prediction categories fail
+explicitly. At most 4 nominal predictors with 32 levels each are permitted;
+original plus derived predictors remain limited to 12. Nominal-only covariance
+uses signal amplitude times the categorical mismatch kernel, not a numerical
+distance between category codes. NPZ remains six bounded numeric arrays, with no
+object array or pickle. Profiles use discrete categories, and surfaces only use
+numeric axes with numeric median/categorical mode hold values.
+
+`standard_exact` remains at 500 valid rows. `extended_exact` admits at most 2,000
+only after the conservative 512 MiB working-memory estimate, fit budget and
+option checks. Extended fitting runs in the owned spawn worker. Large query
+prediction is chunked at 256 rows, without a query-by-query joint covariance.
+Lag preparation has a separate conservative 32 MiB estimate for retained rows,
+strings, observation sorting and lineage, within the general base reserve. This
+is a preflight estimate, not an OS-enforced memory limit. It raises
+`gp_parse_memory_budget_exceeded` rather than truncating rows. Streaming parsing
+also stops with `gp_usable_rows_limit` immediately after the first excess valid
+row. Existing source artifacts are not deleted on either failure.
+
+Recorded fit timings are actual elapsed model construction/fit time, excluding
+preprocessing and prediction. Final fit and per-fold values are separate; CV
+fit time is their sum. Worker RSS evidence and full resource benchmarks are
+recorded by the separate resource-verification harness.
+
+## Executed evidence
+
+Windows, CPython 3.10 virtual environment, single numerical-library threads,
+synthetic fixtures and isolated temporary workspaces only.
+
+- Initial new helper tests failed at import before implementation (red).
+- First 12 pure/calculation tests passed in 8.45 seconds.
+- First API/options integration: 20 tests passed in 31.33 seconds, including real
+  CSV ingestion, ID-role group metadata, saved result/model restore, and explicit
+  lag-value direct prediction matching the stored fitted value at 1e-9 tolerance.
+- Existing seven GPR unit/reference/API/report suites plus those 20 tests:
+  123 passed in 160.53 seconds. Five existing Starlette deprecation warnings.
+- An added candidate-details parity test initially failed because optional
+  retained candidate details omitted the common plan. That field was added;
+  this failure did not indicate a different split or different fitted values.
+- Mypy: six owned source files passed after an Optional metric type correction.
+- Mixed integration first failed on the old numeric-only parser, then four
+  tests passed, including category-label bijection, nominal-only fitting,
+  unseen-fold rejection and safe state reconstruction.
+- Manifest 4 initially encountered the generic OLS manifest-4 validator. The
+  dispatch is now method-specific. Ten API extension tests then passed in
+  38.78 seconds, including 501-row spawned fitting and 600 saved-model queries.
+- Lag memory/early row-limit tests first failed twice, then passed twice after
+  explicit bounded preparation and immediate valid-row limit checks.
+- Independent review reproduced an overly strict GroupKFold boundary: five rows,
+  five groups and five folds were rejected although every training fold has four
+  rows. The group-only guard was corrected, preserving old row-KFold policy;
+  independent sklearn and actual GP boundary tests plus validation tests passed
+  (20 tests, 12.50 seconds).
+- Nominal-only models now persist a warning that numeric kernel presets are
+  inactive as distinct numeric families. KO/EN component rendering passed eight
+  tests. Mixed and nominal-only real API fitting, safe model restore, saved
+  prediction and unknown-category/type rejection passed two parameterized tests
+  in 49.53 seconds. This warning does not change fitting or switch presets.
+- The combined existing GPR and new validation/mixed/resource/API/reader suites,
+  plus execution/catalog checks, produced 196 passed and one failure in
+  327.71 seconds. The sole failure was the not-yet-regenerated capability matrix
+  still containing API 25 while runtime had moved to 26, not a GP calculation
+  failure. The complete product generator/full-check gate remains separate.
+- After the group boundary and nominal-only warning corrections, the focused
+  ten-suite GPR legacy/reference/API/report/context/extension matrix passed all
+  123 tests in 348.59 seconds. It ran concurrently with other validation work;
+  that duration is test evidence, not an isolated performance benchmark.
+- E2E suite partition and exact-archive receipt verifier tests passed 255 tests
+  in 9.96 seconds. These check harness wiring/required receipts, not execution
+  of the browser forms themselves. Owned seven-file mypy, Ruff checks and
+  Python compilation of the five changed browser/verifier modules passed.
+
+`tests/e2e/gp_validation_extension.py` is connected to the `prediction` suite and
+the exact-archive initial journey. It prepares only synthetic CSV through API,
+then manipulates Group/Time/lag forms, mixed saved-model prediction, categorical
+surface holds and explicit view saving. Managed report reopening/downloads and
+KO/EN 1024/1440 resizing are asserted. Unknown-category rejection is explicitly
+an API check, since the UI offers only trained categories. The archive verifier
+requires the receipt, including zero locale/resize fit/prediction POSTs. These
+new browser scenarios were written but not locally executed because server
+launch was denied by the environment policy; native CI must provide execution
+evidence before release.
+
+Test files: `test_gp_validation_extension.py` and
+`test_gp_validation_extension_api.py`. Assertions include full long group IDs,
+disjoint groups, equal-time blocks, timestamp offsets, fold-local means, independent
+scored PRESS/RMSE calculation, past-only/series-isolated lag lineage, embargo
+exclusion, missing/ambiguous metadata, serialization without NaN, stored hashes,
+and missing lag input rejection.
+
+Browser forms, KO/EN labels, built Linux archive, native CI and resource-profile
+benchmarks are separate integration gates; the above Python/API evidence does
+not claim those gates passed. HTML export smoke uses stored result and checks
+table/SVG presence and unchanged model bytes; it does not yet establish visible
+parity for every new validation-plan field.

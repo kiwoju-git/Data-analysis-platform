@@ -522,6 +522,57 @@ jobs:
           path: .tmp/numerics-py311
           if-no-files-found: ignore
 
+  gp-resources:
+    if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            python: "3.10"
+            target: py310-win
+          - os: ubuntu-24.04
+            python: "3.12"
+            target: py312-linux
+    env:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      NUMEXPR_NUM_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install exact native dev lock and application
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          $lock = if ($IsWindows) { 'backend/requirements-py310-win.lock' } else { 'backend/requirements-py312-linux-dev.lock' }
+          & $python -m pip install --only-binary=:all: --require-hashes -r $lock
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -m pip install --no-deps --no-build-isolation -e './backend[dev]'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $python -m pip check
+          exit $LASTEXITCODE
+      - name: Measure synthetic fit CV restoration and prediction
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          & $python scripts/benchmark_gp_resources.py --rows 501 1000 2000 --output .tmp/gp-resources/results.json
+          exit $LASTEXITCODE
+      - name: Preserve synthetic measurement and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gp-resources-${{ matrix.target }}-${{ github.sha }}
+          path: .tmp/gp-resources
+          if-no-files-found: error
+
   linux-release:
     if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: ubuntu-24.04
@@ -563,7 +614,7 @@ jobs:
 
   release-ready:
     if: always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
-    needs: [windows, e2e, linux, python311, linux-release, dependency-security]
+    needs: [windows, e2e, linux, python311, linux-release, dependency-security, gp-resources]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

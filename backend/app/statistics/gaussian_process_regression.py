@@ -14,6 +14,29 @@ from numpy.typing import NDArray
 from scipy.linalg import solve_triangular  # type: ignore[import-untyped]
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
+from app.statistics.gp_mixed_kernels import (
+    MixedPredictorKernel,
+    mixed_kernel_from_payload,
+    mixed_kernel_to_payload,
+    mixed_kernel_warning_codes,
+)
+from app.statistics.gp_preprocessing import (
+    GpPredictorSpec,
+    GpPreprocessingError,
+    GpPreprocessor,
+    fit_gp_preprocessor,
+    transform_gp_rows,
+    validate_encoded_gp_matrix,
+)
+from app.statistics.gp_resource_budget import GpResourceError, estimate_gp_resources
+from app.statistics.gp_time_features import LagObservation, build_lag_features
+from app.statistics.gp_validation import (
+    GpValidationError,
+    GpValidationPlan,
+    build_validation_plan,
+    parse_time_value,
+)
+
 FloatArray = NDArray[np.float64]
 IntArray = NDArray[np.int64]
 KernelPreset = Literal[
@@ -23,10 +46,11 @@ KernelPreset = Literal[
     "rational_quadratic",
 ]
 NoiseMode = Literal["estimate", "fixed", "near_noiseless"]
-ValidationMethod = Literal["k_fold", "leave_one_out", "none"]
+ValidationMethod = Literal["k_fold", "group_k_fold", "time_series_split", "leave_one_out", "none"]
 
 MAX_GP_PREDICTORS = 12
 MAX_GP_USABLE_ROWS = 500
+MAX_GP_LAG_PREPARATION_BYTES = 32 * 1024**2
 MAX_GP_LOO_ROWS = 200
 MAX_GP_OPTIMIZER_STARTS = 256
 NORMAL_975 = 1.959963984540054
@@ -78,6 +102,18 @@ class GaussianProcessOptions:
     length_scale_upper: float = 100.0
     length_scale_coordinate_system: Literal["standardized", "original"] | None = None
     optimizer: Literal["l_bfgs_b", "bfgs"] = "l_bfgs_b"
+    group_column_id: str | None = None
+    time_column_id: str | None = None
+    time_format: Literal["numeric", "timestamp"] | None = None
+    time_unit: str | None = None
+    timestamp_timezone: Literal["require_offset", "UTC"] = "require_offset"
+    gap_time_blocks: int = 0
+    lagged_column_ids: tuple[str, ...] = ()
+    lags: tuple[int, ...] = ()
+    series_column_id: str | None = None
+    resource_profile: Literal["standard_exact", "extended_exact"] = "standard_exact"
+    initial_surface_x_column_id: str | None = None
+    initial_surface_y_column_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +124,15 @@ class _ParsedRows:
     n_total: int
     n_excluded_missing: int
     n_excluded_non_numeric: int
+    groups: list[str] | None = None
+    times: list[float] | None = None
+    lag_source_times: list[list[float]] | None = None
+    feature_lineage: dict[str, Any] | None = None
+    n_excluded_lag: int = 0
+    validation_plan: GpValidationPlan | None = None
+    raw_predictor_rows: list[list[float | str]] | None = None
+    predictor_specs: tuple[GpPredictorSpec, ...] = ()
+    resource_budget: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -106,6 +151,7 @@ class GaussianProcessFittedState:
     fitted_kernel_text: str
     log_marginal_likelihood: float
     converged: bool
+    preprocessing: GpPreprocessor | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +172,7 @@ class _ValidationResult:
     converged_folds: int
     fold_count: int
     folds: list[dict[str, Any]]
+    scored_mask: NDArray[np.bool_] | None = None
 
 
 def optimizer_start_count(options: GaussianProcessOptions, fold_count: int) -> int:
@@ -144,21 +191,101 @@ def calculate_gaussian_process_regression(
     decimal: str = ".",
     thousands: str | None = None,
     options: GaussianProcessOptions | None = None,
+    metadata_columns: Sequence[GaussianProcessColumn] = (),
 ) -> dict[str, object]:
     active = options or GaussianProcessOptions()
     _validate_columns(response_column, predictor_columns)
     _validate_options(active)
-    parsed = _parse_rows(
-        rows,
-        response_column,
-        predictor_columns,
-        decimal=decimal,
-        thousands=thousands,
+    predictor_ids = {column.column_id for column in predictor_columns}
+    if response_column.column_id in {active.group_column_id, active.time_column_id} or (
+        active.group_column_id is not None and active.group_column_id in predictor_ids
+    ):
+        raise GaussianProcessRegressionError("gp_validation_column_overlap")
+    if active.series_column_id is not None and active.series_column_id in {
+        response_column.column_id,
+        active.time_column_id,
+        *predictor_ids,
+    }:
+        raise GaussianProcessRegressionError("gp_validation_column_overlap")
+    try:
+        parsed = _parse_rows(
+            rows,
+            response_column,
+            predictor_columns,
+            decimal=decimal,
+            thousands=thousands,
+            options=active,
+            metadata_columns=metadata_columns,
+        )
+        if active.lagged_column_ids:
+            predictor_columns = [
+                *predictor_columns,
+                *_lag_predictor_columns(
+                    response_column,
+                    predictor_columns,
+                    metadata_columns,
+                    active,
+                ),
+            ]
+        _validate_sample(parsed, len(predictor_columns), active)
+        surface_ids = (active.initial_surface_x_column_id, active.initial_surface_y_column_id)
+        numeric_ids = {
+            column.column_id
+            for column in predictor_columns
+            if column.measurement_level != "nominal"
+        }
+        if any(value is not None for value in surface_ids) and (
+            any(value is None or value not in numeric_ids for value in surface_ids)
+            or surface_ids[0] == surface_ids[1]
+        ):
+            raise GaussianProcessRegressionError("gp_surface_axes_invalid")
+        plan = build_validation_plan(
+            method=active.validation_method,
+            row_indices=parsed.row_indices,
+            folds=active.cv_folds,
+            shuffle=active.cv_shuffle,
+            seed=active.random_seed,
+            groups=parsed.groups,
+            times=parsed.times,
+            gap_time_blocks=active.gap_time_blocks,
+            lag_source_times=parsed.lag_source_times,
+        )
+    except (GpValidationError, GpPreprocessingError) as exc:
+        raise GaussianProcessRegressionError(exc.code) from exc
+    numeric_count = sum(column.measurement_level != "nominal" for column in predictor_columns)
+    categorical_count = sum(
+        column.measurement_level == "nominal" and len(np.unique(parsed.x[:, i])) > 1
+        for i, column in enumerate(predictor_columns)
     )
-    _validate_sample(parsed, len(predictor_columns), active)
+    presets = (
+        active.kernel_candidates
+        if active.kernel_selection_mode == "compare"
+        else (active.kernel_preset,)
+    )
+    parameter_counts = [
+        (int(_build_signal_kernel(preset, numeric_count, active).n_dims) if numeric_count else 1)
+        + categorical_count
+        + int(active.noise_mode == "estimate")
+        for preset in presets
+    ]
+    try:
+        resource = estimate_gp_resources(
+            profile=active.resource_profile,
+            n_rows=int(parsed.y.size),
+            fold_training_sizes=[len(training) for training, _ in plan.splits],
+            kernel_parameter_counts=parameter_counts,
+            optimizer_restarts=active.optimizer_restarts,
+            cv_optimizer_restarts=active.cv_optimizer_restarts,
+            retained_candidate_count=len(presets) - 1 if active.retain_candidate_details else 0,
+            prediction_query_count=len(predictor_columns) * active.profile_points
+            + (active.surface_grid_size**2 if numeric_count >= 2 else 0),
+        )
+    except GpResourceError as exc:
+        raise GaussianProcessRegressionError(exc.code) from exc
+    parsed = replace(parsed, validation_plan=plan, resource_budget=resource.to_payload())
     started = time.monotonic()
     active = replace(active, deadline_monotonic=started + active.time_budget_seconds)
-    splits = _validation_splits(parsed.y.size, active)
+    splits = plan.splits
     if optimizer_start_count(active, len(splits)) > MAX_GP_OPTIMIZER_STARTS:
         raise GaussianProcessRegressionError("gp_kernel_search_budget_exceeded")
     if active.kernel_selection_mode == "compare":
@@ -170,7 +297,7 @@ def calculate_gaussian_process_regression(
     validation = _cross_validate(parsed, active, splits, started)
     _check_time_budget(started, active)
     with threadpool_limits(limits=1):
-        final = _fit_model(parsed.x, parsed.y, active)
+        final = _fit_parsed_model(parsed, active)
     _check_time_budget(started, active)
     result = _assemble_result(
         parsed,
@@ -224,10 +351,10 @@ def _cross_validate(
                         random_seed=(active.random_seed + preset_index * 104729 + fold_index * 1009)
                         % (2**32 - 1),
                     )
-                fit = _fit_model(parsed.x[training], parsed.y[training], cv_options)
+                fit = _fit_parsed_model(parsed, cv_options, training)
                 predicted = predict_from_gaussian_process_state(
                     fit.state,
-                    parsed.x[validation_indices],
+                    _prediction_rows(parsed, validation_indices),
                 )
                 cv_mean[validation_indices] = predicted["mean"]
                 cv_latent_std[validation_indices] = predicted["latent_standard_deviation"]
@@ -235,6 +362,11 @@ def _cross_validate(
                 converged_folds += int(fit.state.converged)
                 fold_records.append(
                     {
+                        **(
+                            parsed.validation_plan.payload["folds"][fold_index]
+                            if parsed.validation_plan is not None
+                            else {}
+                        ),
                         "fold": fold_index + 1,
                         "training_row_indices": [parsed.row_indices[int(i)] for i in training],
                         "validation_row_indices": [
@@ -246,18 +378,33 @@ def _cross_validate(
                         "y_mean": fit.state.y_mean,
                         "y_scale": fit.state.y_scale,
                         "optimizer_runs": fit.optimizer_runs,
+                        "fit_elapsed_seconds": fit.elapsed_seconds,
                         "converged": fit.state.converged,
+                        "preprocessing": fit.state.preprocessing.to_payload()
+                        if fit.state.preprocessing is not None
+                        else None,
                     }
                 )
+        scored = (
+            parsed.validation_plan.scored_mask
+            if parsed.validation_plan is not None
+            else np.ones(parsed.y.shape, dtype=np.bool_)
+        )
         if not (
-            np.all(np.isfinite(cv_mean))
-            and np.all(np.isfinite(cv_latent_std))
-            and np.all(np.isfinite(cv_predictive_std))
+            np.all(np.isfinite(cv_mean[scored]))
+            and np.all(np.isfinite(cv_latent_std[scored]))
+            and np.all(np.isfinite(cv_predictive_std[scored]))
         ):
             raise GaussianProcessRegressionError("gp_cross_validation_failed")
 
     return _ValidationResult(
-        cv_mean, cv_latent_std, cv_predictive_std, converged_folds, len(splits), fold_records
+        cv_mean,
+        cv_latent_std,
+        cv_predictive_std,
+        converged_folds,
+        len(splits),
+        fold_records,
+        parsed.validation_plan.scored_mask if parsed.validation_plan is not None else None,
     )
 
 
@@ -276,7 +423,9 @@ def _assemble_result(
     cv_mean, cv_predictive_std = validation.mean, validation.predictive_std
     cv_converged = validation.converged_folds == validation.fold_count
     training_metrics = _point_metrics(parsed.y, final.fitted)
-    validation_metrics = _validation_metrics(parsed.y, cv_mean, cv_predictive_std)
+    validation_metrics = _validation_metrics(
+        parsed.y, cv_mean, cv_predictive_std, validation.scored_mask
+    )
     plot_indices = _evenly_spaced_indices(parsed.y.size, active.plot_point_limit)
     warnings_list = _warning_codes(
         parsed=parsed,
@@ -287,6 +436,14 @@ def _assemble_result(
         cv_converged=cv_converged,
         length_bounds=(active.length_scale_lower, active.length_scale_upper),
     )
+    if active.validation_method == "group_k_fold":
+        warnings_list.append("gp_group_validation_new_groups")
+    if active.validation_method == "time_series_split":
+        warnings_list.append("gp_time_validation_partial_coverage")
+    if parsed.feature_lineage is not None:
+        warnings_list.append("gp_lag_one_step_observed_history")
+        if parsed.feature_lineage["irregular_intervals"]:
+            warnings_list.append("gp_lag_irregular_observation_intervals")
     profiles = (
         _conditional_profiles(
             final.state,
@@ -303,6 +460,8 @@ def _assemble_result(
             parsed.x,
             predictor_columns,
             grid_size=active.surface_grid_size,
+            x_column_id=active.initial_surface_x_column_id,
+            y_column_id=active.initial_surface_y_column_id,
         )
         if include_projections
         else None
@@ -314,7 +473,7 @@ def _assemble_result(
         length_bounds=(active.length_scale_lower, active.length_scale_upper),
     )
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "summary_type": "gaussian_process_regression",
         "method": {
             "name": "Gaussian Process Regression",
@@ -333,6 +492,7 @@ def _assemble_result(
             "cv_shuffle": active.cv_shuffle if active.validation_method == "k_fold" else False,
             "missing_policy": "complete_case",
             "execution_mode": "bounded_inline",
+            "resource_profile": active.resource_profile,
             "elapsed_seconds": elapsed,
             "optimizer": active.optimizer,
             "length_scale": {
@@ -351,15 +511,51 @@ def _assemble_result(
                 for name in ("numpy", "scipy", "scikit-learn")
             },
         },
-        "optimization": {"final_runs": final.optimizer_runs, "cv_folds": validation.folds},
+        "optimization": {
+            "final_runs": final.optimizer_runs,
+            "cv_folds": validation.folds,
+            "final_fit_elapsed_seconds": final.elapsed_seconds,
+            "cv_fit_elapsed_seconds": sum(
+                float(fold["fit_elapsed_seconds"]) for fold in validation.folds
+            ),
+            "fit_timing_scope": "model_construction_and_fit_excludes_preprocessing_and_prediction",
+        },
+        "validation_plan": {
+            **(parsed.validation_plan.payload if parsed.validation_plan else {}),
+            "group_column_id": active.group_column_id,
+            "time_column_id": active.time_column_id,
+            "time_format": active.time_format,
+            "time_unit": active.time_unit
+            if active.time_format == "numeric"
+            else "UTC_seconds"
+            if active.time_format == "timestamp"
+            else None,
+            "timestamp_timezone": active.timestamp_timezone
+            if active.time_format == "timestamp"
+            else None,
+        },
+        "feature_lineage": parsed.feature_lineage,
+        "resource_budget": parsed.resource_budget,
+        "preprocessing": final.state.preprocessing.to_payload()
+        if final.state.preprocessing is not None
+        else None,
         "response": _column_payload(response_column),
-        "predictors": [_column_payload(column) for column in predictor_columns],
+        "predictors": [
+            {
+                **_column_payload(column),
+                "kind": "nominal" if column.measurement_level == "nominal" else "numeric",
+            }
+            for column in predictor_columns
+        ],
         "sample": {
             "n_total": parsed.n_total,
             "n_used": int(parsed.y.size),
-            "n_excluded": parsed.n_excluded_missing + parsed.n_excluded_non_numeric,
+            "n_excluded": parsed.n_excluded_missing
+            + parsed.n_excluded_non_numeric
+            + parsed.n_excluded_lag,
             "n_excluded_missing": parsed.n_excluded_missing,
             "n_excluded_non_numeric": parsed.n_excluded_non_numeric,
+            "n_excluded_lag": parsed.n_excluded_lag,
             "predictor_count": len(predictor_columns),
         },
         "model_summary": {
@@ -410,16 +606,10 @@ def _assemble_result(
         },
         "conditional_profiles": profiles,
         "two_predictor_surface": surface,
-        "training_ranges": [
-            {
-                "column_id": column.column_id,
-                "display_name": column.display_name,
-                "minimum": float(np.min(parsed.x[:, index])),
-                "maximum": float(np.max(parsed.x[:, index])),
-                "median": float(np.median(parsed.x[:, index])),
-            }
-            for index, column in enumerate(predictor_columns)
-        ],
+        "surface_unavailable_reason": "fewer_than_two_numeric_predictors"
+        if sum(column.measurement_level != "nominal" for column in predictor_columns) < 2
+        else None,
+        "training_ranges": _training_range_rows(final.state, parsed.x, predictor_columns),
         **(
             {"prediction_basis": _prediction_basis(final.state, active)}
             if include_projections
@@ -431,14 +621,31 @@ def _assemble_result(
 
 def predict_from_gaussian_process_state(
     state: GaussianProcessFittedState,
-    x: FloatArray,
+    x: Any,
 ) -> dict[str, FloatArray]:
-    values = np.asarray(x, dtype=np.float64)
-    if values.ndim != 2 or values.shape[1] != state.x_mean.size:
-        raise GaussianProcessRegressionError("gp_prediction_input_invalid")
-    if not np.all(np.isfinite(values)):
-        raise GaussianProcessRegressionError("gp_prediction_input_invalid")
-    scaled = (values - state.x_mean) / state.x_scale
+    try:
+        if state.preprocessing is not None:
+            scaled = transform_gp_rows(state.preprocessing, x)
+        else:
+            values = np.asarray(x, dtype=np.float64)
+            if values.ndim != 2 or values.shape[1] != state.x_mean.size:
+                raise GaussianProcessRegressionError("gp_prediction_input_invalid")
+            if not np.all(np.isfinite(values)):
+                raise GaussianProcessRegressionError("gp_prediction_input_invalid")
+            scaled = (values - state.x_mean) / state.x_scale
+    except GpPreprocessingError as exc:
+        raise GaussianProcessRegressionError(exc.code) from exc
+    # Bound query-by-training temporary arrays; no query-by-query covariance is needed.
+    if len(scaled) > 256:
+        chunks = [
+            _predict_scaled(state, scaled[start : start + 256])
+            for start in range(0, len(scaled), 256)
+        ]
+        return {key: np.concatenate([chunk[key] for chunk in chunks]) for key in chunks[0]}
+    return _predict_scaled(state, scaled)
+
+
+def _predict_scaled(state: GaussianProcessFittedState, scaled: FloatArray) -> dict[str, FloatArray]:
     cross_covariance = np.asarray(
         state.signal_kernel(scaled, state.x_train_scaled),
         dtype=np.float64,
@@ -483,8 +690,30 @@ def build_gaussian_process_state(
     observation_noise_variance_scaled: float,
     fitted_kernel_text: str = "restored",
     log_marginal_likelihood: float = 0.0,
+    preprocessing_payload: dict[str, Any] | None = None,
 ) -> GaussianProcessFittedState:
     signal_kernel = _kernel_from_payload(signal_kernel_payload)
+    preprocessor = None
+    if preprocessing_payload is not None:
+        try:
+            preprocessor = GpPreprocessor.from_payload(preprocessing_payload)
+            validate_encoded_gp_matrix(preprocessor, x_train_scaled)
+            if not isinstance(signal_kernel, MixedPredictorKernel) or (
+                tuple(signal_kernel.numeric_indices) != preprocessor.numeric_indices
+                or tuple(signal_kernel.categorical_indices)
+                != preprocessor.active_categorical_indices
+            ):
+                raise GaussianProcessRegressionError("gp_model_artifact_invalid")
+            expected_mean = np.array([state.mean for state in preprocessor.states])
+            expected_scale = np.array([state.scale for state in preprocessor.states])
+            if not np.array_equal(x_mean, expected_mean) or not np.array_equal(
+                x_scale, expected_scale
+            ):
+                raise GaussianProcessRegressionError("gp_model_artifact_invalid")
+        except GpPreprocessingError as exc:
+            raise GaussianProcessRegressionError("gp_model_artifact_invalid") from exc
+    elif isinstance(signal_kernel, MixedPredictorKernel):
+        raise GaussianProcessRegressionError("gp_model_artifact_invalid")
     return GaussianProcessFittedState(
         x_train_scaled=np.asarray(x_train_scaled, dtype=np.float64),
         cholesky=np.asarray(cholesky, dtype=np.float64),
@@ -500,24 +729,87 @@ def build_gaussian_process_state(
         fitted_kernel_text=fitted_kernel_text,
         log_marginal_likelihood=float(log_marginal_likelihood),
         converged=True,
+        preprocessing=preprocessor,
     )
 
 
-def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) -> _FitResult:
+def _prediction_rows(parsed: _ParsedRows, indices: IntArray | None = None) -> Any:
+    if parsed.raw_predictor_rows is None:
+        return parsed.x if indices is None else parsed.x[indices]
+    return (
+        parsed.raw_predictor_rows
+        if indices is None
+        else [parsed.raw_predictor_rows[int(i)] for i in indices]
+    )
+
+
+def _fit_parsed_model(
+    parsed: _ParsedRows, options: GaussianProcessOptions, indices: IntArray | None = None
+) -> _FitResult:
+    x = parsed.x if indices is None else parsed.x[indices]
+    y = parsed.y if indices is None else parsed.y[indices]
+    if parsed.raw_predictor_rows is None:
+        return _fit_model(x, y, options)
+    return _fit_model(
+        x,
+        y,
+        options,
+        raw_predictors=_prediction_rows(parsed, indices),
+        predictor_specs=parsed.predictor_specs,
+    )
+
+
+def _fit_model(
+    x: FloatArray,
+    y: FloatArray,
+    options: GaussianProcessOptions,
+    *,
+    raw_predictors: list[list[float | str]] | None = None,
+    predictor_specs: tuple[GpPredictorSpec, ...] = (),
+) -> _FitResult:
     from sklearn.exceptions import ConvergenceWarning  # type: ignore[import-untyped]
     from sklearn.gaussian_process import GaussianProcessRegressor  # type: ignore[import-untyped]
 
-    x_mean = np.mean(x, axis=0) if options.standardize_predictors else np.zeros(x.shape[1])
-    x_scale = np.std(x, axis=0, ddof=1) if options.standardize_predictors else np.ones(x.shape[1])
+    preprocessor = None
+    if raw_predictors is not None:
+        try:
+            preprocessor, scaled_x = fit_gp_preprocessor(
+                raw_predictors,
+                predictor_specs,
+                standardize_numeric=options.standardize_predictors,
+                allow_constant_numeric=not options.standardize_predictors,
+            )
+        except GpPreprocessingError as exc:
+            raise GaussianProcessRegressionError(exc.code) from exc
+        x_mean = np.array([state.mean for state in preprocessor.states])
+        x_scale = np.array([state.scale for state in preprocessor.states])
+    else:
+        x_mean = np.mean(x, axis=0) if options.standardize_predictors else np.zeros(x.shape[1])
+        x_scale = (
+            np.std(x, axis=0, ddof=1) if options.standardize_predictors else np.ones(x.shape[1])
+        )
+        scaled_x = (x - x_mean) / x_scale
     if np.any(~np.isfinite(x_scale)) or np.any(x_scale <= 0.0):
         raise GaussianProcessRegressionError("gp_constant_predictor")
     y_mean = float(np.mean(y)) if options.normalize_response else 0.0
     y_scale = float(np.std(y, ddof=1)) if options.normalize_response else 1.0
     if not isfinite(y_scale) or y_scale <= 0.0:
         raise GaussianProcessRegressionError("gp_constant_response")
-    scaled_x = (x - x_mean) / x_scale
     scaled_y = (y - y_mean) / y_scale
-    signal_kernel = _build_signal_kernel(options.kernel_preset, x.shape[1], options)
+    if preprocessor is None:
+        signal_kernel = _build_signal_kernel(options.kernel_preset, x.shape[1], options)
+    else:
+        from sklearn.gaussian_process.kernels import ConstantKernel  # type: ignore[import-untyped]
+
+        numeric_count = len(preprocessor.numeric_indices)
+        numeric_kernel = (
+            _build_signal_kernel(options.kernel_preset, numeric_count, options)
+            if numeric_count
+            else ConstantKernel(1.0, (1e-3, 1e3))
+        )
+        signal_kernel = MixedPredictorKernel(
+            numeric_kernel, preprocessor.numeric_indices, preprocessor.active_categorical_indices
+        )
     kernel: Any = signal_kernel
     alpha = options.jitter
     fixed_noise_scaled = 0.0
@@ -554,6 +846,7 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         raise GaussianProcessRegressionError("gp_covariance_not_positive_definite") from exc
     except (FloatingPointError, ValueError) as exc:
         raise GaussianProcessRegressionError("gp_fit_failed") from exc
+    fit_elapsed_seconds = time.monotonic() - started
     convergence_failures = [
         item
         for item in caught
@@ -576,21 +869,34 @@ def _fit_model(x: FloatArray, y: FloatArray, options: GaussianProcessOptions) ->
         x_scale=np.asarray(x_scale, dtype=np.float64),
         y_mean=y_mean,
         y_scale=y_scale,
-        predictor_medians=np.asarray(np.median(x, axis=0), dtype=np.float64),
+        predictor_medians=np.asarray(np.median(x, axis=0), dtype=np.float64)
+        if preprocessor is None
+        else np.array(
+            [
+                state.median
+                if state.spec.kind == "numeric"
+                else state.vocabulary.index(str(state.mode))
+                for state in preprocessor.states
+            ],
+            dtype=np.float64,
+        ),
         signal_kernel=fitted_signal,
         signal_kernel_payload=signal_payload,
         observation_noise_variance_scaled=estimated_noise,
         fitted_kernel_text=str(model.kernel_),
         log_marginal_likelihood=float(model.log_marginal_likelihood_value_),
         converged=converged,
+        preprocessing=preprocessor,
     )
-    predicted = predict_from_gaussian_process_state(state, x)
+    predicted = predict_from_gaussian_process_state(
+        state, raw_predictors if raw_predictors is not None else x
+    )
     return _FitResult(
         state=state,
         fitted=predicted["mean"],
         latent_standard_deviation=predicted["latent_standard_deviation"],
         predictive_standard_deviation=predicted["predictive_standard_deviation"],
-        elapsed_seconds=time.monotonic() - started,
+        elapsed_seconds=fit_elapsed_seconds,
         optimizer_runs=optimizer_runs,
     )
 
@@ -740,6 +1046,20 @@ def _split_fitted_kernel(
 
 
 def _kernel_payload(kernel: Any, preset: KernelPreset) -> dict[str, object]:
+    if isinstance(kernel, MixedPredictorKernel):
+        mixed = mixed_kernel_to_payload(kernel)
+        signal = mixed["signal"]
+        return {
+            "preset": preset,
+            "amplitude": signal["amplitude"],
+            "length_scales": signal.get("length_scales", []),
+            **(
+                {"rational_quadratic_alpha": signal["rational_quadratic_alpha"]}
+                if "rational_quadratic_alpha" in signal
+                else {}
+            ),
+            "mixed_kernel": mixed,
+        }
     amplitude_kernel = getattr(kernel, "k1", None)
     base_kernel = getattr(kernel, "k2", None)
     amplitude = getattr(amplitude_kernel, "constant_value", None)
@@ -768,6 +1088,22 @@ def _kernel_from_payload(payload: dict[str, object]) -> Any:
         RationalQuadratic,
     )
 
+    if "mixed_kernel" in payload:
+        try:
+            if payload.get("preset") not in {
+                "matern_5_2_ard",
+                "matern_3_2_ard",
+                "rbf_ard",
+                "rational_quadratic",
+            }:
+                raise ValueError("unknown numeric kernel policy")
+            kernel = mixed_kernel_from_payload(payload["mixed_kernel"])
+            restored = _kernel_payload(kernel, cast(KernelPreset, payload.get("preset")))
+            if restored != payload:
+                raise ValueError("mixed signal metadata mismatch")
+            return kernel
+        except ValueError as exc:
+            raise GaussianProcessRegressionError("gp_model_artifact_invalid") from exc
     preset = payload.get("preset")
     amplitude = _finite_float(payload.get("amplitude"), "gp_model_artifact_invalid")
     length_scales_value = payload.get("length_scales")
@@ -816,6 +1152,9 @@ def _prediction_basis(
         "observation_noise_variance_scaled": state.observation_noise_variance_scaled,
         "noise_mode": options.noise_mode,
         "jitter": options.jitter,
+        "preprocessing": state.preprocessing.to_payload()
+        if state.preprocessing is not None
+        else None,
     }
 
 
@@ -866,6 +1205,7 @@ def _validation_metrics(
     observed: FloatArray,
     predicted: FloatArray | None,
     predictive_std: FloatArray | None,
+    scored_mask: NDArray[np.bool_] | None = None,
 ) -> dict[str, float | None]:
     if predicted is None or predictive_std is None:
         return {
@@ -877,6 +1217,14 @@ def _validation_metrics(
             "interval_coverage_95": None,
             "mean_interval_width": None,
         }
+    if scored_mask is not None:
+        if not np.any(scored_mask):
+            raise GaussianProcessRegressionError("gp_cross_validation_failed")
+        observed, predicted, predictive_std = (
+            observed[scored_mask],
+            predicted[scored_mask],
+            predictive_std[scored_mask],
+        )
     residual = observed - predicted
     press = float(np.sum(residual**2))
     tss = float(np.sum((observed - np.mean(observed)) ** 2))
@@ -885,7 +1233,7 @@ def _validation_metrics(
     half_width = NORMAL_975 * predictive_std
     coverage = float(np.mean(np.abs(residual) <= half_width))
     return {
-        "predicted_r_squared": 1.0 - press / tss,
+        "predicted_r_squared": 1.0 - press / tss if tss > 0 else None,
         "press": press,
         "rmse": sqrt(press / observed.size),
         "mae": float(np.mean(np.abs(residual))),
@@ -921,7 +1269,12 @@ def _diagnostic_point(
         "cross_validated_predictive_standard_deviation": None,
         "standardized_predictive_residual": None,
     }
-    if cv_mean is not None and cv_predictive_std is not None:
+    if (
+        cv_mean is not None
+        and cv_predictive_std is not None
+        and isfinite(float(cv_mean[index]))
+        and isfinite(float(cv_predictive_std[index]))
+    ):
         cv_fit = float(cv_mean[index])
         cv_std = float(cv_predictive_std[index])
         result.update(
@@ -945,19 +1298,30 @@ def _conditional_profiles(
     points: int,
 ) -> list[dict[str, object]]:
     output: list[dict[str, object]] = []
+    hold = _hold_values(state)
     for index, predictor in enumerate(predictors):
-        values = np.linspace(np.min(x[:, index]), np.max(x[:, index]), points)
-        grid = np.tile(state.predictor_medians, (points, 1))
-        grid[:, index] = values
+        nominal = predictor.measurement_level == "nominal"
+        values: list[float | str] = (
+            list(state.preprocessing.states[index].vocabulary)
+            if nominal and state.preprocessing is not None
+            else [
+                float(value)
+                for value in np.linspace(np.min(x[:, index]), np.max(x[:, index]), points)
+            ]
+        )
+        grid = [list(hold) for _ in values]
+        for row, value in enumerate(values):
+            grid[row][index] = value
         prediction = predict_from_gaussian_process_state(state, grid)
         output.append(
             {
                 "column_id": predictor.column_id,
                 "display_name": predictor.display_name,
-                "fixed_values": [float(value) for value in state.predictor_medians],
+                "kind": "nominal" if nominal else "numeric",
+                "fixed_values": hold,
+                "fixed_value_policy": "numeric_median_nominal_mode",
                 "points": [
-                    _prediction_point(float(value), prediction, row)
-                    for row, value in enumerate(values)
+                    _prediction_point(value, prediction, row) for row, value in enumerate(values)
                 ],
             }
         )
@@ -970,42 +1334,83 @@ def _two_predictor_surface(
     predictors: Sequence[GaussianProcessColumn],
     *,
     grid_size: int,
+    x_column_id: str | None = None,
+    y_column_id: str | None = None,
 ) -> dict[str, object] | None:
-    if len(predictors) < 2:
+    numeric = [i for i, column in enumerate(predictors) if column.measurement_level != "nominal"]
+    if len(numeric) < 2:
+        if x_column_id is not None or y_column_id is not None:
+            raise GaussianProcessRegressionError("gp_surface_axes_invalid")
         return None
-    x_values = np.linspace(np.min(x[:, 0]), np.max(x[:, 0]), grid_size)
-    y_values = np.linspace(np.min(x[:, 1]), np.max(x[:, 1]), grid_size)
-    grid = np.tile(state.predictor_medians, (grid_size * grid_size, 1))
+    indices = {column.column_id: i for i, column in enumerate(predictors)}
+    xi = indices.get(x_column_id, -1) if x_column_id is not None else numeric[0]
+    yi = indices.get(y_column_id, -1) if y_column_id is not None else numeric[1]
+    if xi not in numeric or yi not in numeric or xi == yi:
+        raise GaussianProcessRegressionError("gp_surface_axes_invalid")
+    x_values = np.linspace(np.min(x[:, xi]), np.max(x[:, xi]), grid_size)
+    y_values = np.linspace(np.min(x[:, yi]), np.max(x[:, yi]), grid_size)
+    hold = _hold_values(state)
+    grid = [list(hold) for _ in range(grid_size * grid_size)]
     row = 0
     for y_value in y_values:
         for x_value in x_values:
-            grid[row, 0] = x_value
-            grid[row, 1] = y_value
+            grid[row][xi] = float(x_value)
+            grid[row][yi] = float(y_value)
             row += 1
     prediction = predict_from_gaussian_process_state(state, grid)
     return {
-        "x_column_id": predictors[0].column_id,
-        "x_display_name": predictors[0].display_name,
-        "y_column_id": predictors[1].column_id,
-        "y_display_name": predictors[1].display_name,
+        "x_column_id": predictors[xi].column_id,
+        "x_display_name": predictors[xi].display_name,
+        "y_column_id": predictors[yi].column_id,
+        "y_display_name": predictors[yi].display_name,
         "grid_size": grid_size,
-        "fixed_values": [float(value) for value in state.predictor_medians],
+        "fixed_values": hold,
+        "fixed_value_policy": "numeric_median_nominal_mode",
         "points": [
             {
-                "x": float(grid[index, 0]),
-                "y": float(grid[index, 1]),
+                "x": float(grid[index][xi]),
+                "y": float(grid[index][yi]),
                 "predicted_mean": float(prediction["mean"][index]),
                 "predictive_standard_deviation": float(
                     prediction["predictive_standard_deviation"][index]
                 ),
+                "latent_standard_deviation": float(prediction["latent_standard_deviation"][index]),
             }
-            for index in range(grid.shape[0])
+            for index in range(len(grid))
         ],
     }
 
 
+def _hold_values(state: GaussianProcessFittedState) -> list[float | str]:
+    return (
+        list(state.preprocessing.hold_values)
+        if state.preprocessing is not None
+        else [float(value) for value in state.predictor_medians]
+    )
+
+
+def _training_range_rows(
+    state: GaussianProcessFittedState, x: FloatArray, predictors: Sequence[GaussianProcessColumn]
+) -> list[dict[str, Any]]:
+    rows = []
+    for i, column in enumerate(predictors):
+        item: dict[str, Any] = {"column_id": column.column_id, "display_name": column.display_name}
+        if column.measurement_level == "nominal" and state.preprocessing is not None:
+            trained = state.preprocessing.states[i]
+            item.update(kind="nominal", levels=list(trained.vocabulary), mode=trained.mode)
+        else:
+            item.update(
+                kind="numeric",
+                minimum=float(np.min(x[:, i])),
+                maximum=float(np.max(x[:, i])),
+                median=float(np.median(x[:, i])),
+            )
+        rows.append(item)
+    return rows
+
+
 def _prediction_point(
-    value: float, prediction: dict[str, FloatArray], index: int
+    value: float | str, prediction: dict[str, FloatArray], index: int
 ) -> dict[str, object]:
     mean = float(prediction["mean"][index])
     latent = float(prediction["latent_standard_deviation"][index])
@@ -1034,12 +1439,21 @@ def _fitted_parameter_rows(
         )
     ]
     length_scales = cast(list[float], payload["length_scales"])
-    if len(length_scales) == 1 and len(predictors) > 1:
+    numeric_predictors = [column for column in predictors if column.measurement_level != "nominal"]
+    if len(length_scales) == 1 and len(numeric_predictors) > 1:
         rows.append(_parameter_row("shared_length_scale", None, length_scales[0], *length_bounds))
     else:
         rows.extend(
             _parameter_row("length_scale", predictor.column_id, value, *length_bounds)
-            for predictor, value in zip(predictors, length_scales, strict=True)
+            for predictor, value in zip(numeric_predictors, length_scales, strict=True)
+        )
+    mixed = payload.get("mixed_kernel")
+    if isinstance(mixed, dict):
+        rows.extend(
+            _parameter_row("categorical_theta", predictors[index].column_id, theta, 1e-4, 1e2)
+            for index, theta in zip(
+                mixed["categorical_indices"], mixed["categorical_theta"], strict=True
+            )
         )
     if "rational_quadratic_alpha" in payload:
         rows.append(
@@ -1103,6 +1517,12 @@ def _warning_codes(
     length_bounds: tuple[float, float] = (0.01, 100.0),
 ) -> list[str]:
     codes = ["gp_predictive_not_causal", "gp_uncertainty_conditional_on_kernel"]
+    if state.preprocessing is not None:
+        codes.extend(state.preprocessing.warning_codes)
+        if not state.preprocessing.numeric_indices:
+            codes.append("gp_nominal_only_signal")
+    if isinstance(state.signal_kernel, MixedPredictorKernel):
+        codes.extend(mixed_kernel_warning_codes(state.signal_kernel))
     if parsed.n_excluded_missing + parsed.n_excluded_non_numeric > 0:
         codes.append("missing_values_excluded")
     if not state.converged or not cv_converged:
@@ -1143,6 +1563,8 @@ def _validate_columns(
         raise GaussianProcessRegressionError("gp_predictor_required")
     if len(predictors) > MAX_GP_PREDICTORS:
         raise GaussianProcessRegressionError("gp_predictor_count_limit")
+    if sum(column.measurement_level == "nominal" for column in predictors) > 4:
+        raise GaussianProcessRegressionError("gp_nominal_predictor_count_limit")
     ids = [column.column_id for column in predictors]
     if len(set(ids)) != len(ids):
         raise GaussianProcessRegressionError("gp_duplicate_predictor")
@@ -1151,6 +1573,44 @@ def _validate_columns(
 
 
 def _validate_options(options: GaussianProcessOptions) -> None:
+    if options.resource_profile not in {"standard_exact", "extended_exact"}:
+        raise GaussianProcessRegressionError("gp_resource_options_invalid")
+    if options.validation_method in {"group_k_fold", "time_series_split"} and options.cv_shuffle:
+        raise GaussianProcessRegressionError("gp_validation_shuffle_unsupported")
+    if (options.validation_method == "group_k_fold") != (options.group_column_id is not None):
+        raise GaussianProcessRegressionError("gp_validation_group_required")
+    if options.validation_method == "time_series_split":
+        if options.time_column_id is None or options.time_format not in {"numeric", "timestamp"}:
+            raise GaussianProcessRegressionError("gp_validation_time_required")
+        if options.time_format == "numeric" and not (
+            options.time_unit and options.time_unit.strip()
+        ):
+            raise GaussianProcessRegressionError("gp_validation_time_unit_required")
+        if options.time_format == "timestamp" and options.time_unit is not None:
+            raise GaussianProcessRegressionError("gp_validation_time_options_invalid")
+        if options.timestamp_timezone not in {"require_offset", "UTC"}:
+            raise GaussianProcessRegressionError("gp_validation_time_options_invalid")
+    elif (
+        options.time_column_id is not None
+        or options.time_format is not None
+        or options.time_unit is not None
+        or options.gap_time_blocks
+    ):
+        raise GaussianProcessRegressionError("gp_validation_time_options_invalid")
+    if options.lagged_column_ids or options.lags or options.series_column_id is not None:
+        if options.validation_method != "time_series_split":
+            raise GaussianProcessRegressionError("gp_lag_time_validation_required")
+        if (
+            not options.lagged_column_ids
+            or not options.lags
+            or len(set(options.lags)) != len(options.lags)
+            or len(set(options.lagged_column_ids)) != len(options.lagged_column_ids)
+            or any(
+                isinstance(lag, bool) or not isinstance(lag, int) or not 1 <= lag <= 100
+                for lag in options.lags
+            )
+        ):
+            raise GaussianProcessRegressionError("gp_lag_definition_invalid")
     lengths = (options.length_scale_lower, options.length_scale_initial, options.length_scale_upper)
     if not all(isfinite(value) and value > 0 for value in lengths) or not (
         options.length_scale_lower < options.length_scale_upper
@@ -1215,15 +1675,23 @@ def _validate_sample(
     predictor_count: int,
     options: GaussianProcessOptions,
 ) -> None:
+    if predictor_count > MAX_GP_PREDICTORS:
+        raise GaussianProcessRegressionError("gp_derived_predictor_count_limit")
     if parsed.y.size < max(5, predictor_count + 2):
         raise GaussianProcessRegressionError("gp_usable_rows_too_few")
-    if parsed.y.size > MAX_GP_USABLE_ROWS:
+    row_limit = 2000 if options.resource_profile == "extended_exact" else MAX_GP_USABLE_ROWS
+    if parsed.y.size > row_limit:
         raise GaussianProcessRegressionError("gp_usable_rows_limit")
     if not np.all(np.isfinite(parsed.x)) or not np.all(np.isfinite(parsed.y)):
         raise GaussianProcessRegressionError("gp_fit_failed")
     if float(np.var(parsed.y, ddof=1)) <= 0.0:
         raise GaussianProcessRegressionError("gp_constant_response")
-    if np.any(np.var(parsed.x, axis=0, ddof=1) <= 0.0):
+    numeric_indices = (
+        [i for i, spec in enumerate(parsed.predictor_specs) if spec.kind == "numeric"]
+        if parsed.predictor_specs
+        else list(range(predictor_count))
+    )
+    if np.any(np.var(parsed.x[:, numeric_indices], axis=0, ddof=1) <= 0.0):
         raise GaussianProcessRegressionError("gp_constant_predictor")
     if options.validation_method == "leave_one_out" and parsed.y.size > MAX_GP_LOO_ROWS:
         raise GaussianProcessRegressionError("gp_leave_one_out_limit")
@@ -1236,35 +1704,227 @@ def _parse_rows(
     *,
     decimal: str,
     thousands: str | None,
+    options: GaussianProcessOptions | None = None,
+    metadata_columns: Sequence[GaussianProcessColumn] = (),
 ) -> _ParsedRows:
-    x_rows: list[list[float]] = []
+    active = options or GaussianProcessOptions()
+    by_id = {column.column_id: column for column in (response, *predictors, *metadata_columns)}
+    required_ids = [
+        value
+        for value in (active.group_column_id, active.time_column_id, active.series_column_id)
+        if value is not None
+    ]
+    if any(value not in by_id for value in [*required_ids, *active.lagged_column_ids]):
+        raise GpValidationError("gp_validation_metadata_column_missing")
+    for column_id in active.lagged_column_ids:
+        column = by_id[column_id]
+        if (
+            column.data_type not in {"integer", "decimal"}
+            or column.measurement_level == "nominal"
+            or column.role == "id"
+        ):
+            raise GpValidationError("gp_lag_source_type_unsupported")
+    lag_features = None
+    if active.lagged_column_ids:
+        source_rows: list[Sequence[str | None]] = []
+        preparation_bytes = 0
+        derived_count = len(active.lagged_column_ids) * len(active.lags)
+        for source_row in rows:
+            # Reserve for strings, row containers, sorted observations, and lag lineage.
+            preparation_bytes += (
+                2048
+                + 64 * len(source_row)
+                + sum(4 * len(value) for value in source_row if value is not None)
+                + 512 * derived_count
+            )
+            if preparation_bytes > MAX_GP_LAG_PREPARATION_BYTES:
+                raise GaussianProcessRegressionError("gp_parse_memory_budget_exceeded")
+            source_rows.append(source_row)
+        observations: list[LagObservation] = []
+        for index, row in enumerate(source_rows):
+            series = (
+                _row_value(row, by_id[active.series_column_id].column_index)
+                if active.series_column_id
+                else ""
+            )
+            if active.series_column_id and (series is None or not str(series).strip()):
+                raise GpValidationError("gp_lag_series_missing")
+            assert active.time_column_id is not None and active.time_format is not None
+            observations.append(
+                LagObservation(
+                    index,
+                    parse_time_value(
+                        _row_value(row, by_id[active.time_column_id].column_index),
+                        time_format=active.time_format,
+                        timestamp_timezone=active.timestamp_timezone,
+                        decimal=decimal,
+                        thousands=thousands,
+                    ),
+                    str(series or ""),
+                    {
+                        column_id: _parse_number(
+                            _row_value(row, by_id[column_id].column_index), decimal, thousands
+                        )
+                        for column_id in active.lagged_column_ids
+                    },
+                )
+            )
+        lag_features = build_lag_features(
+            observations, column_ids=active.lagged_column_ids, lags=active.lags
+        )
+        rows = source_rows
+    mixed = any(column.measurement_level == "nominal" for column in predictors)
+    specs = tuple(
+        GpPredictorSpec(
+            column.column_id, "nominal" if column.measurement_level == "nominal" else "numeric"
+        )
+        for column in predictors
+    )
+    if active.lagged_column_ids:
+        specs += tuple(
+            GpPredictorSpec(f"gp_lag:{column_id}:{lag}", "numeric")
+            for column_id in active.lagged_column_ids
+            for lag in active.lags
+        )
+    x_rows: list[list[Any]] = []
     y_values: list[float] = []
     row_indices: list[int] = []
     n_total = 0
     n_missing = 0
     n_non_numeric = 0
+    n_lag = 0
+    group_values: list[str] | None = [] if active.group_column_id else None
+    time_values: list[float] | None = [] if active.time_column_id else None
+    lag_times: list[list[float]] | None = [] if lag_features is not None else None
+    lineage_rows: list[dict[str, object]] = []
+    excluded_lag_rows: list[int] = []
     for row_index, row in enumerate(rows):
         n_total += 1
         raw = [_row_value(row, column.column_index) for column in (response, *predictors)]
         if any(value is None or not str(value).strip() for value in raw):
             n_missing += 1
             continue
-        parsed = [_parse_number(value, decimal, thousands) for value in raw]
+        parsed: list[float | str | None] = [_parse_number(raw[0], decimal, thousands)]
+        parsed.extend(
+            str(value)
+            if column.measurement_level == "nominal"
+            else _parse_number(value, decimal, thousands)
+            for column, value in zip(predictors, raw[1:], strict=True)
+        )
         if any(value is None for value in parsed):
             n_non_numeric += 1
             continue
-        finite = [cast(float, value) for value in parsed]
-        y_values.append(finite[0])
+        finite = [cast(float | str, value) for value in parsed]
+        if lag_features is not None:
+            if row_index not in lag_features.values_by_row:
+                n_lag += 1
+                excluded_lag_rows.append(row_index)
+                continue
+            finite.extend(lag_features.values_by_row[row_index])
+            assert lag_times is not None
+            lag_times.append(lag_features.source_times_by_row[row_index])
+            lineage_rows.append(
+                {
+                    "row_index": row_index,
+                    "source_row_indices": lag_features.source_rows_by_row[row_index],
+                    "source_times": lag_features.source_times_by_row[row_index],
+                    "target_time": observations[row_index].time,
+                }
+            )
+        if group_values is not None:
+            assert active.group_column_id is not None
+            value = _row_value(row, by_id[active.group_column_id].column_index)
+            if value is None or not str(value).strip():
+                raise GpValidationError("gp_validation_group_missing")
+            group_values.append(str(value))
+        if time_values is not None:
+            assert active.time_column_id is not None and active.time_format is not None
+            time_values.append(
+                parse_time_value(
+                    _row_value(row, by_id[active.time_column_id].column_index),
+                    time_format=active.time_format,
+                    timestamp_timezone=active.timestamp_timezone,
+                    decimal=decimal,
+                    thousands=thousands,
+                )
+            )
+        y_values.append(cast(float, finite[0]))
         x_rows.append(finite[1:])
         row_indices.append(row_index)
+        row_limit = 2000 if active.resource_profile == "extended_exact" else MAX_GP_USABLE_ROWS
+        if len(y_values) > row_limit:
+            raise GaussianProcessRegressionError("gp_usable_rows_limit")
+    if mixed and len(x_rows) >= 2:
+        _, numeric_x = fit_gp_preprocessor(
+            x_rows, specs, standardize_numeric=False, allow_constant_numeric=True
+        )
+    elif mixed:
+        numeric_x = np.empty((len(x_rows), len(specs)), dtype=np.float64)
+    else:
+        numeric_x = np.asarray(x_rows, dtype=np.float64)
     return _ParsedRows(
-        x=np.asarray(x_rows, dtype=np.float64),
+        x=numeric_x,
         y=np.asarray(y_values, dtype=np.float64),
         row_indices=row_indices,
         n_total=n_total,
         n_excluded_missing=n_missing,
         n_excluded_non_numeric=n_non_numeric,
+        groups=group_values,
+        times=time_values,
+        lag_source_times=lag_times,
+        n_excluded_lag=n_lag,
+        raw_predictor_rows=x_rows if mixed else None,
+        predictor_specs=specs if mixed else (),
+        feature_lineage=(
+            {
+                "kind": "positive_observation_order_lags",
+                "prediction_horizon": 1,
+                "time_column_id": active.time_column_id,
+                "series_column_id": active.series_column_id,
+                "gap_policy": "exclude_embargo_sources",
+                "prediction_input_policy": "explicit_past_lag_values",
+                "irregular_intervals": lag_features.irregular_intervals,
+                "definitions": [
+                    {
+                        "column_id": f"gp_lag:{column_id}:{lag}",
+                        "source_column_id": column_id,
+                        "lag": lag,
+                        "interval": "observation_order",
+                    }
+                    for column_id in active.lagged_column_ids
+                    for lag in active.lags
+                ],
+                "excluded_row_indices": excluded_lag_rows,
+                "exclusion_reason": "insufficient_or_missing_past_observation",
+                "row_identity": "filtered_snapshot_zero_based_row_index",
+                "rows": lineage_rows,
+            }
+            if lag_features is not None
+            else None
+        ),
     )
+
+
+def _lag_predictor_columns(
+    response: GaussianProcessColumn,
+    predictors: Sequence[GaussianProcessColumn],
+    metadata: Sequence[GaussianProcessColumn],
+    options: GaussianProcessOptions,
+) -> list[GaussianProcessColumn]:
+    by_id = {column.column_id: column for column in (response, *predictors, *metadata)}
+    return [
+        GaussianProcessColumn(
+            f"gp_lag:{column_id}:{lag}",
+            -1,
+            f"{by_id[column_id].display_name} [lag {lag}]",
+            "decimal",
+            "continuous",
+            "feature",
+            by_id[column_id].unit,
+        )
+        for column_id in options.lagged_column_ids
+        for lag in options.lags
+    ]
 
 
 def _parse_number(value: str | None, decimal: str, thousands: str | None) -> float | None:

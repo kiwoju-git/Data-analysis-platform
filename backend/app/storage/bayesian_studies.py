@@ -71,6 +71,7 @@ class BayesianTrialRecord:
     objective_value: float | None
     created_at: str
     closed_at: str | None
+    replicate_of_trial_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +187,7 @@ class BayesianStudyDeletionGraphRecord:
     successor_study_ids: tuple[str, ...]
     recommendation_batch_count: int = 0
     recommendation_batch_item_count: int = 0
+    replicate_request_count: int = 0
     report_count: int = 0
     report_bytes: int = 0
     reports_manifest_sha256: str = ""
@@ -388,12 +390,18 @@ def delete_bayesian_study_graph_record(
             """,
             (expected.study_id,),
         )
+        replicate_requests = connection.execute(
+            "DELETE FROM bayesian_replicate_requests WHERE study_version_id IN ("
+            "SELECT study_version_id FROM bayesian_study_versions WHERE study_id=?);",
+            (expected.study_id,),
+        )
         if (
             lifecycle.rowcount != expected.lifecycle_event_count
             or batch_items.rowcount != expected.recommendation_batch_item_count
             or batches.rowcount != expected.recommendation_batch_count
             or recommendations.rowcount != expected.recommendation_count
             or history_heads.rowcount != expected.history_head_count
+            or replicate_requests.rowcount != expected.replicate_request_count
         ):
             raise BayesianStorageConflict("bayesian_study_deletion_conflict")
         deleted = connection.execute(
@@ -435,7 +443,8 @@ def get_bayesian_trial_record(workspace_root: Path, trial_id: str) -> BayesianTr
             """
             SELECT trial_id, study_version_id, trial_number, origin, state,
                    actual_coordinates_json, normalized_coordinates_json,
-                   coordinates_sha256, objective_value, created_at, closed_at
+                   coordinates_sha256, objective_value, created_at, closed_at,
+                   replicate_of_trial_id
             FROM bayesian_trials
             WHERE trial_id = ?;
             """,
@@ -456,7 +465,8 @@ def list_bayesian_trial_records(
             """
             SELECT trial_id, study_version_id, trial_number, origin, state,
                    actual_coordinates_json, normalized_coordinates_json,
-                   coordinates_sha256, objective_value, created_at, closed_at
+                   coordinates_sha256, objective_value, created_at, closed_at,
+                   replicate_of_trial_id
             FROM bayesian_trials
             WHERE study_version_id = ?
             ORDER BY trial_number
@@ -707,7 +717,6 @@ def insert_bayesian_recommendation_batch_bundle(
             """
             SELECT 1 FROM bayesian_trials
             WHERE study_version_id = ?
-              AND origin = 'recommendation'
               AND state = 'pending'
             LIMIT 1;
             """,
@@ -1701,6 +1710,11 @@ def _deletion_graph_from_connection(
         (study_id,),
     ).fetchall()
     reports = owner_reports(connection, study_id=study_id)
+    replicate_count = connection.execute(
+        "SELECT COUNT(*) FROM bayesian_replicate_requests WHERE study_version_id IN ("
+        "SELECT study_version_id FROM bayesian_study_versions WHERE study_id=?);",
+        (study_id,),
+    ).fetchone()[0]
     return BayesianStudyDeletionGraphRecord(
         study_id=study_id,
         status=str(study[0]),
@@ -1716,6 +1730,7 @@ def _deletion_graph_from_connection(
         recommendation_count=_row_int(counts[4]),
         recommendation_batch_count=_row_int(counts[5]),
         recommendation_batch_item_count=_row_int(counts[6]),
+        replicate_request_count=_row_int(replicate_count),
         lifecycle_event_count=_row_int(counts[7]),
         successor_study_ids=tuple(str(row[0]) for row in successors),
         report_count=len(reports),
@@ -1767,6 +1782,7 @@ def _trial_from_row(row: tuple[object, ...]) -> BayesianTrialRecord:
         objective_value=None if row[8] is None else _row_float(row[8]),
         created_at=str(row[9]),
         closed_at=None if row[10] is None else str(row[10]),
+        replicate_of_trial_id=None if row[11] is None else str(row[11]),
     )
 
 

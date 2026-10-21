@@ -9,8 +9,43 @@ import type {
 import { GaussianProcessRegressionPanel } from "./GaussianProcessRegressionPanel";
 import { GpKernelSelectionSettings, gpOptimizerStarts, gpPresets } from "./GpKernelSelectionSettings";
 import { setCurrentLocale } from "./i18n/store";
+import { GpExtensionSettings } from "./GpExtensionSettings";
+import { defaultGpExtensionDraft } from "./gpExtensionOptions";
+import { GpProfileChart } from "./charts/GaussianProcessCharts";
 
 describe("GaussianProcessRegressionPanel", () => {
+  it("explains inactive numeric kernel presets for nominal-only models in both locales", () => {
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      const result = resultFixture();
+      result.warnings = ["gp_nominal_only_signal"];
+      const html = renderToString(<GaussianProcessRegressionPanel analysisResult={analysisEnvelope()} filterValidationError={null} isRunningAnalysis={false} methodId="regression.gaussian_process" result={result} version={datasetVersion()} onRun={() => undefined} />);
+      expect(html).toContain(locale === "en" ? "Numeric kernel presets do not represent distinct kernel families" : "숫자형 kernel preset들은 이 모형에서 서로 다른 커널 계열을 뜻하지 않습니다");
+    }
+  });
+
+  it("renders nominal profiles as discrete intervals, never interpolated bands", () => {
+    setCurrentLocale("en");
+    const result = resultFixture();
+    const profile = { kind: "nominal" as const, column_id: "category", display_name: "Category <not markup>", fixed_values: [0, 0], points: ["01", "1"].map((value) => ({ value, predicted_mean: 1e-6, latent_standard_deviation: 2e-6, predictive_standard_deviation: 3e-6, latent_interval_95: { lower: -1e-6, upper: 2e-6 }, predictive_interval_95: { lower: -2e-6, upper: 4e-6 } })) };
+    const before = JSON.stringify(profile);
+    const html = renderToString(<GpProfileChart result={result} profile={profile} scope="synthetic-profile" />);
+    expect(html).toContain("Category &lt;not markup&gt;");
+    expect(html).toContain(">01</text>"); expect(html).toContain(">1</text>");
+    expect(html).not.toContain("gp-profile-band");
+    expect(JSON.stringify(profile)).toBe(before);
+  });
+
+  it("labels metadata, observation-order lags and bounded resource settings in both locales", () => {
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      const version = datasetVersion();
+      const html = renderToString(<GpExtensionSettings draft={{ ...defaultGpExtensionDraft(), lagEnabled: true, timeColumnId: "x1", timeUnit: "s" }} onChange={() => undefined} method="time_series_split" onMethodChange={() => undefined} columns={version.columns} numericColumns={version.columns} selectedNumeric={version.columns.slice(1)} responseId="response" predictorIds={["x1", "x2"]} />);
+      expect(html).toContain("extended_exact");
+      expect(html).toContain(locale === "en" ? "One-step past-observation features" : "과거 관측 기반 1단계 예측변수");
+      expect(html).toContain("2,000");
+    }
+  });
   it("keeps small-scale summary measurements compact without hiding nonzero values", () => {
     for (const locale of ["en", "ko"] as const) {
       setCurrentLocale(locale);

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.api.v1.schemas.gp_views import GpSurfaceViewSpec
 from app.api.v1.schemas.report_capabilities import MethodReportContract
 from app.api.v1.schemas.reports import SavedPredictionDescriptor
 
@@ -75,6 +76,8 @@ class AnalysisResourceLimit(BaseModel):
         "seconds",
         "workers",
         "points_per_group",
+        "levels_per_predictor",
+        "bytes",
     ]
     variant: str | None = None
 
@@ -761,10 +764,74 @@ class PlsRegressionOptions(BaseModel):
 class GaussianProcessCrossValidationOptions(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    method: Literal["k_fold", "leave_one_out", "none"] = "k_fold"
+    method: Literal["k_fold", "group_k_fold", "time_series_split", "leave_one_out", "none"] = (
+        "k_fold"
+    )
     folds: int = Field(default=5, ge=2, le=10)
     shuffle: bool = True
     seed: int = 20260829
+    group_column_id: str | None = Field(default=None, min_length=1)
+    time_column_id: str | None = Field(default=None, min_length=1)
+    time_format: Literal["numeric", "timestamp"] | None = None
+    time_unit: str | None = Field(default=None, min_length=1, max_length=80)
+    timestamp_timezone: Literal["require_offset", "UTC"] = "require_offset"
+    gap_time_blocks: int = Field(default=0, ge=0, le=1000, strict=True)
+
+    @model_validator(mode="after")
+    def validate_split_metadata(self) -> "GaussianProcessCrossValidationOptions":
+        if self.method in {"group_k_fold", "time_series_split"} and self.shuffle:
+            raise ValueError("gp_validation_shuffle_unsupported")
+        if (self.method == "group_k_fold") != (self.group_column_id is not None):
+            raise ValueError("gp_group_column_required")
+        if self.method == "time_series_split":
+            if self.time_column_id is None or self.time_format is None:
+                raise ValueError("gp_time_column_required")
+            if self.time_format == "numeric" and (
+                self.time_unit is None or not self.time_unit.strip()
+            ):
+                raise ValueError("gp_time_unit_required")
+            if self.time_format == "timestamp" and self.time_unit is not None:
+                raise ValueError("gp_time_options_invalid")
+        elif (
+            self.time_column_id is not None
+            or self.time_format is not None
+            or self.time_unit is not None
+            or self.gap_time_blocks
+            or self.timestamp_timezone != "require_offset"
+        ):
+            raise ValueError("gp_time_options_invalid")
+        return self
+
+
+class GaussianProcessLagFeatureOptions(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lagged_column_ids: list[str] = Field(min_length=1, max_length=12)
+    lags: list[int] = Field(min_length=1, max_length=12)
+    series_column_id: str | None = Field(default=None, min_length=1)
+    prediction_horizon: Literal[1] = 1
+    interval: Literal["observation_order"] = "observation_order"
+    gap_policy: Literal["exclude_embargo_sources"] = "exclude_embargo_sources"
+
+    @field_validator("lags", mode="before")
+    @classmethod
+    def validate_positive_lags(cls, value: Any) -> Any:
+        if not isinstance(value, list) or any(
+            isinstance(item, bool) or not isinstance(item, int) or not 1 <= item <= 100
+            for item in value
+        ):
+            raise ValueError("gp_lag_options_invalid")
+        return value
+
+    @model_validator(mode="after")
+    def validate_unique_features(self) -> "GaussianProcessLagFeatureOptions":
+        if (
+            any(not item for item in self.lagged_column_ids)
+            or len(set(self.lagged_column_ids)) != len(self.lagged_column_ids)
+            or len(set(self.lags)) != len(self.lags)
+        ):
+            raise ValueError("gp_lag_options_invalid")
+        return self
 
 
 GpKernelPreset = Literal["matern_5_2_ard", "matern_3_2_ard", "rbf_ard", "rational_quadratic"]
@@ -826,6 +893,10 @@ class GaussianProcessRegressionOptions(BaseModel):
     cv: GaussianProcessCrossValidationOptions = Field(
         default_factory=GaussianProcessCrossValidationOptions
     )
+    lag_features: GaussianProcessLagFeatureOptions | None = None
+    resource_profile: Literal["standard_exact", "extended_exact"] = "standard_exact"
+    initial_surface_x_column_id: str | None = Field(default=None, min_length=1)
+    initial_surface_y_column_id: str | None = Field(default=None, min_length=1)
     plot_point_limit: int = Field(default=1000, ge=100, le=2000)
     profile_points: int = Field(default=50, ge=10, le=80)
     surface_grid_size: int = Field(default=25, ge=10, le=40)
@@ -863,6 +934,29 @@ class GaussianProcessRegressionOptions(BaseModel):
             raise ValueError("gp_duplicate_predictor")
         if self.response_column_id in self.predictor_column_ids:
             raise ValueError("gp_response_in_predictors")
+        surface_ids = (self.initial_surface_x_column_id, self.initial_surface_y_column_id)
+        if any(value is not None for value in surface_ids) and (
+            any(value is None or value not in self.predictor_column_ids for value in surface_ids)
+            or surface_ids[0] == surface_ids[1]
+        ):
+            raise ValueError("gp_surface_axes_invalid")
+        metadata_ids = {self.cv.group_column_id, self.cv.time_column_id} - {None}
+        if self.response_column_id in metadata_ids or self.cv.group_column_id in set(
+            self.predictor_column_ids
+        ):
+            raise ValueError("gp_validation_column_overlap")
+        if self.lag_features is not None:
+            if self.cv.method != "time_series_split":
+                raise ValueError("gp_lag_requires_time_validation")
+            if self.lag_features.series_column_id in {
+                self.response_column_id,
+                self.cv.time_column_id,
+                *self.predictor_column_ids,
+            }:
+                raise ValueError("gp_validation_column_overlap")
+            derived_count = len(self.lag_features.lagged_column_ids) * len(self.lag_features.lags)
+            if len(self.predictor_column_ids) + derived_count > 12:
+                raise ValueError("gp_derived_predictor_count_limit")
         if self.noise_mode == "fixed" and self.fixed_noise_standard_deviation is None:
             raise ValueError("gp_noise_value_invalid")
         if self.noise_mode != "fixed" and self.fixed_noise_standard_deviation is not None:
@@ -2069,7 +2163,17 @@ class GaussianProcessPointPredictionInputRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     client_row_id: str = Field(min_length=1, max_length=120)
-    values: dict[str, float]
+    values: dict[str, float | str]
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def validate_typed_values(cls, values: Any) -> Any:
+        if not isinstance(values, dict) or any(
+            isinstance(value, bool) or not isinstance(value, int | float | str)
+            for value in values.values()
+        ):
+            raise ValueError("gp_prediction_input_invalid")
+        return values
 
 
 class GaussianProcessPointPredictionRequest(BaseModel):
@@ -2078,6 +2182,7 @@ class GaussianProcessPointPredictionRequest(BaseModel):
     expected_model_manifest_sha256: str = Field(min_length=64, max_length=64)
     rows: list[GaussianProcessPointPredictionInputRow] = Field(min_length=1, max_length=2000)
     save_result: bool = False
+    surface_view: GpSurfaceViewSpec | None = None
 
 
 class GaussianProcessPredictionInterval(BaseModel):

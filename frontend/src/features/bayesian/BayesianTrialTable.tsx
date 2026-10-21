@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n/LocaleProvider";
 import { translateSystemText } from "../../i18n/translate";
 import type { AppLocale } from "../../i18n/types";
 import { observationPasteErrorMessage, parseObservationPaste, type ObservationPasteError } from "./bayesianObservationPaste";
+import { boText } from "./boNoisePolicy";
 
 export function BayesianTrialTable({
   study,
@@ -90,7 +91,9 @@ export function BayesianTrialTable({
             {study.trials.map((trial) => (
               <tr key={trial.trial_id}>
                 <td>{trial.trial_number}</td>
-                <td>{trial.origin === "recommendation" ? "추천" : "초기 설계"}</td>
+                <td>{trial.origin === "replicate"
+                  ? `${boText(locale, "반복", "Replicate")} (Trial ${study.trials.find(parent => parent.trial_id === trial.replicate_of_trial_id)?.trial_number ?? trial.replicate_of_trial_id})`
+                  : trial.origin === "recommendation" ? "추천" : "초기 설계"}</td>
                 <td>{coordinateText(trial.actual_coordinates)}</td>
                 <td>{trialStateLabel(trial.state, locale)}</td>
                 <td>

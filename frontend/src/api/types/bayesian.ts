@@ -95,7 +95,7 @@ export interface BayesianInitialDesignResponse {
   scipy_version?: string | null;
 }
 
-export interface BayesianTrialResponse {
+export interface BayesianLegacyTrialResponse {
   trial_id: string;
   study_version_id: string;
   trial_number: number;
@@ -107,6 +107,33 @@ export interface BayesianTrialResponse {
   objective_value: number | null;
   created_at: string;
   closed_at: string | null;
+}
+
+export interface BayesianReplicateTrialResponse extends Omit<BayesianLegacyTrialResponse, "origin"> {
+  origin: "replicate";
+  replicate_of_trial_id: string;
+}
+export type BayesianTrialResponse = BayesianLegacyTrialResponse | BayesianReplicateTrialResponse;
+
+export interface BayesianReplicateCreateRequest {
+  expected_history_revision_id: string;
+  expected_history_sha256: string;
+  request_id: string;
+  count: number;
+  confirm_replicate_intent: true;
+  total_trial_budget: number;
+}
+export interface BayesianReplicateCreateResponse {
+  schema_version: 1;
+  study_id: string;
+  study_version_id: string;
+  request_id: string;
+  parent_trial_id: string;
+  source_history_revision_id: string;
+  source_history_sha256: string;
+  request_sha256: string;
+  trials: BayesianReplicateTrialResponse[];
+  replayed: boolean;
 }
 
 export interface BayesianHistoryRevisionResponse {
@@ -577,7 +604,7 @@ export interface BayesianBatchSharedModelResponse {
   package_versions: Record<string, string>;
 }
 
-export interface BayesianRecommendationBatchResponse {
+export interface BayesianLegacyRecommendationBatchResponse {
   batch_id: string;
   study_id: string;
   study_version_id: string;
@@ -642,6 +669,118 @@ export interface BayesianRecommendationBatchResponse {
     | "closed_mixed";
   requested_total_trial_budget: number;
 }
+
+export interface BayesianSurrogatePolicyRequest {
+  noise_mode: "estimate" | "fixed" | "near_noiseless";
+  initial_noise_variance_scaled: number;
+  lower_noise_variance_scaled: number;
+  upper_noise_variance_scaled: number;
+  fixed_noise_sd: number | null;
+}
+export interface BayesianObservationPolicyRequest {
+  mode: "retain_raw" | "exact_replicates" | "nearby_diagnostics";
+  nearby_tolerances: Record<string, number> | null;
+  nearby_units: "actual" | "normalized";
+}
+export interface BayesianNoiseBatchCreateRequest extends Omit<BayesianRecommendationBatchCreateRequest, "search"> {
+  schema_version: 2;
+  expected_history_sha256: string;
+  search: Omit<BayesianBatchSearchRequest, "batch_policy"> & { batch_policy: "greedy_mc_joint_latent_improvement_v2" };
+  surrogate: BayesianSurrogatePolicyRequest;
+  observation_policy: BayesianObservationPolicyRequest;
+  batch_options: { posterior_sample_count: number; min_batch_distance_normalized: number };
+}
+export interface BayesianNoiseBatchItemResponse {
+  item_id: string;
+  batch_id: string;
+  rank: number;
+  trial: BayesianTrialResponse;
+  current_trial: BayesianRecommendationCurrentTrialResponse;
+  actual_coordinates: Record<string, number>;
+  normalized_coordinates: Record<string, number>;
+  predicted_objective_mean: number;
+  latent_standard_deviation: number;
+  predictive_standard_deviation: number;
+  acquisition_kind: BayesianAcquisitionKind;
+  acquisition_value_standardized: number;
+  acquisition_value_raw: number;
+  nearest_existing_distance: number | null;
+  nearest_selected_distance: number | null;
+  constraint_evaluations: BayesianConstraintEvaluationResponse[];
+  planning: {
+    policy_version: "greedy_mc_joint_latent_improvement_v2";
+    root_seed: number;
+    sample_seed: string;
+    batch_step: number;
+    requested_sample_count: number;
+    effective_sample_count: number;
+    conditioned_on_selected_ranks: number[];
+    conditional_latent_sd_scaled: number;
+    selected_covariance_adjustment_scaled: number;
+    conditional_variance_adjustment_max_scaled: number;
+    covariance_adjustment_is_measurement_noise: false;
+    representative_prediction_source: "completed_observations_base_posterior";
+  };
+}
+export interface BayesianNoiseBatchResponse extends Omit<BayesianLegacyRecommendationBatchResponse,
+  "config_schema_version" | "result_schema_version" | "model_schema_version" | "item_schema_version" |
+  "batch_policy" | "shared_model" | "search_budget" | "items" | "provenance"> {
+  config_schema_version: 2;
+  result_schema_version: 2;
+  model_schema_version: 3;
+  item_schema_version: 2;
+  batch_policy: "greedy_mc_joint_latent_improvement_v2";
+  shared_model: {
+    schema_version: 3;
+    policy_version: "bo_noise_latent_v2";
+    noise: { mode: BayesianSurrogatePolicyRequest["noise_mode"]; initial_variance_scaled: number;
+      bounds_scaled: [number, number] | null; fixed_sd_raw: number | null; fitted_variance_scaled: number };
+    observation_noise_sd_raw: number;
+    jitter: number;
+    normalization: { mean: number; scale: number; ddof: 0; direction_multiplier: number };
+    raw_observation_count: number;
+    effective_training_count: number;
+    optimizer: { name: "L-BFGS-B"; optimized: boolean; seed: number; restarts: number; evaluations: number;
+      starts: Array<{ success: boolean; termination_reason: string }> };
+    objective_goal_type: "minimize" | "maximize" | "match_target";
+  };
+  incumbent: {
+    incumbent_policy: "posterior_mean_at_completed_locations_v2";
+    best_observed_objective: number;
+    best_observed_trial_id: string;
+    best_observed_target_distance_raw: number | null;
+    latent_incumbent_value_raw: number;
+    latent_incumbent_trial_id: string;
+    latent_incumbent_distance_raw: number | null;
+    xi_standardized: number;
+    xi_raw: number;
+  };
+  observation_view: {
+    mode: BayesianObservationPolicyRequest["mode"];
+    raw_observation_count: number;
+    unique_condition_count: number;
+    effective_training_count: number;
+    groups: Array<{ member_trial_ids: string[]; canonical_actual_coordinates: Record<string, number>;
+      n: number; mean: number; within_ss: number; sample_variance: number | null }>;
+    nearby_diagnostics: { changes_training_data: false; units: "actual" | "normalized";
+      tolerances: Record<string, number> | null;
+      groups: Array<{ member_trial_ids: string[]; maximum_normalized_distance: number; maximum_axis_distances: Record<string, number>;
+        response_range: [number, number]; response_sample_variance: number | null }> };
+  };
+  search_budget: {
+    evaluations_consumed: number;
+    max_evaluations_total: number;
+    min_batch_distance_normalized: number;
+    searches: Array<{ all_acquisitions_zero: boolean; termination_reason: string; local_starts: number;
+      local_successes: number; feasible_pool_size: number }>;
+  };
+  items: BayesianNoiseBatchItemResponse[];
+  provenance: Omit<BayesianLegacyRecommendationBatchResponse["provenance"],
+    "config_schema_version" | "result_schema_version" | "model_schema_version" | "item_schema_version"> & {
+      config_schema_version: 2; result_schema_version: 2; model_schema_version: 3; item_schema_version: 2;
+    };
+}
+export type BayesianRecommendationBatchResponse = BayesianLegacyRecommendationBatchResponse | BayesianNoiseBatchResponse;
 
 export interface BayesianLatestRecommendationBatchResponse {
   study_id: string;

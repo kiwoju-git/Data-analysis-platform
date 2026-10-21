@@ -1,5 +1,22 @@
 # Runtime Compatibility Contract
 
+## Noise-Aware BO and GPR Extension (API26)
+
+API26 introduces versioned noise-aware BO request/result contracts, explicit
+replicate creation, GPR validation metadata, mixed predictors, one-step lag,
+resource profiles and saved applied surface views. Metadata24 performs the real
+BO trial parent/idempotency and V1/V2 batch constraint migration. Windows startup
+and frontend require API26/metadata24; Linux launch reads the same constants.
+The current backup reader accepts exact schemas20..24 without migrating the
+archive. Startup acquires the workspace lease before applying pending migrations.
+Older application versions cannot open metadata24; code revert alone is not a
+workspace downgrade. Keep a verified pre-upgrade offline backup.
+
+Existing DOE/RSM API25 artifacts, BO legacy policies and numeric GP manifests1..3
+remain readable through explicit version dispatch without rewriting checksums.
+See [extension contract](bo_gpr_noise_validation_extension.md) for result/manifest
+versions and the distinction between source tests and exact-archive validation.
+
 ## DOE Expansion (API 25)
 
 API 25 adds the regular-fraction model preflight, structured alias view and
@@ -131,8 +148,8 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `23`);
-- the actual metadata schema constant (currently `23`);
+- `api_contract_version` (currently `26`);
+- the actual metadata schema constant (currently `24`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
@@ -152,7 +169,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `25`, schema 22 or later, and every required
+The frontend expects API contract `26`, schema 24 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

@@ -13,6 +13,9 @@ import type {
   BayesianRecommendationResponse,
   BayesianRecommendationBatchCreateRequest,
   BayesianRecommendationBatchResponse,
+  BayesianNoiseBatchCreateRequest,
+  BayesianReplicateCreateRequest,
+  BayesianReplicateCreateResponse,
   BayesianStudyCreateRequest,
   BayesianStudyCloseRequest,
   BayesianStudyCloseResponse,
@@ -28,7 +31,7 @@ import type {
 
 export async function createBayesianRecommendationBatch(
   studyId: string,
-  request: BayesianRecommendationBatchCreateRequest,
+  request: BayesianRecommendationBatchCreateRequest | BayesianNoiseBatchCreateRequest,
 ): Promise<BayesianRecommendationBatchResponse> {
   const response = await fetchApi(apiRoutes.bayesianRecommendationBatches(studyId), {
     method: "POST",
@@ -41,6 +44,17 @@ export async function createBayesianRecommendationBatch(
     );
   }
   return (await response.json()) as BayesianRecommendationBatchResponse;
+}
+
+export async function createBayesianReplicates(
+  studyId: string, trialId: string, request: BayesianReplicateCreateRequest,
+): Promise<BayesianReplicateCreateResponse> {
+  const response = await fetchApi(`${apiRoutes.bayesianStudy(studyId)}/trials/${encodeURIComponent(trialId)}/replicates`, {
+    method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) throw new Error(await apiErrorCode(response, "bayesian_replicate_failed"));
+  return await response.json() as BayesianReplicateCreateResponse;
 }
 
 export async function fetchBayesianRecommendationBatch(

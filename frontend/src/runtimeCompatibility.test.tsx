@@ -102,7 +102,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: EXPECTED_API_CONTRACT_VERSION,
-    metadata_schema_version: 23,
+    metadata_schema_version: 24,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,

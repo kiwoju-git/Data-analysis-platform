@@ -56,6 +56,8 @@ import { useBayesianStudyCatalogState } from "./features/bayesian/hooks/useBayes
 import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesianStudyDraftState";
 import { useBayesianStudyLifecycleState } from "./features/bayesian/hooks/useBayesianStudyLifecycleState";
 import { useBayesianRecommendationState } from "./features/bayesian/hooks/useBayesianRecommendationState";
+import { useBayesianReplicateState } from "./features/bayesian/hooks/useBayesianReplicateState";
+import type { BayesianReplicateCreateRequest, BayesianReplicateCreateResponse } from "./api/types/bayesian";
 import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesianRetentionState";
 import { useDatasetVersionCatalogState } from "./useDatasetVersionCatalogState";
 import { useDatasetWorkflow } from "./useDatasetWorkflow";
@@ -70,6 +72,11 @@ import type { AnalysisExecutionSource } from "./analysisExecutionContext";
 import { PrincipalComponentsPanel } from "./PrincipalComponentsPanel";
 import { PlsRegressionPanel } from "./PlsRegressionPanel";
 import { GaussianProcessRegressionPanel } from "./GaussianProcessRegressionPanel";
+import { useGpPointPrediction } from "./useGpPointPrediction";
+import { GpSurfaceChart } from "./charts/GaussianProcessCharts";
+import { InteractiveGridChart } from "./charts/InteractiveGridChart";
+import type { GaussianProcessRegressionResult, GaussianProcessPointPredictionRequest, GaussianProcessPointPredictionResponse } from "./api";
+import { setCurrentLocale } from "./i18n/store";
 import { TwoVariancesPanel } from "./TwoVariancesPanel";
 import type { ManagedReportDescriptor, ManagedReportList, ReportSourceDescriptor, StoredReportCapability, StoredSourceSnapshot } from "./api/types/reports";
 import { useAssetManagementState } from "./useAssetManagementState";
@@ -87,8 +94,83 @@ function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): 
   };
 }
 
+describe("GPR mixed input and applied surface ownership", () => {
+  const source = { analysisId: "analysis-gp", modelId: "model-gp", manifestSha256: "a".repeat(64), responseColumnId: "response", predictorColumnIds: ["x", "category"], nominalLevels: { category: ["01", "1"] } };
+  function response(request: GaussianProcessPointPredictionRequest): GaussianProcessPointPredictionResponse {
+    return { model_id: "model-gp", model_manifest_sha256: "a".repeat(64), response_column_id: "response", row_count: request.rows.length, interval_kind: "latent_and_new_observation", confidence_level: .95,
+      rows: request.rows.map((row) => ({ client_row_id: row.client_row_id, predicted_mean: 1e-6, latent_standard_deviation: 2e-6, predictive_standard_deviation: 4e-6, latent_interval_95: { lower: -1e-6, upper: 3e-6 }, predictive_interval_95: { lower: -2e-6, upper: 4e-6 }, warnings: [] })).reverse() };
+  }
+  function nodes(node: unknown): React.ReactElement<Record<string, unknown>>[] {
+    if (Array.isArray(node)) return node.flatMap(nodes);
+    if (React.isValidElement<Record<string, unknown>>(node)) return [node, ...nodes(node.props.children)];
+    return [];
+  }
+  function surfaceResult(): GaussianProcessRegressionResult {
+    return { response: { column_id: "response", display_name: "Response", unit: "mm" }, model_manifest: { model_id: "model-gp", manifest_sha256: "a".repeat(64) },
+      predictors: [{ column_id: "category", display_name: "Category" }, { column_id: "x", display_name: "X" }, { column_id: "z", display_name: "Z" }],
+      training_ranges: [{ column_id: "category", display_name: "Category", kind: "nominal", levels: ["01", "1"], mode: "01" }, { column_id: "x", display_name: "X", minimum: 0, maximum: 1, median: .5 }, { column_id: "z", display_name: "Z", minimum: 10, maximum: 20, median: 15 }],
+      two_predictor_surface: { x_column_id: "x", y_column_id: "z", x_display_name: "X", y_display_name: "Z", grid_size: 2, fixed_values: ["01", .5, 15], points: [{ x: 0, y: 10, predicted_mean: 5, latent_standard_deviation: 1, predictive_standard_deviation: 2 }] },
+    } as unknown as GaussianProcessRegressionResult;
+  }
+  it("preserves exact category strings and ignores an old finally during the next prediction", async () => {
+    gpPredictionMocks.createGaussianProcessPointPredictions.mockReset();
+    const first = deferred<GaussianProcessPointPredictionResponse>(); const second = deferred<GaussianProcessPointPredictionResponse>();
+    gpPredictionMocks.createGaussianProcessPointPredictions.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const runner = new HookRunner(useGpPointPrediction, source);
+    await runner.act(() => { runner.output.editCell("gp-row-1", "x", "1e-6"); runner.output.editCell("gp-row-1", "category", "01"); });
+    await runner.act(() => { void runner.output.run(); });
+    const requestA = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls[0][1] as GaussianProcessPointPredictionRequest;
+    expect(requestA.rows[0].values).toEqual({ x: 1e-6, category: "01" });
+    await runner.act(() => runner.output.editCell("gp-row-1", "category", "1"));
+    await runner.act(() => { void runner.output.run(); });
+    first.resolve(response(requestA)); await runner.flush();
+    expect(runner.output.snapshot).toBeNull(); expect(runner.output.isRunning).toBe(true);
+    const requestB = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls[1][1] as GaussianProcessPointPredictionRequest;
+    second.resolve(response(requestB)); await runner.flush();
+    expect(runner.output.snapshot?.request.rows[0].values.category).toBe("1");
+    expect(runner.output.snapshot?.response.rows[0].predictive_standard_deviation).toBe(4e-6);
+    runner.update({ ...source, nominalLevels: { category: ["B", "A"] } });
+    expect(runner.output.snapshot).toBeNull(); expect(runner.output.valid).toBe(false); runner.unmount();
+  });
+  it("invalidates an in-flight surface on a hold edit, keeps applied labels and saves exact applied rows", async () => {
+    setCurrentLocale("en"); gpPredictionMocks.createGaussianProcessPointPredictions.mockReset();
+    const first = deferred<GaussianProcessPointPredictionResponse>(); const second = deferred<GaussianProcessPointPredictionResponse>();
+    gpPredictionMocks.createGaussianProcessPointPredictions.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const props = { result: surfaceResult(), scope: "analysis-gp:selected", analysisId: "analysis-gp" };
+    const runner = new HookRunner(GpSurfaceChart, props);
+    const button = (text: string) => nodes(runner.output).find((node) => node.type === "button" && node.props.children === text)!;
+    const click = (text: string) => (button(text).props.onClick as () => void)();
+    const holdSelect = () => nodes(runner.output).find((node) => node.type === "select" && node.props.value === "01")!;
+    await runner.act(() => click("Generate Surface"));
+    const requestA = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls[0][1] as GaussianProcessPointPredictionRequest;
+    await runner.act(() => (holdSelect().props.onChange as (event: { currentTarget: { value: string } }) => void)({ currentTarget: { value: "1" } }));
+    first.resolve(response(requestA)); await runner.flush();
+    const oldChart = nodes(runner.output).find((node) => node.type === InteractiveGridChart)!;
+    expect((oldChart.props.cells as Array<{ value: number }>)[0].value).toBe(5);
+    expect(button("Save applied view").props.disabled).toBe(true);
+    await runner.act(() => click("Generate Surface"));
+    const requestB = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls[1][1] as GaussianProcessPointPredictionRequest;
+    expect(requestB.rows.every((row) => row.values.category === "1")).toBe(true);
+    second.resolve(response(requestB)); await runner.flush();
+    const before = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls.length;
+    runner.update({ ...props }); await runner.flush();
+    expect(gpPredictionMocks.createGaussianProcessPointPredictions).toHaveBeenCalledTimes(before);
+    const save = deferred<GaussianProcessPointPredictionResponse>(); gpPredictionMocks.createGaussianProcessPointPredictions.mockReturnValueOnce(save.promise);
+    await runner.act(() => click("Save applied view"));
+    const savedRequest = gpPredictionMocks.createGaussianProcessPointPredictions.mock.calls[2][1] as GaussianProcessPointPredictionRequest;
+    expect(savedRequest.rows).toEqual(requestB.rows);
+    expect(savedRequest.surface_view).toEqual({ x_column_id: "x", y_column_id: "z", hold_values: { category: "1" }, grid_size: 2, display_mode: "mean" });
+    expect(savedRequest.save_result).toBe(true);
+    runner.unmount(); save.resolve(response(savedRequest)); await runner.flush();
+  });
+});
+
 const managedReportMocks = vi.hoisted(() => ({ fetchReportSources: vi.fn(), fetchStoredReportCapability: vi.fn(), fetchStoredSourceSnapshot: vi.fn(), fetchManagedReports: vi.fn(), fetchManagedReport: vi.fn(), createManagedReport: vi.fn(), deleteManagedReport: vi.fn(), fetchManagedReportDownload: vi.fn() }));
 vi.mock("./api/reports", () => managedReportMocks);
+const replicateApiMocks = vi.hoisted(() => ({ createBayesianReplicates: vi.fn() }));
+vi.mock("./api/bayesian", () => replicateApiMocks);
+const gpPredictionMocks = vi.hoisted(() => ({ createGaussianProcessPointPredictions: vi.fn() }));
+vi.mock("./api/regression", async (original) => ({ ...await original<typeof import("./api/regression")>(), ...gpPredictionMocks }));
 
 const apiMocks = vi.hoisted(() => ({
   createAnalysisRun: vi.fn(),
@@ -1110,6 +1192,8 @@ function bayesianRecommendationBatch(
   return {
     batch_id: batchId,
     study_id: studyId,
+    source_history_revision_id: `${studyId}-history`,
+    source_observation_history_sha256: "b".repeat(64),
     execution_mode: "parallel_batch",
     batch_size: 4,
     acquisition: {
@@ -1175,8 +1259,8 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 25,
-    metadata_schema_version: 23,
+    api_contract_version: 26,
+    metadata_schema_version: 24,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -1203,6 +1287,7 @@ function runtimeInfo(
 }
 
 beforeEach(() => {
+  replicateApiMocks.createBayesianReplicates.mockReset();
   for (const mock of Object.values(apiMocks)) {
     mock.mockReset();
   }
@@ -3953,6 +4038,11 @@ describe("async workbench hooks", () => {
       throw new Error("expected_batch_request");
     }
     expect(request).toMatchObject({
+      schema_version: 2,
+      expected_history_sha256: "b".repeat(64),
+      surrogate: { noise_mode: "estimate", lower_noise_variance_scaled: 1e-6 },
+      observation_policy: { mode: "retain_raw" },
+      batch_options: { posterior_sample_count: 64, min_batch_distance_normalized: 0 },
       execution_mode: "parallel_batch",
       batch_size: 4,
       acquisition: {
@@ -3961,6 +4051,7 @@ describe("async workbench hooks", () => {
         xi_standardized: 0.1,
       },
       search: {
+        batch_policy: "greedy_mc_joint_latent_improvement_v2",
         candidate_count_per_step: 256,
         total_trial_budget: 50,
       },
@@ -3969,6 +4060,124 @@ describe("async workbench hooks", () => {
       request.search.candidate_count_per_step,
     );
     expect(selectedBatch).toHaveBeenCalledWith("batch-a");
+    runner.unmount();
+  });
+
+  it.each(["resolve", "reject"])("ignores old BO %s and finally after noise edits start a newer request", async (outcome) => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    const old = deferred<BayesianRecommendationBatchResponse>();
+    const next = deferred<BayesianRecommendationBatchResponse>();
+    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const selectedBatch = vi.fn();
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onBatchSelected: selectedBatch,
+      onRecommendationSelected: vi.fn(), sourceHistoryKey: "source-a",
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    await runner.act(() => runner.output.onNoiseDraftChange({ ...runner.output.noiseDraft, noiseMode: "near_noiseless" }));
+    expect(runner.output.draftChanged).toBe(true);
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    if (outcome === "resolve") old.resolve(bayesianRecommendationBatch("study-a", "old"));
+    else old.reject(new Error("old_network_failure"));
+    await runner.flush();
+    expect(runner.output.isRecommending).toBe(true);
+    expect(runner.output.error).toBeNull();
+    expect(runner.output.batch).toBeNull();
+    next.resolve(bayesianRecommendationBatch("study-a", "new"));
+    await runner.flush();
+    expect(runner.output.batch?.batch_id).toBe("new");
+    expect(selectedBatch).toHaveBeenCalledExactlyOnceWith("new");
+    expect(apiMocks.createBayesianRecommendationBatch.mock.calls[1][1]).toMatchObject({ surrogate: { noise_mode: "near_noiseless" } });
+    runner.unmount();
+  });
+
+  it("keeps q1 target on the batch core and cancels a response after same-study history changes", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    const response = deferred<BayesianRecommendationBatchResponse>();
+    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(response.promise);
+    const props = { selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(), sourceHistoryKey: "history-1" };
+    const runner = new HookRunner(useBayesianRecommendationState, props);
+    await runner.flush();
+    const study = bayesianStudy("study-a");
+    study.objective = { ...study.objective, goal_type: "match_target", target_value: 1, target_tolerance: 0.1 };
+    await runner.act(() => { void runner.output.onRecommend(study); });
+    expect(apiMocks.createBayesianRecommendationBatch.mock.calls[0][1]).toMatchObject({ batch_size: 1, acquisition: { kind: "expected_target_improvement" } });
+    runner.update({ ...props, sourceHistoryKey: "history-2" });
+    response.resolve(bayesianRecommendationBatch("study-a", "old"));
+    await runner.flush();
+    expect(runner.output.batch).toBeNull();
+    expect(runner.output.isRecommending).toBe(false);
+    expect(apiMocks.createBayesianRecommendation).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it.each(["pending", "completed", "abandoned"] as const)("preserves a replicate request identity and accepts current %s state on explicit replay", async (replayedState) => {
+    const study = bayesianStudy("study-a");
+    study.trials = study.trials.map(trial => ({ ...trial, state: "completed", objective_value: 2 }));
+    const runner = new HookRunner(useBayesianReplicateState, study);
+    await runner.flush();
+    await runner.act(() => { runner.output.setParentId(study.trials[0].trial_id); runner.output.setCount("2"); runner.output.setConfirmed(true); });
+    replicateApiMocks.createBayesianReplicates.mockRejectedValueOnce(new Error("network_error"));
+    await runner.output.submit("50"); await runner.flush();
+    expect(replicateApiMocks.createBayesianReplicates).toHaveBeenCalledTimes(1);
+    const payload = replicateApiMocks.createBayesianReplicates.mock.calls[0][2] as BayesianReplicateCreateRequest;
+    expect(payload).toMatchObject({ count: 2, confirm_replicate_intent: true, expected_history_sha256: "b".repeat(64) });
+    expect(runner.output.canRetry).toBe(true);
+    const result: BayesianReplicateCreateResponse = {
+      schema_version: 1, study_id: study.study_id, study_version_id: study.study_version_id,
+      request_id: payload.request_id, parent_trial_id: study.trials[0].trial_id,
+      source_history_revision_id: payload.expected_history_revision_id, source_history_sha256: payload.expected_history_sha256,
+      request_sha256: "c".repeat(64), replayed: true,
+      trials: [3, 4].map(n => ({ ...study.trials[0], origin: "replicate", replicate_of_trial_id: study.trials[0].trial_id,
+        trial_id: `replicate-${n}`, trial_number: n, state: replayedState, objective_value: replayedState === "completed" ? 2.5 : null })),
+    };
+    replicateApiMocks.createBayesianReplicates.mockResolvedValueOnce(result);
+    expect(await runner.output.submit("50", true)).toBe(true); await runner.flush();
+    expect(replicateApiMocks.createBayesianReplicates.mock.calls[1][2]).toEqual(payload);
+    expect(runner.output.created?.trials).toHaveLength(2);
+    expect(runner.output.canRetry).toBe(false);
+    expect(study.trials).toHaveLength(2);
+    runner.unmount();
+  });
+
+  it("invalidates replicate success and finally after source changes", async () => {
+    const study = bayesianStudy("study-a");
+    study.trials = study.trials.map(trial => ({ ...trial, state: "completed", objective_value: 2 }));
+    const response = deferred<BayesianReplicateCreateResponse>();
+    replicateApiMocks.createBayesianReplicates.mockReturnValueOnce(response.promise);
+    const runner = new HookRunner(useBayesianReplicateState, study);
+    await runner.flush();
+    await runner.act(() => { runner.output.setParentId(study.trials[0].trial_id); runner.output.setConfirmed(true); });
+    await runner.act(() => { void runner.output.submit("50"); });
+    expect(runner.output.isRunning).toBe(true);
+    runner.update(bayesianStudy("study-b"));
+    response.reject(new Error("old_failure"));
+    await runner.flush();
+    expect(runner.output.created).toBeNull();
+    expect(runner.output.error).toBeNull();
+    expect(runner.output.isRunning).toBe(false);
+    runner.unmount();
+  });
+
+  it.each(["wrong_version", "new_completed", "missing_observation", "pending_observation"] as const)("rejects inconsistent replicate response: %s", async (caseName) => {
+    const study = bayesianStudy("study-a");
+    study.trials = study.trials.map(trial => ({ ...trial, state: "completed", objective_value: 2 }));
+    const runner = new HookRunner(useBayesianReplicateState, study);
+    await runner.flush();
+    await runner.act(() => { runner.output.setParentId(study.trials[0].trial_id); runner.output.setConfirmed(true); });
+    replicateApiMocks.createBayesianReplicates.mockImplementationOnce((_id: string, _parent: string, payload: BayesianReplicateCreateRequest) => Promise.resolve({
+      schema_version: 1, study_id: study.study_id, study_version_id: caseName === "wrong_version" ? "other-version" : study.study_version_id,
+      request_id: payload.request_id, parent_trial_id: study.trials[0].trial_id,
+      source_history_revision_id: payload.expected_history_revision_id, source_history_sha256: payload.expected_history_sha256,
+      request_sha256: "c".repeat(64), replayed: caseName !== "new_completed",
+      trials: [{ ...study.trials[0], origin: "replicate", replicate_of_trial_id: study.trials[0].trial_id,
+        trial_id: "replicate-3", trial_number: 3, state: caseName === "pending_observation" ? "pending" : "completed",
+        objective_value: caseName === "missing_observation" ? null : 2.5 }],
+    } satisfies BayesianReplicateCreateResponse));
+    expect(await runner.output.submit("50")).toBe(false); await runner.flush();
+    expect(runner.output.created).toBeNull();
+    expect(runner.output.error).toBe("bayesian_replicate_response_mismatch");
     runner.unmount();
   });
 

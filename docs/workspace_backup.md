@@ -1,5 +1,13 @@
 # Offline Workspace Backup And Restore
 
+API26 adds metadata24 backup/restore support. The entire replicate request and
+trial-parent graph is retained; request JSON hashes are checked as well as the
+SQLite/FK/schema inventory. Schema20..23 archives remain readable without
+rewriting or migrating their bytes. Restored older workspaces migrate only on
+application startup under the workspace lease. A code revert does not downgrade
+metadata24: use a verified pre-upgrade backup in a new empty destination when
+running older code. Do not remove the current workspace or its new observations.
+
 The DOE contour expansion adds metadata schema 23 to the supported offline
 backup versions. Saved RSM plot-view BLOBs and their managed report dependencies
 are included through the existing DOE asset storage, not separate unmanaged

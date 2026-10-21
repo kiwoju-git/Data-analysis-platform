@@ -9,6 +9,8 @@ import { BayesianStudyClosePanel } from "./BayesianStudyClosePanel";
 import { BayesianStudyDeletionPanel } from "./BayesianStudyDeletionPanel";
 import { BayesianStudySummary } from "./BayesianStudySummary";
 import { BayesianTrialTable } from "./BayesianTrialTable";
+import { BayesianReplicatePanel } from "./BayesianReplicatePanel";
+import { useBayesianReplicateState } from "./hooks/useBayesianReplicateState";
 import { validBayesianId } from "./bayesianDisplay";
 import { useBayesianRecommendationState } from "./hooks/useBayesianRecommendationState";
 import { useBayesianRetentionState } from "./hooks/useBayesianRetentionState";
@@ -53,6 +55,7 @@ export function BayesianOptimizationWorkspace() {
   }, []);
   const recommendation = useBayesianRecommendationState({
     selectedStudyId: catalog.selectedStudyId,
+    sourceHistoryKey: lifecycle.study === null ? null : `${lifecycle.study.study_id}:${lifecycle.study.observation_history.history_revision_id}:${lifecycle.study.observation_history.observation_history_sha256}`,
     requestedBatchId,
     requestedRecommendationId,
     onBatchSelected: selectBatch,
@@ -69,6 +72,7 @@ export function BayesianOptimizationWorkspace() {
       ? recommendation.batch
       : null;
   const retention = useBayesianRetentionState(study);
+  const replicates = useBayesianReplicateState(study);
   const requestInFlight =
     catalog.isLoading ||
     lifecycle.isRestoring ||
@@ -77,6 +81,7 @@ export function BayesianOptimizationWorkspace() {
     lifecycle.isClosing ||
     recommendation.isRestoring ||
     recommendation.isRecommending ||
+    replicates.isRunning ||
     retention.isChecking ||
     retention.isDeleting;
   const studyActionDisabled =
@@ -142,6 +147,11 @@ export function BayesianOptimizationWorkspace() {
   async function createRecommendation() {
     if (study === null) return;
     const created = await recommendation.onRecommend(study);
+    if (created) await lifecycle.refreshStudy();
+  }
+
+  async function createReplicates(retry = false) {
+    const created = await replicates.submit(recommendation.totalTrialBudget, retry);
     if (created) await lifecycle.refreshStudy();
   }
 
@@ -227,6 +237,9 @@ export function BayesianOptimizationWorkspace() {
             onCancelTransition={() => lifecycle.setPendingTransition(null)}
             onCancelObservationBatch={() => lifecycle.setPendingObservationBatch(false)}
           />
+          <BayesianReplicatePanel study={study} state={replicates} disabled={studyActionDisabled}
+            totalBudget={recommendation.totalTrialBudget} onSubmit={retry => void createReplicates(retry)}
+            onRefresh={() => void lifecycle.refreshStudy()} />
           <BayesianRecommendationPanel
             study={study}
             batch={selectedBatch}
@@ -246,6 +259,9 @@ export function BayesianOptimizationWorkspace() {
             onCustomXiChange={recommendation.setCustomXi}
             onBudgetChange={recommendation.setTotalTrialBudget}
             onRecommend={() => void createRecommendation()}
+            noiseDraft={recommendation.noiseDraft}
+            onNoiseDraftChange={recommendation.onNoiseDraftChange}
+            draftChanged={recommendation.draftChanged}
           />
           <BayesianStudyClosePanel
             study={study}

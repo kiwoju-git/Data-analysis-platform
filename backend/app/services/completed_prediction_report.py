@@ -18,7 +18,7 @@ COMPLETED_PREDICTION_REPORT_DEFINITION = ReportDefinition(
     "completed_prediction",
     (1,),
     "completed_prediction_report",
-    "1.1.0",
+    "1.2.0",
     (
         ReportVariantDefinition(
             "completed_prediction",
@@ -26,6 +26,7 @@ COMPLETED_PREDICTION_REPORT_DEFINITION = ReportDefinition(
                 ReportSectionDefinition("provenance", True),
                 ReportSectionDefinition("inputs", True),
                 ReportSectionDefinition("predictions", True),
+                ReportSectionDefinition("surface_view"),
                 ReportSectionDefinition("limitations", True),
             ),
         ),
@@ -131,6 +132,36 @@ def render_completed_prediction(payload: dict[str, Any], locale: ReportLocale) -
             ),
         )
     )
+    from app.services.gaussian_process_report import gp_surface_sections
+    from app.services.gp_surface_views import stored_surface_payload
+
+    surface = stored_surface_payload(payload) if payload["family"] == "gaussian_process" else None
+    surface_title = text("Saved Conditional Surface View", "저장된 조건부 곡면 뷰")
+    if surface is None:
+        sections.append(
+            ReportSection("surface_view", surface_title, "not_applicable", reason="not_requested")
+        )
+    else:
+        surface_payload, display_mode = surface
+        section_id = {
+            "mean": "gp_surface_mean",
+            "latent_sd": "gp_surface_latent_sd",
+            "predictive_sd": "gp_surface_sd",
+        }[display_mode]
+        selected = next(
+            item
+            for item in gp_surface_sections(surface_payload, locale)
+            if item.section_id == section_id
+        )
+        sections.append(
+            ReportSection(
+                "surface_view",
+                surface_title,
+                selected.status,
+                selected.markup,
+                reason=selected.reason,
+            )
+        )
     warnings = [(row["client_row_id"], code) for row in rows for code in row.get("warnings", [])]
     warning_text = text(
         "Extrapolation warnings identify inputs outside the model's training ranges. "

@@ -17,11 +17,28 @@ records below retain their original scope rather than certifying the current bui
 Result charts share viewport-safe tooltips, explicit pinned selections, visible
 axes and bounded responsive frames. Desktop results switch between one/two
 columns by available content width; navigation becomes a drawer below1100px.
-PCA/PLS/GPR and existing DOE/BO fitting policies are unchanged.
+That chart refresh did not change fitting policies. Subsequent BO/GPR policy
+changes are separately versioned below.
 `quality.two_variances`0.1 adds explicit two-group BF equality or normal-F ratio
 inference; Bonett ratio intervals are not included in this version. Current
 runtime compatibility is recorded above. See [method contract](docs/two_variances_method_contract.md) and
 [validation record](docs/result_charts_linux_validation.md).
+
+### Noise-Aware BO and GPR
+
+BO separates observation noise from numerical jitter and uses latent-posterior
+EI/ETI, reproducible joint-latent batch planning, executable mixed-domain search
+and explicitly registered independent repeats. Standalone GPR adds group/time
+validation, optional one-step observed lags, bounded nominal predictors and an
+opt-in extended Exact GP resource profile. Extended mode admits at most2,000
+valid rows only when the whole requested configuration passes the resource
+estimate; it is not a sparse GP or a promise that every2,000-row fit is admitted.
+
+API26/metadata24 adds a real BO storage migration. Back up an existing workspace
+offline before upgrade; old code cannot open the new metadata schema. Existing
+JSON/NPZ artifacts are not rewritten. Current implementation and actual validation
+scope are recorded in the [extension evidence](docs/bo_gpr_noise_validation_extension.md)
+and [JMP comparison](docs/jmp_gp_bo_alignment.md), without claiming JMP numeric parity.
 
 ### Linux Prerelease
 
@@ -39,14 +56,16 @@ not an archive validation pass.
 #### Install and Run the Linux Release
 
 Download the Linux `.tar.gz` and `SHA256SUMS` from the
-[2026.10.5 DOE/RSM prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-doe-rsm-2026.10.5).
+[2026.10.6 BO/GPR prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-bo-gpr-2026.10.6).
+This version is publishable only after the exact-source product/security/resource
+and archive gates pass; an absent Release page means publication is not complete.
 The supported target is Ubuntu 24.04, x86_64, CPython 3.12 with `venv` and `pip`
 already installed. Python itself is not bundled. Node.js and Git are not needed.
 Verify the archive against the published checksum before extraction:
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.5-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.6-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 bash install.sh
 bash run.sh

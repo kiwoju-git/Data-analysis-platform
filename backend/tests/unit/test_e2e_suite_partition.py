@@ -31,12 +31,15 @@ STAGE_CALLS = {
     "analysis_completion": "verify_analysis_completion",
     "report_center_context": "verify_report_center_context",
     "rsm_context": "verify_rsm_context",
+    "bo_noise_context": "verify_bo_noise_context",
+    "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
     "doe_browser_zoom": "verify_doe_browser_zoom",
     "fractional_completion": "verify_fractional_completion",
     "api_translation": "verify_api_translation_boundary",
     "dataset_context": "verify_dataset_context",
     "gp_prediction_context": "verify_gp_prediction_context",
+    "gp_validation_extension": "verify_gp_validation_extension",
     "schema_concurrency": "verify_schema_concurrency",
     "chart_interactions": "verify_chart_interactions",
     "result_chart_models": "verify_result_chart_models",
@@ -62,9 +65,11 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "analysis_completion",
         "report_center_context",
         "rsm_context",
+        "bo_noise_context",
         "api_translation",
         "dataset_context",
         "gp_prediction_context",
+        "gp_validation_extension",
         "schema_concurrency",
         "chart_interactions",
         "result_chart_models",
@@ -76,6 +81,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "fractional_completion",
         "doe_rsm_completion",
         "doe_browser_zoom",
+        "bo_noise_extension",
         "desktop_resize",
         "localization_shell",
         "legacy_workflow",
@@ -86,7 +92,11 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert set(union.values()) == {1}
     for partition in partitions:
         assert partition == tuple(stage for stage in driver.FULL_STAGE_ORDER if stage in partition)
-    assert driver.suite_stage_ids("prediction") == ("gp_prediction_context", "pilot_prediction")
+    assert driver.suite_stage_ids("prediction") == (
+        "gp_prediction_context",
+        "gp_validation_extension",
+        "pilot_prediction",
+    )
     assert "pilot_feedback" in driver.suite_stage_ids("context")
     assert "rsm_context" in driver.suite_stage_ids("context")
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
@@ -281,6 +291,7 @@ def test_early_browser_diagnostics_do_not_replace_product_gates():
         "python311",
         "linux-release",
         "dependency-security",
+        "gp-resources",
     }
     command = next(
         step["run"] for step in diagnostic["steps"] if step.get("name") == "Existing browser suite"
@@ -338,6 +349,7 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
         "python311",
         "linux-release",
         "dependency-security",
+        "gp-resources",
     ]
     assert "needs" not in native
     commands = "\n".join(step.get("run", "") for step in native["steps"])

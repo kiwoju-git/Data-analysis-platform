@@ -36,6 +36,7 @@ def test_all_jobs_required_and_bound_to_source() -> None:
         "python311",
         "linux-release",
         "dependency-security",
+        "gp-resources",
     }
 
 
@@ -163,7 +164,8 @@ def test_workflow_admits_only_the_complete_gate_and_parameterizes_archive() -> N
     aggregate = workflow.split("  release-ready:", 1)[1]
     assert "if: always()" in aggregate
     assert (
-        "needs: [windows, e2e, linux, python311, linux-release, dependency-security]" in aggregate
+        "needs: [windows, e2e, linux, python311, linux-release, dependency-security, gp-resources]"
+        in aggregate
     )
     assert "release_readiness.py gate --kind release" in aggregate
     assert "GATE_RESULTS: ${{ toJSON(needs) }}" in aggregate
@@ -172,3 +174,13 @@ def test_workflow_admits_only_the_complete_gate_and_parameterizes_archive() -> N
     assert "statistical-twin-linux-$RELEASE_VERSION-ubuntu24.04-x86_64-py312.tar.gz" in archive
     assert "2026.10.2" not in archive
     assert "${{ inputs.release_version }}" not in archive.split("run:", 1)[1]
+
+
+def test_gp_resource_evidence_runs_both_native_targets_without_replacing_checks() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("  gp-resources:", 1)[1].split("  linux-release:", 1)[0]
+    assert "os: windows-latest" in job and 'python: "3.10"' in job
+    assert "os: ubuntu-24.04" in job and 'python: "3.12"' in job
+    assert "benchmark_gp_resources.py --rows 501 1000 2000" in job
+    assert "gp-resources-${{ matrix.target }}-${{ github.sha }}" in job
+    assert "if: always()" in job

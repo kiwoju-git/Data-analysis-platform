@@ -18,17 +18,20 @@ import {
   bayesianErrorCode,
   defaultBayesianBatchSearch,
 } from "../bayesianDisplay";
+import { buildNoisePolicy, defaultNoiseDraft, strictBoNumber, type BayesianNoiseDraft } from "../boNoisePolicy";
 
 const ignoreSelection = () => undefined;
 
 export function useBayesianRecommendationState({
   selectedStudyId,
+  sourceHistoryKey = null,
   requestedBatchId = null,
   requestedRecommendationId,
   onBatchSelected = ignoreSelection,
   onRecommendationSelected,
 }: {
   selectedStudyId: string | null;
+  sourceHistoryKey?: string | null;
   requestedBatchId?: string | null;
   requestedRecommendationId: string | null;
   onBatchSelected?: (batchId: string | null) => void;
@@ -50,8 +53,16 @@ export function useBayesianRecommendationState({
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRecommending, setIsRecommending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [noiseDraft, setNoiseDraft] = useState<BayesianNoiseDraft>(defaultNoiseDraft);
+  const [draftChanged, setDraftChanged] = useState(false);
   const restoreGuard = useRef(createLatestRequestGuard()).current;
   const createGuard = useRef(createLatestRequestGuard()).current;
+
+  useEffect(() => {
+    createGuard.cancel();
+    setIsRecommending(false);
+    return () => createGuard.cancel();
+  }, [createGuard, sourceHistoryKey]);
 
   const loadRecommendation = useCallback(
     async (
@@ -111,6 +122,20 @@ export function useBayesianRecommendationState({
             String(restoredBatch.requested_total_trial_budget),
           );
           if (batchId === null) onBatchSelected(restoredBatch.batch_id);
+          if (restoredBatch.result_schema_version === 2) {
+            const noise = restoredBatch.shared_model.noise;
+            setNoiseDraft({ ...defaultNoiseDraft, noiseMode: noise.mode,
+              noiseInitial: noise.mode === "estimate" ? String(noise.initial_variance_scaled) : defaultNoiseDraft.noiseInitial,
+              noiseLower: String(noise.bounds_scaled?.[0] ?? 1e-6), noiseUpper: String(noise.bounds_scaled?.[1] ?? 1),
+              fixedNoiseSd: noise.fixed_sd_raw === null ? "" : String(noise.fixed_sd_raw),
+              observationMode: restoredBatch.observation_view.mode,
+              nearbyUnits: restoredBatch.observation_view.nearby_diagnostics.units,
+              nearbyTolerances: Object.fromEntries(Object.entries(restoredBatch.observation_view.nearby_diagnostics.tolerances ?? {}).map(([id, value]) => [id, String(value)])),
+              sampleCount: String(restoredBatch.items[0]?.planning.requested_sample_count ?? 64),
+              minBatchDistance: String(restoredBatch.search_budget.min_batch_distance_normalized),
+            });
+          }
+          setDraftChanged(false);
           return restoredBatch;
         }
 
@@ -157,7 +182,7 @@ export function useBayesianRecommendationState({
         requestedRecommendationId,
       );
     }
-    return () => restoreGuard.cancel();
+    return () => { restoreGuard.cancel(); createGuard.cancel(); };
   }, [
     createGuard,
     loadRecommendation,
@@ -168,6 +193,12 @@ export function useBayesianRecommendationState({
   ]);
 
   async function onRecommend(study: BayesianStudyResponse): Promise<boolean> {
+    if (study.study_id !== selectedStudyId) return false;
+    const policy = buildNoisePolicy(noiseDraft, study.factors);
+    if (policy.payload === null) {
+      setError("bayesian_surrogate_policy_invalid");
+      return false;
+    }
     const parsedBatchSize = Number(batchSize);
     const parsedTotalTrialBudget = Number(totalTrialBudget);
     const resolvedBatchSize =
@@ -204,8 +235,10 @@ export function useBayesianRecommendationState({
       const created = await createBayesianRecommendationBatch(
         study.study_id,
         {
+          schema_version: 2,
           expected_history_revision_id:
             study.observation_history.history_revision_id,
+          expected_history_sha256: study.observation_history.observation_history_sha256,
           execution_mode: executionMode,
           batch_size: resolvedBatchSize,
           acquisition: {
@@ -218,12 +251,20 @@ export function useBayesianRecommendationState({
           },
           search: {
             ...defaultBayesianBatchSearch,
+            batch_policy: "greedy_mc_joint_latent_improvement_v2",
             total_trial_budget: parsedTotalTrialBudget,
           },
+          ...policy.payload,
         },
       );
       if (!createGuard.isCurrent(request)) return false;
+      if (created.study_id !== study.study_id || created.source_history_revision_id !== study.observation_history.history_revision_id ||
+        created.source_observation_history_sha256 !== study.observation_history.observation_history_sha256) {
+        setError("bayesian_recommendation_study_mismatch");
+        return false;
+      }
       setBatch(created);
+      setDraftChanged(false);
       setRecommendation(null);
       onBatchSelected(created.batch_id);
       return true;
@@ -254,9 +295,24 @@ export function useBayesianRecommendationState({
   ]);
 
   function onExecutionModeChange(value: BayesianExecutionMode) {
+    invalidateDraft();
     setExecutionMode(value);
     setBatchSize(value === "sequential_single" ? "1" : "2");
     setError(null);
+  }
+
+  function invalidateDraft() {
+    createGuard.cancel();
+    restoreGuard.cancel();
+    setIsRecommending(false);
+    setIsRestoring(false);
+    setDraftChanged(true);
+    setError(null);
+  }
+
+  function onNoiseDraftChange(value: BayesianNoiseDraft) {
+    invalidateDraft();
+    setNoiseDraft(value);
   }
 
   function clearRecommendation() {
@@ -272,6 +328,9 @@ export function useBayesianRecommendationState({
   return {
     batch,
     batchSize,
+    noiseDraft,
+    draftChanged,
+    onNoiseDraftChange,
     clearRecommendation,
     customXi,
     error,
@@ -283,11 +342,11 @@ export function useBayesianRecommendationState({
     onRecommend,
     onRefresh,
     recommendation,
-    setBatchSize,
-    setCustomXi,
+    setBatchSize: (value: string) => { invalidateDraft(); setBatchSize(value); },
+    setCustomXi: (value: string) => { invalidateDraft(); setCustomXi(value); },
     setError,
-    setExplorationProfile,
-    setTotalTrialBudget,
+    setExplorationProfile: (value: BayesianExplorationProfile) => { invalidateDraft(); setExplorationProfile(value); },
+    setTotalTrialBudget: (value: string) => { invalidateDraft(); setTotalTrialBudget(value); },
     totalTrialBudget,
   };
 }
@@ -299,8 +358,8 @@ function resolveXi(
   if (profile === "exploitation") return 0;
   if (profile === "balanced") return 0.01;
   if (profile === "exploration") return 0.1;
-  const parsed = Number(customValue);
-  return Number.isFinite(parsed) && parsed >= 0 && parsed <= 10
+  const parsed = strictBoNumber(customValue);
+  return parsed !== null && parsed >= 0 && parsed <= 10
     ? parsed
     : null;
 }

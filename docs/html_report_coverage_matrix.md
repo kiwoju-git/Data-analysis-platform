@@ -104,7 +104,7 @@ Versions and accepted stored schemas are declared in the live catalog and
 | regression.linear_model, OLS | linear_model_report: fit/equation/coefs/ANOVA/selection/influence/raw+standardized diagnostics | Missing legacy sections become summary |
 | regression.linear_model, Ridge/Lasso/EN | regularized_model_report + residual distribution: tuning/CV/all coefficient paths | No OLS inference |
 | regression.partial_least_squares | pls_regression_report: settings/components/coefs/train+OOF/score/all loadings/residuals | No UI pagination limit, invented VIP or p-values |
-| regression.gaussian_process | GP core + gaussian_process_report: settings/optimizer/train+CV/residual/predictive SD/profile/surface tables and mean+SD heatmaps/comparison | Single/compare variants; missing old settings/plots reduce level |
+| regression.gaussian_process | GP core + gaussian_process_report: settings/optimizer/train+CV/residual, named latent/predictive uncertainty, numeric/nominal profiles, stored surface tables/heatmaps, comparison and validation/resource/lineage evidence | Method 0.4/result 4; schemas 1/2/3 readable; missing legacy sections reduce level; exact saved custom surface uses completed-prediction report source |
 | quality.individuals_chart | quality_report: I/MR summaries/charts/signals | Shapes and zero limits preserved |
 | quality.subgroup_chart | quality_report: Xbar/R/S summaries/charts/signals | Actual subgroup counts/statistics |
 | quality.attribute_control_chart | quality_report: p/np/c/u summaries/charts/signals | Point-varying limits and frozen Phase II dependency |
@@ -209,7 +209,7 @@ Renderer shorthand: E = named EDA renderer in `analysis_run_exports.py`, H =
 | Regression | regression.linear_model 0.3.0 OLS | linear_model / 6 | R: fit/coefficient tables | summary; full ANOVA/selection/diagnostic UI absent | API + OLS tests |
 | Regression | regression.linear_model 0.3.0 Ridge/Lasso/EN | linear_model / 6 | regularized_model_report: tuning/CV/coefs/path | summary; no OLS inference | regularized API/report |
 | Regression | regression.partial_least_squares 0.1.0 | partial_least_squares_regression / 1 | pls_regression_report: settings/components/coefs/response/score/all loadings/residuals | fixed; all saved points, no invented inference | test_pls_report + E2E |
-| Regression | regression.gaussian_process 0.3.0 | gaussian_process_regression / 3 | GP renderer + gaussian_process_report | fixed; surface table, not heatmap | GP API/reference + E2E |
+| Regression | regression.gaussian_process 0.4.0 | gaussian_process_regression / 4 (read 1/2/3) | GP renderer + gaussian_process_report; exact completed-prediction surface views | Stored-only numeric/nominal profiles and surface heatmaps; validation coverage/lag/resource notices; old absent fields explicitly limited | GP API/reference/mixed/restore tests executed; new form/archive E2E written, native execution recorded separately |
 | Regression contextual | regression.predict 0.3.0 | dedicated prediction / 3 | own CSV/restore | unsupported HTML | prediction API/E2E |
 | DOE | doe.factorial_design 0.9.0 | factorial analysis / 3 | factorial_analysis_report | supported; separate legacy design report | factorial exports/E2E |
 | DOE | doe.general_factorial_design 0.4.0 | general factorial analysis / 3 | dedicated workflow renderer | supported; cube inapplicable | factorial exports/E2E |

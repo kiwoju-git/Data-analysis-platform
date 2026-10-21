@@ -10,20 +10,23 @@ from uuid import UUID, uuid4
 from fastapi import status
 from pydantic import ValidationError
 
-from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
     MAX_BAYESIAN_TRIALS,
     MAX_COMPLETED_OBSERVATIONS,
     BayesianBatchSearchBudgetResponse,
     BayesianBatchSharedModelResponse,
-    BayesianLatestRecommendationBatchResponse,
     BayesianRecommendationBatchCreateRequest,
     BayesianRecommendationBatchItemResponse,
-    BayesianRecommendationBatchListResponse,
     BayesianRecommendationBatchProvenance,
     BayesianRecommendationBatchResponse,
     BayesianRecommendationCurrentTrialResponse,
     BayesianTrialResponse,
+)
+from app.api.v1.schemas.bayesian_noise import (
+    BayesianAnyBatchListResponse,
+    BayesianAnyBatchResponse,
+    BayesianAnyLatestBatchResponse,
+    BayesianNoiseBatchCreateRequest,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -63,8 +66,12 @@ WORKER_STARTUP_ALLOWANCE_MS: Final = 20_000
 def create_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
-    body: BayesianRecommendationBatchCreateRequest,
-) -> BayesianRecommendationBatchResponse:
+    body: BayesianRecommendationBatchCreateRequest | BayesianNoiseBatchCreateRequest,
+) -> BayesianAnyBatchResponse:
+    if isinstance(body, BayesianNoiseBatchCreateRequest):
+        from app.services.bayesian_noise_recommendations import create_noise_batch
+
+        return create_noise_batch(settings, study_id, body)
     study = get_bayesian_study(settings, study_id)
     if study.status != "active":
         raise _batch_error("bayesian_study_closed")
@@ -72,7 +79,7 @@ def create_bayesian_recommendation_batch(
         raise _batch_error("bayesian_optimization_history_stale")
     if any(trial.origin == "initial_design" and trial.state == "pending" for trial in study.trials):
         raise _batch_error("bayesian_optimization_history_incomplete")
-    if any(trial.origin == "recommendation" and trial.state == "pending" for trial in study.trials):
+    if any(trial.state == "pending" for trial in study.trials):
         raise _batch_error("bayesian_optimization_pending_recommendation_exists")
     completed = [trial for trial in study.trials if trial.state == "completed"]
     if (
@@ -203,7 +210,7 @@ def create_bayesian_recommendation_batch(
             raise _batch_error("bayesian_optimization_artifact_mismatch") from exc
         items.append(item)
 
-    method_version = METHOD_VERSIONS[BAYESIAN_METHOD_ID]
+    method_version = "0.6.0"
     config_payload = {
         "schema_version": BAYESIAN_BATCH_CONFIG_SCHEMA_VERSION,
         "study_id": str(study.study_id),
@@ -329,7 +336,7 @@ def get_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
     batch_id: UUID,
-) -> BayesianRecommendationBatchResponse:
+) -> BayesianAnyBatchResponse:
     study = get_bayesian_study(settings, study_id)
     record = get_bayesian_recommendation_batch_record(
         settings.workspace_root,
@@ -356,13 +363,13 @@ def get_bayesian_recommendation_batch(
 def get_latest_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
-) -> BayesianLatestRecommendationBatchResponse:
+) -> BayesianAnyLatestBatchResponse:
     study = get_bayesian_study(settings, study_id)
     record = get_latest_bayesian_recommendation_batch_record(
         settings.workspace_root,
         str(study.study_version_id),
     )
-    return BayesianLatestRecommendationBatchResponse(
+    return BayesianAnyLatestBatchResponse(
         study_id=study.study_id,
         study_version_id=study.study_version_id,
         item=(
@@ -377,7 +384,7 @@ def list_bayesian_recommendation_batches(
     *,
     offset: int,
     limit: int,
-) -> BayesianRecommendationBatchListResponse:
+) -> BayesianAnyBatchListResponse:
     study = get_bayesian_study(settings, study_id)
     records = list_bayesian_recommendation_batch_records(
         settings.workspace_root,
@@ -389,7 +396,7 @@ def list_bayesian_recommendation_batches(
         settings.workspace_root,
         str(study.study_version_id),
     )
-    return BayesianRecommendationBatchListResponse(
+    return BayesianAnyBatchListResponse(
         study_id=study.study_id,
         study_version_id=study.study_version_id,
         total=count_bayesian_recommendation_batch_records(
@@ -416,7 +423,33 @@ def _validated_response(
     record: BayesianRecommendationBatchRecord,
     *,
     is_latest: bool,
-) -> BayesianRecommendationBatchResponse:
+) -> BayesianAnyBatchResponse:
+    if record.result_schema_version == 2:
+        from app.api.v1.schemas.bayesian_noise import BayesianNoiseBatchResponse
+
+        # get_bayesian_study has already verified the complete immutable graph.
+        response_v2 = BayesianNoiseBatchResponse.model_validate_json(record.result_json)
+        current = {str(trial.trial_id): trial for trial in study.trials}
+        current_items_v2 = [
+            item.model_copy(
+                update={
+                    "current_trial": BayesianRecommendationCurrentTrialResponse(
+                        trial_id=current[str(item.trial.trial_id)].trial_id,
+                        state=current[str(item.trial.trial_id)].state,
+                        objective_value=current[str(item.trial.trial_id)].objective_value,
+                        closed_at=current[str(item.trial.trial_id)].closed_at,
+                    )
+                }
+            )
+            for item in response_v2.items
+        ]
+        return response_v2.model_copy(
+            update={
+                "items": current_items_v2,
+                "is_latest": is_latest,
+                "batch_state": _batch_state(current_items_v2),
+            }
+        )
     if (
         hashlib.sha256(record.config_json.encode("utf-8")).hexdigest() != record.config_sha256
         or hashlib.sha256(record.result_json.encode("utf-8")).hexdigest() != record.result_sha256
@@ -513,7 +546,7 @@ def _validated_response(
 def _worker_payload(
     study: Any,
     body: BayesianRecommendationBatchCreateRequest,
-    completed: list[BayesianTrialResponse],
+    completed: list[Any],
 ) -> dict[str, Any]:
     goal_type = study.objective.goal_type or study.objective.direction
     return {
@@ -561,19 +594,16 @@ def _run_worker(payload: dict[str, Any], *, timeout_ms: int) -> dict[str, Any]:
         args=(output_queue, payload),
     )
     process.start()
-    process.join(timeout_ms / 1000.0)
-    if process.is_alive():
-        process.terminate()
-        process.join(timeout=5.0)
-        output_queue.close()
-        output_queue.join_thread()
-        process.close()
-        raise _batch_error("bayesian_optimization_batch_incomplete")
     try:
-        message = output_queue.get(timeout=2.0)
+        # Drain the result before joining: a full feeder pipe otherwise deadlocks.
+        message = output_queue.get(timeout=timeout_ms / 1000.0)
+        process.join(timeout=5.0)
     except queue.Empty as exc:
-        raise _batch_error("bayesian_optimization_surrogate_fit_failed") from exc
+        raise _batch_error("bayesian_optimization_batch_incomplete") from exc
     finally:
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5.0)
         output_queue.close()
         output_queue.join_thread()
         process.close()
@@ -591,7 +621,7 @@ def _run_worker(payload: dict[str, Any], *, timeout_ms: int) -> dict[str, Any]:
 
 
 def _batch_state(
-    items: list[BayesianRecommendationBatchItemResponse],
+    items: list[Any],
 ) -> Literal[
     "pending",
     "partially_completed",

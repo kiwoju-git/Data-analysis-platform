@@ -118,7 +118,25 @@ def expected_target_improvement(
     return result
 
 
+def _noise_aware_payload(payload: dict[str, Any]) -> bool:
+    search = payload.get("search")
+    if payload.get("schema_version") == 2 or (
+        isinstance(search, dict)
+        and search.get("batch_policy") == "greedy_mc_joint_latent_improvement_v2"
+    ):
+        return True
+    if any(key in payload for key in ("surrogate", "observation_policy", "batch_options")):
+        raise BayesianOptimizationError("bayesian_optimization_search_options_invalid")
+    return False
+
+
 def calculate_bayesian_recommendation(payload: dict[str, Any]) -> dict[str, Any]:
+    if _noise_aware_payload(payload):
+        from app.statistics.bo_recommendation_core import calculate_noise_aware_batch
+
+        if payload.get("batch_size") != 1:
+            raise BayesianOptimizationError("bayesian_optimization_search_options_invalid")
+        return calculate_noise_aware_batch(payload)
     import numpy as np
     import scipy  # type: ignore[import-untyped]
     import sklearn  # type: ignore[import-untyped]

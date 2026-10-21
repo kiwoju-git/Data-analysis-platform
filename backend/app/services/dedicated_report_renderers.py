@@ -8,6 +8,7 @@ from typing import Any
 
 from app.api.v1.schemas.rsm_plots import RsmPlotBundle
 from app.i18n.report_text import ReportLocale
+from app.services.bo_noise_report import bo_noise_report_section
 from app.services.doe_lack_of_fit_report import lack_of_fit_report_notice
 from app.services.inference_report_primitives import missing, paragraph, section, text
 from app.services.report_contract import (
@@ -124,8 +125,9 @@ DEFINITIONS = {
         "bayesian_history",
         "bayesian",
         ("source", "definition", "history"),
-        ("observations", "history_plot", "attachment", "warnings"),
+        ("observations", "history_plot", "attachment", "noise_summary", "warnings"),
         (1,),
+        renderer_version="1.2.0",
     ),
     "doe_prediction": _definition(
         "doe.factorial_prediction",
@@ -775,6 +777,7 @@ def render_bayesian_body(payload: dict[str, Any], locale: ReportLocale) -> Repor
                 "observations", "이력의 관측값", "Historical observations", observations, locale
             ),
             section("history_plot", "관측 이력 그래프", "Observation history plot", plot, locale),
+            bo_noise_report_section(attachment, payload["definition"], locale),
             _saved(
                 "attachment",
                 "명시적으로 선택한 추천",

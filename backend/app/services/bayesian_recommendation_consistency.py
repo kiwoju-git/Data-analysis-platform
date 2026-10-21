@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
+    BayesianAnyTrialResponse,
     BayesianFactorResponse,
     BayesianLinearConstraintResponse,
     BayesianRecommendationCreateRequest,
@@ -24,6 +25,9 @@ SUPPORTED_BAYESIAN_RECOMMENDATION_METHOD_VERSIONS: Final = frozenset(
         "0.2.1",
         "0.2.2",
         "0.3.0",
+        "0.4.0",
+        "0.5.0",
+        "0.6.0",
         METHOD_VERSIONS[BAYESIAN_METHOD_ID],
     }
 )
@@ -32,7 +36,7 @@ SUPPORTED_BAYESIAN_RECOMMENDATION_METHOD_VERSIONS: Final = frozenset(
 def recommendation_trial_snapshot_matches(
     *,
     snapshot: BayesianTrialResponse,
-    current: BayesianTrialResponse,
+    current: BayesianAnyTrialResponse,
 ) -> bool:
     return (
         snapshot.state == "pending"
@@ -61,7 +65,7 @@ def validate_bayesian_recommendation_record(
     factors: list[BayesianFactorResponse],
     constraints: list[BayesianLinearConstraintResponse],
     objective_direction: str,
-    current_trial: BayesianTrialResponse,
+    current_trial: BayesianAnyTrialResponse,
 ) -> BayesianRecommendationResponse:
     try:
         response = BayesianRecommendationResponse.model_validate_json(record.result_json)

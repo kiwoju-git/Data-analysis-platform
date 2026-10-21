@@ -100,7 +100,7 @@ def test_backup_restore_preserves_owned_bytes_and_db_rows(tmp_path: Path) -> Non
         )
 
 
-@pytest.mark.parametrize("legacy_schema", [20, 21])
+@pytest.mark.parametrize("legacy_schema", [20, 21, 22, 23])
 def test_legacy_backup_restores_without_migration_then_upgrades(
     tmp_path: Path, legacy_schema: int
 ) -> None:
@@ -135,9 +135,10 @@ def test_legacy_backup_restores_without_migration_then_upgrades(
                 "SELECT 1 FROM sqlite_master WHERE name='managed_report_artifacts'"
             ).fetchone()
         ) == (legacy_schema >= 21)
-        assert "failure_code" not in {
-            row[1] for row in connection.execute("PRAGMA table_info(analysis_runs)")
-        }
+        assert (
+            "failure_code"
+            in {row[1] for row in connection.execute("PRAGMA table_info(analysis_runs)")}
+        ) == (legacy_schema >= 22)
     initialize_metadata_store(restored)
     with sqlite3.connect(metadata_db_path(restored)) as connection:
         assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION

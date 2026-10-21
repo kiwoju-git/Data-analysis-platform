@@ -1,6 +1,22 @@
 # Bayesian Batch Recommendation Contract
 
-Last updated: 2026-07-30
+Last updated: 2026-10-21
+
+## Current V2 Policy
+
+New UI requests use schema2, method0.7.0 and
+`greedy_mc_joint_latent_improvement_v2`. Noise/latent incumbent, exact-repeat
+sufficient statistics, correlated MC planning, mixed search and version dispatch
+are specified in [BO/GPR extension](bo_gpr_noise_validation_extension.md).
+Default posterior sample count is64 (allowed16..256); q1 is analytic.
+All q1..q8 requests share one fit/core. The optional normalized batch distance
+defaults to0 and is separate from duplicate tolerance. Infeasible or over-budget
+batches are rejected atomically; no partial pending trials are committed.
+New result predictions use the real-data base posterior; planning conditional
+uncertainty is separately labeled. Exact qNEI/JMP numerical equivalence is not claimed.
+
+The following sections specify the retained **legacy V1** mean-fantasy policy.
+They are not the current UI defaults, and no old artifact is recalculated.
 
 ## Scope
 

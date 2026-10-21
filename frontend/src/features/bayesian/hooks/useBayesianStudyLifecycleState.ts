@@ -12,6 +12,7 @@ import {
   type BayesianStudyResponse,
 } from "../../../api";
 import { createLatestRequestGuard } from "../../../latestRequest";
+import { bayesianRequestId } from "../bayesianRequestId";
 import {
   bayesianErrorCode,
   type PendingTrialTransition,
@@ -187,8 +188,12 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
       return;
     }
     setError(null);
-    setPendingObservationBatch(true);
-    setPendingObservationBatchRequestId(crypto.randomUUID());
+    try {
+      setPendingObservationBatchRequestId(bayesianRequestId());
+      setPendingObservationBatch(true);
+    } catch {
+      setError("bayesian_secure_random_unavailable");
+    }
   }
 
   async function confirmObservationBatch(): Promise<boolean> {
@@ -243,7 +248,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
         target_status: closeTarget,
         reason_code: closeReason,
         note: closeNote.trim() || null,
-        request_id: crypto.randomUUID(),
+        request_id: bayesianRequestId(),
         expected_study_version_id: activeStudy.study_version_id,
         expected_history_revision_id:
           activeStudy.observation_history.history_revision_id,

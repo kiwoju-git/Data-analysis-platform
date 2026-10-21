@@ -22,6 +22,7 @@ from app.statistics.gaussian_process_regression import (
     _assemble_result,
     _cross_validate,
     _fit_model,
+    _fit_parsed_model,
     _ParsedRows,
     _validation_metrics,
     _ValidationResult,
@@ -103,8 +104,14 @@ def compare_kernel_candidates(
             validation = _cross_validate(
                 parsed, active, splits, started, preset_index=PRESET_PRIORITY.index(preset)
             )
-            metrics = _validation_metrics(parsed.y, validation.mean, validation.predictive_std)
-            if any(value is None or not math.isfinite(value) for value in metrics.values()):
+            metrics = _validation_metrics(
+                parsed.y, validation.mean, validation.predictive_std, validation.scored_mask
+            )
+            if any(
+                value is None or not math.isfinite(value)
+                for key in ("rmse", "mae", "nlpd", "interval_coverage_95", "mean_interval_width")
+                for value in (metrics[key],)
+            ):
                 raise GaussianProcessRegressionError("gp_cross_validation_failed")
             validations[preset] = validation
             record.update(
@@ -141,7 +148,11 @@ def compare_kernel_candidates(
         record = next(candidate for candidate in candidates if candidate["preset"] == preset)
         try:
             with threadpool_limits(limits=1):
-                final = _fit_model(parsed.x, parsed.y, active)
+                final = (
+                    _fit_parsed_model(parsed, active)
+                    if parsed.raw_predictor_rows is not None
+                    else _fit_model(parsed.x, parsed.y, active)
+                )
                 result = _assemble_result(
                     parsed,
                     response,
@@ -165,6 +176,8 @@ def compare_kernel_candidates(
                         "diagnostics",
                         "warnings",
                         "optimization",
+                        "validation_plan",
+                        "feature_lineage",
                     )
                 }
             record["fitted_kernel_summary"] = result["kernel"]
@@ -190,6 +203,9 @@ def compare_kernel_candidates(
         "retain_candidate_details": options.retain_candidate_details,
         "selection_is_external_validation": False,
         "cv_split_sha256": split_sha,
+        "validation_plan_sha256": parsed.validation_plan.payload["split_plan_sha256"]
+        if parsed.validation_plan is not None
+        else None,
         "cv_validation_row_indices": validation_indices,
         "base_seed": options.random_seed,
         "optimizer_starts": optimizer_start_count(options, len(splits)),

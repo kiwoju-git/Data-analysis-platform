@@ -295,6 +295,54 @@ def test_source_and_version_must_match_requested_archive(field: str, replacement
         VERIFY.require_expected_identity(identity, SHA, "2026.10.3")
 
 
+def valid_gp_receipt() -> dict:
+    return {
+        "schema_version": 1,
+        "synthetic": True,
+        "status": "succeeded",
+        "group_form": True,
+        "time_form": True,
+        "lag_form": True,
+        "mixed_restore_prediction": True,
+        "unknown_category_api_rejected": True,
+        "surface_hold_saved": True,
+        "managed_report_reopened": True,
+        "source_checksums_unchanged": True,
+        "group_count": 6,
+        "raw_n": 36,
+        "forbidden_resize_locale_requests": [],
+        "locales_viewports": [
+            {"locale": locale, "width": width} for locale in ("ko", "en") for width in (1024, 1440)
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "group_form",
+        "time_form",
+        "lag_form",
+        "mixed_restore_prediction",
+        "surface_hold_saved",
+        "managed_report_reopened",
+        "source_checksums_unchanged",
+    ],
+)
+def test_gp_archive_receipt_requires_real_form_and_restore_gates(field: str) -> None:
+    receipt = valid_gp_receipt()
+    receipt[field] = False
+    with pytest.raises(ValueError, match="GPR built-UI"):
+        VERIFY.require_gp_extension_receipt(receipt)
+
+
+def test_gp_archive_receipt_rejects_missing_or_posting_resize_evidence() -> None:
+    VERIFY.require_gp_extension_receipt(valid_gp_receipt())
+    for receipt in (None, {}, {**valid_gp_receipt(), "forbidden_resize_locale_requests": ["POST"]}):
+        with pytest.raises(ValueError, match="GPR built-UI"):
+            VERIFY.require_gp_extension_receipt(receipt)
+
+
 def valid_evidence(phase: str) -> dict:
     base = {"schema_version": 2, "status": "succeeded", "phase": phase}
     analyses = [
@@ -327,6 +375,9 @@ def valid_evidence(phase: str) -> dict:
             "doe_rsm_receipt": valid_doe_receipt(),
             "fractional_receipt": valid_fractional_receipt(),
             "doe_zoom_receipt": valid_zoom_receipt(),
+            "bo_noise_receipt": valid_bo_receipt(),
+            "bo_context_receipt": valid_bo_context_receipt(),
+            "gp_extension_receipt": valid_gp_receipt(),
         }
     if phase == "resume":
         return {
@@ -498,6 +549,59 @@ def test_offline_rsm_evidence_requires_visible_geometry() -> None:
     evidence["doe_rsm_receipt"]["visible_stored_geometry"] = False
     with pytest.raises(ValueError, match="stored geometry"):
         VERIFY.require_browser_evidence(evidence, "offline-smoke.json")
+
+
+def valid_bo_receipt() -> dict:
+    return {
+        "schema_version": 1,
+        "synthetic": True,
+        "status": "succeeded",
+        "q1_target_ui": True,
+        "joint_batch_ui": True,
+        "replicate_ui": True,
+        "individual_observations_ui": True,
+        "exact_aggregation_ui": True,
+        "legacy_observations_unchanged": True,
+        "restore_ui": True,
+        "raw_n": 9,
+        "effective_n": 7,
+        "locale_resize_restore_do_not_post": True,
+        "locales_viewports": [
+            {"locale": locale, "width": width} for locale in ("ko", "en") for width in (1024, 1440)
+        ],
+    }
+
+
+def valid_bo_context_receipt() -> dict:
+    return {
+        "schema_version": 1,
+        "synthetic": True,
+        "status": "succeeded",
+        "committed_post_replayed_only_by_explicit_action": True,
+        "same_request_id_payload": True,
+        "no_duplicate_trials": True,
+        "history_unchanged": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "key", ["q1_target_ui", "replicate_ui", "restore_ui", "exact_aggregation_ui"]
+)
+def test_bo_archive_receipt_requires_visible_workflow_evidence(key):
+    receipt = valid_bo_receipt()
+    receipt[key] = False
+    with pytest.raises(ValueError, match="BO built-UI"):
+        VERIFY.require_bo_noise_receipts(receipt, valid_bo_context_receipt())
+
+
+def test_bo_archive_receipt_does_not_accept_api_only_or_unknown_context():
+    VERIFY.require_bo_noise_receipts(valid_bo_receipt(), valid_bo_context_receipt())
+    with pytest.raises(ValueError, match="BO built-UI"):
+        VERIFY.require_bo_noise_receipts(valid_bo_receipt(), {})
+    receipt = valid_bo_receipt()
+    receipt["effective_n"] = 9
+    with pytest.raises(ValueError, match="BO built-UI"):
+        VERIFY.require_bo_noise_receipts(receipt, valid_bo_context_receipt())
 
 
 def valid_fractional_receipt() -> dict:

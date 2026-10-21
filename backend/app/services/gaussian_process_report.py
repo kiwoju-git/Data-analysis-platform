@@ -16,6 +16,7 @@ from app.services.stored_report_primitives import (
 GP_SURFACE_DEFINITIONS = (
     ReportSectionDefinition("gp_surface_mean"),
     ReportSectionDefinition("gp_surface_sd"),
+    ReportSectionDefinition("gp_surface_latent_sd"),
 )
 
 
@@ -80,6 +81,11 @@ def gp_surface_sections(
             "predictive_standard_deviation",
             text("New Observation Predictive SD", "새 관측값 예측 표준편차"),
         ),
+        (
+            "gp_surface_latent_sd",
+            "latent_standard_deviation",
+            text("Latent Response SD", "잠재 반응 표준편차"),
+        ),
     )
     if "two_predictor_surface" not in payload:
         return tuple(
@@ -111,6 +117,11 @@ def gp_surface_sections(
     unit = response.get("unit")
     sections = []
     for section_id, key, title in specs:
+        if any(key not in point for point in surface["points"]):
+            sections.append(
+                ReportSection(section_id, title, "missing", reason="surface_quantity_not_stored")
+            )
+            continue
         value_label = title + (f" ({unit})" if unit else "")
         cells = [
             (
@@ -121,7 +132,7 @@ def gp_surface_sections(
             )
             for point in surface["points"]
         ]
-        if key == "predictive_standard_deviation" and any(value < 0 for _, _, value, _ in cells):
+        if key.endswith("standard_deviation") and any(value < 0 for _, _, value, _ in cells):
             raise ValueError("analysis_report_payload_invalid")
         markup = report_grid(title, labels[0], labels[1], value_label, cells)
         markup += report_table(
@@ -328,10 +339,18 @@ def gp_saved_sections(payload: dict[str, Any], locale: ReportLocale) -> tuple[Re
 
     for profile in payload.get("conditional_profiles", []):
         title = text("Conditional Profile", "조건부 profile") + ": " + profile["display_name"]
+        categorical = profile.get("kind") == "nominal"
+        coordinates = [
+            float(index) if categorical else point["value"]
+            for index, point in enumerate(profile["points"])
+        ]
         profile_series = [
             (
                 text("Mean", "평균"),
-                [(p["value"], p["predicted_mean"], "") for p in profile["points"]],
+                [
+                    (x, p["predicted_mean"], str(p["value"]))
+                    for x, p in zip(coordinates, profile["points"], strict=True)
+                ],
             )
         ]
         profile_series += [
@@ -339,7 +358,10 @@ def gp_saved_sections(payload: dict[str, Any], locale: ReportLocale) -> tuple[Re
                 text("95% new-observation PI lower", "95% 새 관측값 예측구간 하한")
                 if key == "lower"
                 else text("95% new-observation PI upper", "95% 새 관측값 예측구간 상한"),
-                [(p["value"], p["predictive_interval_95"][key], "") for p in profile["points"]],
+                [
+                    (x, p["predictive_interval_95"][key], str(p["value"]))
+                    for x, p in zip(coordinates, profile["points"], strict=True)
+                ],
             )
             for key in ("lower", "upper")
         ]
@@ -350,13 +372,39 @@ def gp_saved_sections(payload: dict[str, Any], locale: ReportLocale) -> tuple[Re
                 predictor_label(profile["column_id"], profile["display_name"]),
                 response_label,
                 profile_series,
-                lines=True,
+                lines=not categorical,
+                x_ticks=[
+                    (x, str(p["value"]))
+                    for x, p in zip(coordinates, profile["points"], strict=True)
+                ]
+                if categorical
+                else None,
             ),
             report_table(
                 [text("Fixed predictors (model order)", "고정 예측변수 (모형 순서)")],
                 [[str(profile["fixed_values"])]],
             ),
         ]
+        if categorical:
+            parts.append(
+                report_table(
+                    [
+                        profile["display_name"],
+                        text("Predicted mean", "예측 평균"),
+                        text("95% new-observation lower", "95% 새 관측값 하한"),
+                        text("95% new-observation upper", "95% 새 관측값 상한"),
+                    ],
+                    [
+                        [
+                            p["value"],
+                            p["predicted_mean"],
+                            p["predictive_interval_95"]["lower"],
+                            p["predictive_interval_95"]["upper"],
+                        ]
+                        for p in profile["points"]
+                    ],
+                )
+            )
     if parts:
         take("gp_profiles", "Conditional Profiles", "조건부 예측 프로파일")
     else:
@@ -379,10 +427,17 @@ def gp_saved_sections(payload: dict[str, Any], locale: ReportLocale) -> tuple[Re
                     predictor_label(surface["y_column_id"], surface["y_display_name"]),
                     text("Predicted mean", "예측 평균")
                     + (f' ({response["unit"]})' if response.get("unit") else ""),
+                    text("Latent response SD", "잠재 반응 표준편차"),
                     axis_labels["predictive_standard_deviation"],
                 ],
                 [
-                    [p["x"], p["y"], p["predicted_mean"], p["predictive_standard_deviation"]]
+                    [
+                        p["x"],
+                        p["y"],
+                        p["predicted_mean"],
+                        p.get("latent_standard_deviation"),
+                        p["predictive_standard_deviation"],
+                    ]
                     for p in surface["points"]
                 ],
             ),
@@ -398,4 +453,61 @@ def gp_saved_sections(payload: dict[str, Any], locale: ReportLocale) -> tuple[Re
                 reason="surface_not_requested" if stored_surface else "surface_not_stored",
             )
         )
+    sections.extend(gp_validation_resource_sections(payload, locale))
+    return tuple(sections)
+
+
+def gp_validation_resource_sections(
+    payload: dict[str, Any], locale: ReportLocale
+) -> tuple[ReportSection, ...]:
+    def text(en: str, ko: str) -> str:
+        return report_text(locale, en=en, ko=ko)
+
+    sections = []
+    for section_id, key, title in (
+        ("gp_validation_plan", "validation_plan", text("Validation Plan", "검증 계획")),
+        ("gp_feature_lineage", "feature_lineage", text("Lag Feature Lineage", "Lag 특성 계보")),
+        (
+            "gp_resource_budget",
+            "resource_budget",
+            text("Exact GP Resource Budget", "Exact GP 자원 예산"),
+        ),
+    ):
+        record = payload.get(key)
+        if not isinstance(record, dict) or not record:
+            sections.append(ReportSection(section_id, title, "not_applicable", reason="not_stored"))
+            continue
+        markup = report_table(
+            [text("Setting", "설정"), text("Stored value", "저장값")],
+            [(name, value) for name, value in record.items() if name != "folds"],
+        )
+        if key == "validation_plan":
+            purpose = record.get("evaluation_purpose")
+            notices = {
+                "new_group_generalization": text(
+                    "Evaluation on unseen groups, not another measurement from the same batch.",
+                    "새 그룹의 일반화 평가이며 같은 배치의 다음 측정 평가가 아닙니다.",
+                ),
+                "one_step_rolling_observed_history": text(
+                    "One-step evaluation uses earlier observed outcomes; "
+                    "not fixed-origin forecasting.",
+                    "이전 결과 관측 후 다음 시점을 평가하며 고정 시점 다단계 예측이 아닙니다.",
+                ),
+                "future_observations": text(
+                    "Training precedes validation in time; warm-up rows are not scored.",
+                    "과거로 학습해 이후를 검증하며 초기 학습 전용 행은 평가하지 않습니다.",
+                ),
+                "no_external_validation": text(
+                    "No external predictive-performance validation was requested.",
+                    "외부 예측 성능 검증을 요청하지 않았습니다.",
+                ),
+            }
+            notice = notices.get(purpose, "") if isinstance(purpose, str) else ""
+            markup += f"<p>{escape(notice)}</p>"
+            for fold in record.get("folds", []):
+                markup += report_table(
+                    [text("Fold setting", "Fold 설정"), text("Stored value", "저장값")],
+                    list(fold.items()),
+                )
+        sections.append(ReportSection(section_id, title, "rendered", markup))
     return tuple(sections)

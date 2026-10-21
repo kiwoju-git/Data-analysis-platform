@@ -244,6 +244,52 @@ class BayesianTrialResponse(BaseModel):
     closed_at: str | None
 
 
+class BayesianReplicateTrialResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trial_id: UUID
+    study_version_id: UUID
+    trial_number: int = Field(ge=1)
+    origin: Literal["replicate"]
+    state: Literal["pending", "completed", "abandoned"]
+    actual_coordinates: dict[str, float]
+    normalized_coordinates: dict[str, float]
+    coordinates_sha256: str
+    objective_value: float | None
+    created_at: str
+    closed_at: str | None
+    replicate_of_trial_id: UUID
+
+
+BayesianAnyTrialResponse = BayesianTrialResponse | BayesianReplicateTrialResponse
+
+
+class BayesianReplicateCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_history_revision_id: UUID
+    expected_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    request_id: UUID
+    count: int = Field(ge=1, le=8, strict=True)
+    confirm_replicate_intent: Literal[True]
+    total_trial_budget: int = Field(default=50, ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
+
+
+class BayesianReplicateCreateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal[1] = 1
+    study_id: UUID
+    study_version_id: UUID
+    request_id: UUID
+    parent_trial_id: UUID
+    source_history_revision_id: UUID
+    source_history_sha256: str
+    request_sha256: str
+    trials: list[BayesianReplicateTrialResponse]
+    replayed: bool
+
+
 class BayesianHistoryRevisionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -366,7 +412,7 @@ class BayesianStudyResponse(BaseModel):
     completed_trial_count: int = Field(ge=0)
     abandoned_trial_count: int = Field(ge=0)
     observation_history: BayesianHistoryRevisionResponse
-    trials: list[BayesianTrialResponse]
+    trials: list[BayesianAnyTrialResponse]
     surrogate_available: bool
     recommendation_available: bool
     recommendation_minimum_completed_observations: int = Field(
@@ -403,6 +449,7 @@ class BayesianStudyDeletionCounts(BaseModel):
     recommendation_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     recommendation_batch_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     recommendation_batch_item_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
+    replicate_request_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     lifecycle_event_count: int = Field(ge=0, le=1)
     metadata_record_count: int = Field(ge=4)
     report_count: int = Field(default=0, ge=0)
@@ -481,7 +528,7 @@ class BayesianTrialListResponse(BaseModel):
     total: int = Field(ge=0)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=100)
-    items: list[BayesianTrialResponse]
+    items: list[BayesianAnyTrialResponse]
 
 
 class BayesianObservationCreateRequest(BaseModel):
@@ -495,7 +542,7 @@ class BayesianTrialTransitionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     study_id: UUID
-    trial: BayesianTrialResponse
+    trial: BayesianAnyTrialResponse
     observation_history: BayesianHistoryRevisionResponse
 
 

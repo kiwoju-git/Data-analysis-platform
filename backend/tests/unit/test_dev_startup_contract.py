@@ -80,12 +80,12 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRepositoryBuildId" in dev_text
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
-    assert "$script:ExpectedApiContractVersion = 25" in helper_text
-    assert "$script:MinimumMetadataSchemaVersion = 23" in helper_text
+    assert "$script:ExpectedApiContractVersion = 26" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 24" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
     )
-    assert "MINIMUM_METADATA_SCHEMA_VERSION = 23" in frontend_runtime
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 24" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -118,7 +118,7 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
 
 
 @pytest.mark.parametrize(
-    "schema,expected", [(20, "False"), (21, "False"), (22, "False"), (23, "True")]
+    "schema,expected", [(21, "False"), (22, "False"), (23, "False"), (24, "True")]
 )
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
     repo_root = Path(__file__).resolve().parents[3]
@@ -127,7 +127,7 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
         "$capabilities = @{}; "
         "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
         "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
-        f"api_contract_version=25; metadata_schema_version={schema}; "
+        f"api_contract_version=26; metadata_schema_version={schema}; "
         "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "
         "Test-DevRuntimeCompatibility -RuntimeInfo $runtime "
         "-ExpectedBuildId test -RequireExactCommit"

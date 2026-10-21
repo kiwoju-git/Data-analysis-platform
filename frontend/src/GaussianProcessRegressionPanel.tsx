@@ -20,6 +20,9 @@ import { useGpPointPrediction } from "./useGpPointPrediction";
 import { PredictionSaveControl } from "./PredictionSaveControl";
 import { GP_POINT_PREDICTION_ROW_LIMIT } from "./gpPredictionSnapshot";
 import { formatExactNumericValue, formatInterval, formatMeasurement } from "./statisticalNumberFormat";
+import { GpExtensionSettings } from "./GpExtensionSettings";
+import { buildGpExtensionOptions, defaultGpExtensionDraft, type GpExtensionOptions } from "./gpExtensionOptions";
+import type { GpValidationMethod } from "./api/types/analysisResultsRegression";
 
 export interface GaussianProcessRunConfig {
   lengthScale: GpLengthScale;
@@ -32,7 +35,8 @@ export interface GaussianProcessRunConfig {
   fixedNoiseStandardDeviation: number | null;
   standardizePredictors: boolean;
   normalizeResponse: boolean;
-  validationMethod: "k_fold" | "leave_one_out" | "none";
+  validationMethod: GpValidationMethod;
+  extensionOptions?: GpExtensionOptions;
   cvFolds: number;
   cvShuffle: boolean;
   randomSeed: number;
@@ -70,6 +74,12 @@ const warningKeys = {
   gp_training_cv_gap: "gp.warning.gap",
   gp_uncertainty_conditional_on_kernel: "gp.warning.conditional",
   gp_predictive_not_causal: "gp.warning.notCausal",
+  gp_category_sparse_levels: "gp.extension.sparseLevels",
+  gp_category_high_cardinality: "gp.extension.highCardinality",
+  gp_categorical_constant_training_fold: "gp.extension.constantCategory",
+  gp_numeric_constant_training_fold: "gp.extension.constantNumeric",
+  gp_category_theta_bound: "gp.extension.categoryBound",
+  gp_nominal_only_signal: "gp.extension.nominalOnlySignal",
 } as const;
 
 export function GaussianProcessRegressionPanel({
@@ -87,6 +97,8 @@ export function GaussianProcessRegressionPanel({
     () => (version?.columns ?? []).filter(isNumericColumn),
     [version],
   );
+  const eligiblePredictors = useMemo(() => (version?.columns ?? []).filter((column) => column.role !== "id" && (isNumericColumn(column) || column.measurement_level === "nominal")), [version]);
+  const [extensionDraft, setExtensionDraft] = useState(defaultGpExtensionDraft);
   const [responseColumnId, setResponseColumnId] = useState("");
   const [predictorColumnIds, setPredictorColumnIds] = useState<string[]>([]);
   const [kernelPreset, setKernelPreset] = useState<GaussianProcessRunConfig["kernelPreset"]>(
@@ -118,6 +130,7 @@ export function GaussianProcessRegressionPanel({
   useEffect(() => {
     setResponseColumnId("");
     setPredictorColumnIds([]);
+    setExtensionDraft(defaultGpExtensionDraft());
   }, [version?.version_id]);
 
   const restoredAnalysisId = useRef<string | null>(null);
@@ -126,7 +139,16 @@ export function GaussianProcessRegressionPanel({
     restoredAnalysisId.current = analysisResult.analysis_id;
     const method = result.method;
     setResponseColumnId(result.response.column_id);
-    setPredictorColumnIds(result.predictors.map((column) => column.column_id));
+    const lineage = result.feature_lineage?.definitions ?? [];
+    setPredictorColumnIds(result.predictors.filter((column) => !lineage.some((feature) => feature.column_id === column.column_id)).map((column) => column.column_id));
+    setExtensionDraft({ ...defaultGpExtensionDraft(),
+      groupColumnId: result.validation_plan?.group_column_id ?? "", timeColumnId: result.validation_plan?.time_column_id ?? "",
+      timeFormat: result.validation_plan?.time_format ?? "numeric", timeUnit: result.validation_plan?.time_unit ?? "",
+      timestampTimezone: result.validation_plan?.timestamp_timezone ?? "require_offset", gapTimeBlocks: result.validation_plan?.gap_time_blocks ?? 0,
+      lagEnabled: lineage.length > 0, laggedColumnIds: [...new Set(lineage.map((feature) => feature.source_column_id))],
+      lagText: lineage.length ? [...new Set(lineage.map((feature) => feature.lag))].join(",") : "1", seriesColumnId: result.feature_lineage?.series_column_id ?? "",
+      initialX: result.two_predictor_surface?.x_column_id ?? "", initialY: result.two_predictor_surface?.y_column_id ?? "", resourceProfile: method.resource_profile ?? "standard_exact",
+    });
     setStandardizePredictors(method.standardize_predictors);
     setNormalizeResponse(method.normalize_response);
     setLengthDraft(method.length_scale ? { lower: String(method.length_scale.lower), initial: String(method.length_scale.initial), upper: String(method.length_scale.upper) } : gpLengthPreset(method.standardize_predictors, true));
@@ -146,12 +168,16 @@ export function GaussianProcessRegressionPanel({
   }, [analysisResult, result]);
 
   const lengthScale = gpLengthValue(lengthDraft, standardizePredictors, optimizer);
+  const extensionOptions = buildGpExtensionOptions(extensionDraft, validationMethod, predictorColumnIds, responseColumnId);
+  const selectedNumeric = numericColumns.filter((column) => predictorColumnIds.includes(column.column_id));
+  const nominalCount = eligiblePredictors.filter((column) => predictorColumnIds.includes(column.column_id) && column.measurement_level === "nominal").length;
 
   const kernelSelection: GpKernelSelection = kernelSelectionMode === "single" ? { mode: "single", kernel_preset: kernelPreset } : candidateSelection;
   const estimatedStarts = gpOptimizerStarts(kernelSelection, validationMethod === "none" ? 0 : validationMethod === "leave_one_out" ? version?.row_count ?? 0 : cvFolds, cvOptimizerRestarts, optimizerRestarts);
   const canRun =
     version !== null &&
     lengthScale !== null &&
+    extensionOptions !== null && nominalCount <= 4 &&
     responseColumnId.length > 0 &&
     predictorColumnIds.length >= 1 &&
     predictorColumnIds.length <= 12 &&
@@ -164,6 +190,7 @@ export function GaussianProcessRegressionPanel({
     !isRunningAnalysis;
 
   function togglePredictor(columnId: string, checked: boolean): void {
+    if (!checked && (extensionDraft.initialX === columnId || extensionDraft.initialY === columnId)) setExtensionDraft((draft) => ({ ...draft, initialX: "", initialY: "" }));
     setPredictorColumnIds((current) =>
       checked
         ? current.includes(columnId)
@@ -203,15 +230,16 @@ export function GaussianProcessRegressionPanel({
             </label>
             <NumericColumnPicker
               className="gp-predictor-field"
-              columns={numericColumns}
+              columns={eligiblePredictors}
               excludedColumnIds={responseColumnId ? [responseColumnId] : []}
-              helpText={t("gp.predictorsHelp")}
+              helpText={t("gp.extension.predictorsHelp")}
               legend={t("gp.predictors")}
               maximumSelection={12}
               minimumSelection={1}
               onClear={() => {
                 onAnalysisInputChange?.();
                 setPredictorColumnIds([]);
+                setExtensionDraft((draft) => ({ ...draft, initialX: "", initialY: "" }));
               }}
               onToggle={(...args) => {
                 onAnalysisInputChange?.();
@@ -332,7 +360,7 @@ export function GaussianProcessRegressionPanel({
             <label>
               <span>{t("gp.validation")}</span>
               <select
-                value={validationMethod}
+                value={validationMethod === "group_k_fold" ? "k_fold" : validationMethod}
                 onChange={(event) =>
                   {
                     onAnalysisInputChange?.();
@@ -343,6 +371,7 @@ export function GaussianProcessRegressionPanel({
                 }
               >
                 <option value="k_fold">{t("gp.validation.kFold")}</option>
+                <option value="time_series_split">{t("gp.extension.timeValidation")}</option>
                 <option value="leave_one_out">{t("gp.validation.loo")}</option>
                 <option value="none" disabled={kernelSelectionMode === "compare"}>{t("gp.validation.none")}</option>
               </select>
@@ -350,7 +379,7 @@ export function GaussianProcessRegressionPanel({
             <label>
               <span>{t("gp.folds")}</span>
               <input
-                disabled={validationMethod !== "k_fold"}
+                disabled={validationMethod === "none" || validationMethod === "leave_one_out"}
                 max={10}
                 min={2}
                 onChange={(event) => {
@@ -364,7 +393,7 @@ export function GaussianProcessRegressionPanel({
             <label className="checkbox-field">
               <span>{t("gp.shuffle")}</span>
               <input
-                checked={cvShuffle}
+                checked={validationMethod === "k_fold" && cvShuffle}
                 disabled={validationMethod !== "k_fold"}
                 onChange={(event) => {
                   onAnalysisInputChange?.();
@@ -385,6 +414,12 @@ export function GaussianProcessRegressionPanel({
               />
             </label>
           </div>
+
+          <GpExtensionSettings draft={extensionDraft} onChange={(draft) => { onAnalysisInputChange?.(); setExtensionDraft(draft); }}
+            method={validationMethod} onMethodChange={(method) => { onAnalysisInputChange?.(); setValidationMethod(method); }}
+            columns={version.columns} numericColumns={numericColumns} selectedNumeric={selectedNumeric} responseId={responseColumnId} predictorIds={predictorColumnIds} />
+          {extensionOptions === null && <p className="field-help" role="status">{t("gp.extension.invalidSettings")}</p>}
+          {nominalCount > 4 && <p className="error-box" role="alert">{t("gp.extension.nominalLimit")}</p>}
 
           <details>
             <summary>{t("gp.advanced")}</summary>
@@ -441,7 +476,7 @@ export function GaussianProcessRegressionPanel({
             <button
               className="primary-button"
               disabled={!canRun}
-              onClick={() => lengthScale !== null &&
+              onClick={() => lengthScale !== null && extensionOptions !== null &&
                 onRun({
                   lengthScale,
                   optimizer,
@@ -455,6 +490,7 @@ export function GaussianProcessRegressionPanel({
                   standardizePredictors,
                   normalizeResponse,
                   validationMethod,
+                  extensionOptions,
                   cvFolds,
                   cvShuffle,
                   randomSeed,
@@ -592,7 +628,8 @@ function GaussianProcessResults({ result, analysisId }: { result: GaussianProces
         </div>
       </section>
 
-      {result.two_predictor_surface !== null ? <GpSurfaceChart scope={scope} result={result} /> : null}
+      <GpSurfaceChart scope={scope} result={result} analysisId={analysisId} />
+      {result.validation_plan && <div className="notice-box gp-validation-coverage"><p>{validationLabel(result.method.validation_method, t)}: {t("gp.extension.scored", { scored: result.validation_plan.n_scored ?? 0, unscored: result.validation_plan.n_unscored ?? 0 })}</p><p>{t(result.method.validation_method === "group_k_fold" ? "gp.extension.groupPurpose" : result.method.validation_method === "time_series_split" ? "gp.extension.timePurpose" : result.method.validation_method === "none" ? "gp.extension.nonePurpose" : "gp.extension.rowPurpose")}</p><code>{result.validation_plan.split_plan_sha256}</code></div>}
 
       {result.warnings.length > 0 ? (
         <section className="result-section">
@@ -684,12 +721,14 @@ function Metric({ label, value }: { label: string; value: string }) {
 function GaussianProcessPrediction({ result, analysisId }: { result: GaussianProcessRegressionResult; analysisId: string }) {
   const { t, locale } = useI18n();
   const manifest = result.model_manifest;
-  const state = useGpPointPrediction({ analysisId, modelId: manifest?.model_id ?? "", manifestSha256: manifest?.manifest_sha256 ?? "", responseColumnId: result.response.column_id, predictorColumnIds: result.predictors.map((predictor) => predictor.column_id) });
+  const nominalLevels = Object.fromEntries(result.training_ranges.flatMap((range) => range.kind === "nominal" ? [[range.column_id, range.levels]] : []));
+  const state = useGpPointPrediction({ analysisId, modelId: manifest?.model_id ?? "", manifestSha256: manifest?.manifest_sha256 ?? "", responseColumnId: result.response.column_id, predictorColumnIds: result.predictors.map((predictor) => predictor.column_id), nominalLevels });
   const error = state.error === null ? null : localizedErrorDisplay(state.error.cause, locale);
   const predictions = new Map(state.snapshot?.response.rows.map((row) => [row.client_row_id, row]) ?? []);
   const interval = (value: { lower: number; upper: number } | undefined) => formatInterval(value, locale);
   return <section className="result-section gp-point-prediction" aria-busy={state.isRunning} data-prediction-state={error !== null ? "error" : state.isRunning ? "running" : state.snapshot !== null ? "ready" : state.isStale ? "stale" : "empty"}>
     <h4>{t("gp.pointPrediction")}</h4><p>{t("gp.pointPredictionHelp")}</p>
+    {result.feature_lineage?.definitions?.length ? <p className="notice-box">{t("gp.extension.lagPrediction")}</p> : null}
     {!state.valid ? <div className="notice-box warning">{t("gp.inputRequired")}</div> : null}
     {state.isStale ? <div className="notice-box warning" role="status">{t("prediction.inputChanged")}</div> : null}
     {error !== null ? <div className="notice-box error" role="alert">{error.message} ({error.code})</div> : null}
@@ -698,7 +737,7 @@ function GaussianProcessPrediction({ result, analysisId }: { result: GaussianPro
       <tbody>{state.rows.map((row, index) => {
         const predicted = predictions.get(row.id);
         return <tr key={row.id}><td>{index + 1}</td>{result.predictors.map((predictor) => <td key={predictor.column_id}>
-          <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => state.editCell(row.id, predictor.column_id, event.currentTarget.value)} type="text" value={row.values[predictor.column_id] ?? ""} />
+          {nominalLevels[predictor.column_id] ? <select aria-label={`${predictor.display_name} ${index + 1}`} value={row.values[predictor.column_id] ?? ""} onChange={(event) => state.editCell(row.id, predictor.column_id, event.currentTarget.value)}><option value="">{t("gp.select")}</option>{nominalLevels[predictor.column_id].map((level) => <option key={level} value={level}>{level}</option>)}</select> : <input aria-label={`${predictor.display_name} ${index + 1}`} inputMode="decimal" onChange={(event) => state.editCell(row.id, predictor.column_id, event.currentTarget.value)} type="text" value={row.values[predictor.column_id] ?? ""} />}
         </td>)}<td title={formatExactNumericValue(predicted?.predicted_mean)}>{formatMeasurement(predicted?.predicted_mean, locale)}</td><td title={formatExactNumericValue(predicted?.latent_standard_deviation)}>{formatMeasurement(predicted?.latent_standard_deviation, locale)}</td><td>{interval(predicted?.latent_interval_95)}</td><td title={formatExactNumericValue(predicted?.predictive_standard_deviation)}>{formatMeasurement(predicted?.predictive_standard_deviation, locale)}</td><td>{interval(predicted?.predictive_interval_95)}</td><td>{predicted === undefined ? "-" : predicted.warnings.length === 0 ? t("gp.ready") : predicted.warnings.map((warning, index) => <span key={`${index}:${warning}`}>{index > 0 ? "; " : ""}{warning === "gp_extrapolation" ? t("gp.extrapolation") : <code>{warning}</code>}</span>)}</td>
           <td><button aria-label={`${t("gp.deleteRow")} ${index + 1}`} onClick={() => state.removeRow(row.id)} type="button">{t("gp.deleteRow")}</button></td></tr>;
       })}</tbody>
@@ -712,7 +751,7 @@ function GaussianProcessPrediction({ result, analysisId }: { result: GaussianPro
   </section>;
 }
 
-function isNumericColumn(column: DatasetColumnResponse): boolean { return column.role !== "id" && (column.data_type === "integer" || column.data_type === "decimal"); }
+function isNumericColumn(column: DatasetColumnResponse): boolean { return column.role !== "id" && column.measurement_level !== "nominal" && (column.data_type === "integer" || column.data_type === "decimal"); }
 function kernelLabel(value: GaussianProcessRegressionResult["method"]["kernel_preset"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "matern_5_2_ard" ? "gp.kernel.matern52" : value === "matern_3_2_ard" ? "gp.kernel.matern32" : value === "rbf_ard" ? "gp.kernel.rbf" : "gp.kernel.rq"); }
 function noiseKey(value: GaussianProcessRegressionResult["method"]["noise_mode"]): "estimate" | "fixed" | "nearNoiseless" { return value === "near_noiseless" ? "nearNoiseless" : value; }
-function validationLabel(value: GaussianProcessRegressionResult["method"]["validation_method"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "k_fold" ? "gp.validation.kFold" : value === "leave_one_out" ? "gp.validation.loo" : "gp.validation.none"); }
+function validationLabel(value: GaussianProcessRegressionResult["method"]["validation_method"], t: ReturnType<typeof useI18n>["t"]): string { return t(value === "group_k_fold" ? "gp.extension.groupValidation" : value === "time_series_split" ? "gp.extension.timeValidation" : value === "k_fold" ? "gp.validation.kFold" : value === "leave_one_out" ? "gp.validation.loo" : "gp.validation.none"); }
