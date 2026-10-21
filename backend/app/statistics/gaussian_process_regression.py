@@ -271,7 +271,8 @@ def calculate_gaussian_process_regression(
             optimizer_restarts=active.optimizer_restarts,
             cv_optimizer_restarts=active.cv_optimizer_restarts,
             retained_candidate_count=len(presets) - 1 if active.retain_candidate_details else 0,
-            prediction_query_count=len(predictor_columns) * active.profile_points
+            prediction_query_count=int(parsed.y.size)
+            + len(predictor_columns) * active.profile_points
             + (active.surface_grid_size**2 if numeric_count >= 2 else 0),
         )
     except GpResourceError as exc:

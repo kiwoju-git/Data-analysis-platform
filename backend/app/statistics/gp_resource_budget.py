@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from math import ceil
 
 MEMORY_BUDGET_BYTES = 512 * 1024**2
+PROCESS_ALLOWANCE_BYTES = 160 * 1024**2
 PREDICTION_CHUNK_SIZE = 256
 
 
@@ -28,9 +29,14 @@ class GpResourceEstimate:
     prediction_peak_bytes: int
     prediction_chunk_size: int
     prediction_chunk_count: int
+    process_allowance_bytes: int
+    fit_phase_bytes: int
+    transfer_phase_bytes: int
+    comparison_allocator_reserve_bytes: int
     memory_budget_bytes: int = MEMORY_BUDGET_BYTES
     memory_enforcement: str = "admission_estimate_not_os_limit"
-    estimate_version: str = "exact_gp_peak_v1"
+    estimate_scope: str = "task_arrays_and_transfer_plus_worker_allowance_excludes_parent_baseline"
+    estimate_version: str = "exact_gp_peak_v2"
 
     def to_payload(self) -> dict[str, object]:
         return asdict(self)
@@ -80,8 +86,14 @@ def estimate_gp_resources(
     transfer_bytes = matrix_bytes * 2 + 8 * n_rows * 64
     prediction_bytes = 8 * n_rows * min(queries, PREDICTION_CHUNK_SIZE) * 3
     result_bytes = queries * 128 + len(parameters) * n_rows * 1024
-    peak = 64 * 1024**2 + fit_bytes + retained_bytes + transfer_bytes
-    peak += prediction_bytes + result_bytes
+    # Fitting releases gradient/inverse temporaries before state serialization.
+    # Keep prediction/retained buffers in both phases for allocator retention;
+    # differing candidate kernels receive one further dense-matrix reserve.
+    comparison_reserve = matrix_bytes if len(parameters) > 1 else 0
+    common_bytes = PROCESS_ALLOWANCE_BYTES + retained_bytes + prediction_bytes + result_bytes
+    fit_peak = common_bytes + fit_bytes + comparison_reserve
+    transfer_peak = common_bytes + matrix_bytes + transfer_bytes
+    peak = max(fit_peak, transfer_peak)
     if peak > MEMORY_BUDGET_BYTES:
         raise GpResourceError("gp_memory_budget_exceeded")
     cubic = len(parameters) * sum(size**3 for size in sizes) * (1 + cv_restarts)
@@ -99,4 +111,8 @@ def estimate_gp_resources(
         prediction_peak_bytes=prediction_bytes,
         prediction_chunk_size=PREDICTION_CHUNK_SIZE,
         prediction_chunk_count=ceil(queries / PREDICTION_CHUNK_SIZE),
+        process_allowance_bytes=PROCESS_ALLOWANCE_BYTES,
+        fit_phase_bytes=fit_peak,
+        transfer_phase_bytes=transfer_peak,
+        comparison_allocator_reserve_bytes=comparison_reserve,
     )
