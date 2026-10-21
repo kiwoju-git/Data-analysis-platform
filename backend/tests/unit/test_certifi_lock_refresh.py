@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 def refresh_module(monkeypatch):
@@ -34,3 +35,22 @@ def test_only_certifi_version_and_hash_may_change(monkeypatch):
         module.validate_refresh(before, {**after, "extra": {}})
     with pytest.raises(ValueError, match="Unexpected certifi"):
         module.validate_refresh(before, before)
+
+
+def test_native_refresh_workflow_is_valid_and_not_a_release_gate():
+    root = Path(__file__).resolve().parents[3]
+    workflow = yaml.safe_load(
+        (root / ".github/workflows/security-lock-refresh.yml").read_text("utf-8")
+    )
+    triggers = workflow.get("on", workflow.get(True))
+    assert "workflow_call" in triggers
+    job = workflow["jobs"]["native-certifi"]
+    assert job["permissions"] == {"contents": "read"}
+    assert {entry["target"] for entry in job["strategy"]["matrix"]["include"]} == {
+        "py310-win",
+        "py311-linux",
+        "py312-linux",
+    }
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "refresh_certifi_lock.py" in commands
+    assert "release_readiness" not in commands

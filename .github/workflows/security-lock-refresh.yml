@@ -29,7 +29,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - name: Generator dependency
-        run: python -m pip install --only-binary=:all: packaging==25.0
+        run: |
+          python -m pip install --only-binary=:all: packaging==25.0
       - name: Refresh only certifi and verify offline target installation
         run: python scripts/refresh_certifi_lock.py --target ${{ matrix.target }} --output-dir .tmp/security-lock-${{ matrix.target }}
       - uses: actions/upload-artifact@v4
