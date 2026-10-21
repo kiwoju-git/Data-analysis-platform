@@ -28,18 +28,18 @@ from the other. No new ML framework, external service or data transfer.
 
 | Stage | Implementation | Verification |
 | --- | --- | --- |
-| A BO surrogate/noise | Implemented core/API/UI | Independent Cholesky, noise/jitter, optimizer/gradient tests passed; browser pending |
+| A BO surrogate/noise | Implemented core/API/UI | Independent Cholesky, noise/jitter, optimizer/gradient and native BO browser stage passed |
 | B Incumbent/single target | Implemented V2 core and versioned wrappers | q1 analytic/direction/target and actual API passed |
 | C Exact replicate view/lifecycle | Implemented sufficient statistics and atomic explicit replication | Unequal counts/LML/gradient, API retry/restore/close/delete passed |
 | D Joint-latent MC batch | Implemented V2; legacy V1 reader retained | Joint integration, fixed samples, xi, near-singular covariance passed |
 | E Mixed acquisition search | Implemented executable-level search | 18 new tests; 33 including legacy calculations passed |
-| F Group CV | Implemented backend/UI | Full group identity, disjoint groups, API save/restore passed; browser pending |
-| G Time/lag | Implemented backend/UI | Warm-up null, shared plans, explicit lag prediction and embargo checks passed; browser pending |
-| H Categorical GP | Implemented pure layer/backend/UI | 29 pure tests and actual mixed fit/restore API tests passed; browser pending |
-| I Surface views | Existing selectors extended; explicit saved request view | Complete-grid validation and managed report tests passed; browser pending |
-| J Extended exact resources | Admission estimator, owned spawn worker, chunk prediction | 15 admission + 7 worker tests; actual 501-row API passed; benchmark pending |
-| K Integration/UI/report/legacy | In progress | 28 report/saved-prediction tests passed; full checks pending |
-| L Native CI/main/prerelease | Pending | Not published |
+| F Group CV | Implemented backend/UI | Full group identity, disjoint groups, API and actual Linux browser form/save/restore passed |
+| G Time/lag | Implemented backend/UI | Warm-up null, shared plans, explicit lag prediction, embargo and native browser journey passed |
+| H Categorical GP | Implemented pure layer/backend/UI | Pure checks, mixed fit/restore API and actual browser prediction passed |
+| I Surface views | Existing selectors extended; explicit saved request view | Complete-grid validation, managed report and native applied-view browser checks passed |
+| J Extended exact resources | Admission estimator, owned spawn worker, chunk prediction | Clean Windows/Linux matrices each passed 27 fit/restore/prediction cases and rejected 9 at admission |
+| K Integration/UI/report/legacy | Implemented; final rerun in progress | Python3.11 2994 passed; prior full Linux/Windows runs exposed failures preserved below |
+| L Native CI/main/prerelease | Pending final gates | No main push or new Release yet; exact-archive journeys strengthened but not yet executed |
 
 The prior release's test counts are not evidence for this work. Append actual
 commands, failures and corrected runs as each stage completes. Synthetic-only
@@ -66,6 +66,10 @@ unverified; see `jmp_gp_bo_alignment.md`.
   correction. Nearby complete-link diagnostics never change training rows.
   The raw 200-observation budget is checked before aggregation. The minimum
   unique-condition count is the product policy `max(2, factor_count + 1)`.
+  The UI does not collect a separate process/time-state identity for a trial.
+  Exact compression therefore assumes that identical coordinates within one
+  study describe the same homoscedastic condition. Distinct process states must
+  be represented by the study/factors rather than silently treated as repeats.
 - V2 batch policy is `greedy_mc_joint_latent_improvement_v2`, not qNEI. A real
   model is fitted once; correlated latent selected-point draws condition each
   candidate's analytic marginal EI/ETI. Defaults: 64 draws, range 16-256.
@@ -251,3 +255,55 @@ workflow stage. The complete workflows suite and GPR prediction suite still
 failed on ambiguous or missing accessible select names. These are separately
 tracked browser failures, not passing product or release gates. The detailed BO
 assertions and retained diagnostics are in `bo_frontend_noise_evidence.md`.
+
+## Prepublication Checkpoint
+
+At source `6fe0b509a726a43be340450b4f0faf47a3ec5927`, native run39619608275
+passed Python3.11 (2994 tests, 13 skips), all runtime/dev dependency audits,
+the Linux context/prediction browser suites and both clean resource matrices.
+The browser evidence includes real group/time/lag form execution, mixed model
+restore/manual prediction and an applied latent-SD surface with categorical hold.
+It is not a full passing CI run: Linux stopped at 91 missing localization
+registrations, and workflows found 84px overflow in the BO settings at 390px.
+Those failures were fixed without altering statistical values, request bodies,
+translations or suppressing page overflow. The superseded run was explicitly
+cancelled during its Windows job; that job is not recorded as passed.
+
+Source `16fbaf3447622c4ab1f2ae602000aab7107038ac` is under full native
+re-execution in run39622753726. Its source also strengthens the exact Linux
+archive verifier: BO/GP identities and checksums must survive two restarts,
+another installation using the same external workspace, managed report reopen
+and offline HTML inspection. See `bo_gpr_archive_roundtrip_contract.md`.
+Unit tests of this verifier are not evidence that an archive has passed it.
+
+That source passed the context/prediction browser jobs, including settled layout
+bounds at 1024/1440px in both languages. A fresh full frontend run passed 977
+tests across 113 files. The new BO managed-report journey then exposed a fixture
+problem: its context init script forced Korean on every navigation, overriding
+the explicit English choice before the report deep-link assertion. Actual child
+trace/DOM showed a mounted compatible application, successful report POST and
+download, and no page errors or failed assets. Only the BO fixture now seeds
+the locale when absent and additionally verifies English persistence on reload;
+the product LocaleProvider and shared forced-locale fixture behavior are unchanged.
+This corrected journey still requires native re-execution.
+
+The new V2 noisy mixed q2 benchmark is a bounded characterization, not a claim
+that the new policy always improves regret or beats another product. Its MC
+sample-stability, objective/constraint/reproducibility results and the initially
+failed arbitrary 50-percent improvement criterion are retained in
+`bo_noise_policy_benchmark.md`. The legacy Branin test remains legacy-policy
+evidence; it is not repurposed as proof of V2 performance superiority.
+
+The initial Windows native run39613148814 completed with 2949 passes, 20
+failures and 3 skips. The same obsolete explicit version/fixture expectations
+were corrected before the passing Python3.11 rerun. A concurrent local full
+backend run finished with 2921 passes, 27 failures and 9 skips while source
+changed; it is diagnostic only, not final-source evidence. Current narrow
+reruns passed the affected legacy BO, owned-worker and 501-row API tests without
+increasing their deadlines. Two local startup failures used an external venv
+instead of the expected worktree venv; native setup remains the release gate.
+
+Final publication evidence belongs to the Release validation asset, so recording
+the final source SHA does not require a self-referential source commit. Until
+that exact-source aggregate gate and archive verification pass, the intended
+2026.10.6 tag and README commands are a publication target, not a release claim.

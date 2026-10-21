@@ -188,6 +188,31 @@ native green confirmation of this scoped CSS change remains pending at this chec
 Related local BO settings/presentation tests passed 18 tests; fixture/suite-partition checks passed
 87 tests and targeted Ruff passed. None of those local checks executes a browser layout engine.
 
+## Managed-report Locale Fixture Correction
+
+Run `39622753726`, workflow job `119300205851`, source
+`16fbaf3447622c4ab1f2ae602000aab7107038ac`, passed the BO calculation/replicate assertions and the
+new KO/EN 1024/1440 post-transition bounding checks. The new Report Center journey displayed the
+exact snapshot, created an EN report, downloaded it and verified its checksum. It then failed on
+the report deep link's locale assertion, before the later legacy 390px workflow was reached.
+
+Actual child artifact `12355722046` was inspected: `failure.json` reports the reports route with a
+mounted root, compatible runtime, `lang=ko`, no page errors and no failed JS/CSS. Its trace records
+the fixture's unconditional `localStorage.setItem(..., 'ko')` initialization on every navigation.
+Thus the fixture overwrote the user's ENG choice before asking the reopened page to remain EN.
+This is not evidence of a product LocaleProvider failure. The browser download POST returned 200,
+and its saved-file checksum assertion completed. A separate server-log GET returned 405, but it
+is not a page navigation/request in the child trace; its initiator is not established and it is
+not the failed assertion or a failed saved download.
+
+Only the two BO fixture contexts now seed KO when the locale key is absent. Shared forced-locale
+fixtures and product locale code are unchanged. The report step explicitly switches to ENG,
+reloads and checks EN before continuing, then also checks the deep-link navigation. Local fixture
+and suite-partition checks passed 89 tests; Ruff passed. Executing the actual seed script in a
+Node VM verified empty storage initializes KO and an in-memory user's EN value survives repeated
+initialization; that is script evidence, not browser persistence evidence. Native re-execution of
+the corrected report/restart journey and the 390px CSS fix remains pending.
+
 ## Versioned API Inventory Follow-up
 
 The native Python 3.11 run exposed outdated OpenAPI test expectations for legacy-only batch/trial

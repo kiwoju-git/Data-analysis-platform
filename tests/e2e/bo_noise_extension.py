@@ -13,6 +13,9 @@ from playwright.sync_api import Browser, Page, Route, expect
 from app_readiness import diagnosed_page, wait_for_app_ready, wait_for_layout_settled
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
+_INITIAL_LOCALE = """if (localStorage.getItem('statistical-twin.locale') === null) {
+    localStorage.setItem('statistical-twin.locale', 'ko');
+}"""
 
 _RECEIPT_CHECKS = (
     "q1_target_ui",
@@ -299,6 +302,8 @@ def _managed_report(page: Page, base: str, output: Path, batch: dict) -> dict:
     )
     wait_for_app_ready(page, "ko", "/reports")
     page.locator(".language-switcher button").filter(has_text="ENG").click()
+    page.reload(wait_until="domcontentloaded")
+    wait_for_app_ready(page, "en", "/reports")
     page.locator(f'[data-report-source="{reference}"]').click()
     selected = page.locator(f'[data-managed-report-selection="{reference}"]')
     with page.expect_response(
@@ -355,7 +360,7 @@ def _managed_report(page: Page, base: str, output: Path, batch: dict) -> dict:
 
 
 def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict:
-    with diagnosed_page(browser, output, "bo-noise-workflow", locale="ko") as page:
+    with diagnosed_page(browser, output, "bo-noise-workflow", init_script=_INITIAL_LOCALE) as page:
         ui_posts: list[str] = []
         page.on(
             "request",
@@ -493,7 +498,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
 
 
 def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
-    with diagnosed_page(browser, output, "bo-replicate-context", locale="ko") as page:
+    with diagnosed_page(browser, output, "bo-replicate-context", init_script=_INITIAL_LOCALE) as page:
         study = _seed(page, base)
         _open(page, base, study["study_id"])
         page.locator("#bo-replicate-parent").select_option(

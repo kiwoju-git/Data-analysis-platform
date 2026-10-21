@@ -2,11 +2,38 @@
 
 import importlib
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+
+
+@pytest.mark.parametrize("name", ["verify_bo_noise_extension", "verify_bo_noise_context"])
+def test_bo_context_only_seeds_locale_if_storage_is_empty(monkeypatch, tmp_path, name):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "tests/e2e"))
+    fixture = importlib.import_module("bo_noise_extension")
+    received = {}
+
+    @contextmanager
+    def context(*args, **kwargs):
+        received.update(kwargs)
+        yield Mock()
+
+    class SeedReached(Exception):
+        pass
+
+    monkeypatch.setattr(fixture, "diagnosed_page", context)
+    monkeypatch.setattr(fixture, "_seed", Mock(side_effect=SeedReached))
+    with pytest.raises(SeedReached):
+        getattr(fixture, name)(Mock(), "http://127.0.0.1:5199", tmp_path)
+    assert received.get("locale") is None
+    assert received["init_script"] == (
+        "if (localStorage.getItem('statistical-twin.locale') === null) {\n"
+        "    localStorage.setItem('statistical-twin.locale', 'ko');\n}"
+    )
 
 
 @pytest.mark.parametrize("base", ["http://127.0.0.1:5199", "http://192.0.2.10:8600"])
