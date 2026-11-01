@@ -58,12 +58,66 @@ Source inspection is not browser reproduction. A past CI result is not evidence 
   passed (existing large-chunk warning); full ESLint passed with12 existing refresh warnings.
 - Initial full Vitest:1013 passed/2 failed. One fixture omitted required design options;
   one expected editable saved responses contrary to the new explicit-correction contract.
-  Corrected tests and relevant135 tests passed; full rerun still pending.
+  Corrected tests and relevant135 tests passed. Two concurrent-worker full reruns
+  hit existing module-import timeouts (one also read a helper while it was being
+  edited). With the source frozen and one worker, all118 files/1,031 tests passed
+  using unchanged timeouts. Native default-worker checks remain separate evidence.
 - Initial tutorial version assertions failed as expected after method changes. Actual API
   reruns retained all numeric expectations/tolerance1e-8; only3 method-version fields changed.
   Tutorial suite11 passed, including optimizer and explicit-retain Gage reference execution.
-- Full localization initially reported13 unregistered Gage labels; correction is required
-  before native CI. Browser suite code review is not an executed browser pass.
+- Full localization initially reported13 unregistered Gage labels; explicit KO/EN keys
+  fixed them. Checker verified2,955 source strings/4,457 keys;22 i18n tests passed.
+  Browser suite code review is not an executed browser pass.
+- The long local backend full run was stopped at28% in favor of exact-commit native CI;
+  it is **not** a full pass. Its initial tutorial version failure and an in-flight
+  lock-maintenance fixture mismatch are retained as failures, not hidden by this stop.
+  The final source must pass the complete native checks below.
+
+## Initial Native CI Evidence
+
+Branch commit `aeca1b34d15a4ca0c3aacffbe41b573fcf21dec9`,
+[run41290140121](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41290140121):
+early Linux context and prediction browser suites passed. Workflows initially
+failed in the new residual assertion: the DOM contained4 chart SVGs plus3
+decorative legend-key SVGs. No child-page JS or asset error was recorded. The
+test now counts `svg.chart-frame-svg` and still requires exactly4 charts; this
+is a harness correction, not evidence of a product chart failure. Main is not
+promoted on this partial run.
+
+The same run passed npm security but failed Python security for the newly
+reported setuptools advisory below. All initial failures remain in CI history.
+
+Python3.11 completed with3,092 passed/13 skipped/7 failed: missing Gage stage/mock
+registration and stale result-schema expectations. Commit435bd47 fixes the
+registrations and aligns declared/actual RSM->zoom->Gage ordering without removing
+stages;307 affected contract tests passed locally.
+
+Linux additionally exposed a newly added tutorial assertion requiring an exact
+optimizer coordinate on a nonunique desirability=1 plateau (pressure differed
+by approximately1.75e-7 from the recorded Windows output). Commit750a2a7 keeps
+the golden JSON and1e-8 tolerances intact, and verifies bounds/constraints,
+source hashes and returned prediction with independent literal quadratic OLS.
+It establishes more than one feasible point with desirability1 rather than
+claiming a unique coordinate. Existing unique-optimum CCC fixtures are unchanged.
+
+[Browser-only run41290583204](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41290583204)
+passed context/prediction again. RSM paste, stored raw/standardized residuals,
+optimizer typing/caret/locale/1024-1440px and stale committed-request checks ran
+before a genuine390px page-overflow failure. Captures also showed the long first
+factor name painting into the next optimizer cell. Scoped name/notice wrapping
+and painted-text assertions address these; their browser effect requires the
+next run. This diagnostic-only run is not a release-ready pass.
+
+## Native Setuptools Maintenance
+
+Candidate security CI reported
+[GHSA-xmj3-9gf7-h52w](https://github.com/pypa/setuptools/security/advisories/GHSA-xmj3-9gf7-h52w)
+in setuptools83.0.0. The patch is84.1.0, not a change to NumPy/SciPy/sklearn.
+Native maintenance [41290641290](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41290641290)
+passed Windows3.10 and Linux3.11/3.12 generation, all5 profiles' fresh offline
+hash-locked installs and pip check. Commitscb4a117/e6358a2 preserve every other
+package version/hash. The advisory audit on the imported final locks is a
+separate required gate. See [security receipts](dependency_upload_security.md).
 
 ## Limitations and Rollback
 

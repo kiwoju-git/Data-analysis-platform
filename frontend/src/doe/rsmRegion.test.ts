@@ -55,6 +55,6 @@ describe("saved RSM region presentation", () => {
     [3e-300, 1e-300, 1e-300, true], [2.5e-300, 1e-300, 1e-300, false],
     [10, 10, 0, false], [10, 10, -1, false], [Infinity, 10, 1, false],
   ])("checks decimal lattice %s from %s with step %s", (value, anchor, step, expected) => {
-    expect(isRsmOnLattice(value as number, anchor as number, step as number)).toBe(expected);
+    expect(isRsmOnLattice(value, anchor, step)).toBe(expected);
   });
 });
