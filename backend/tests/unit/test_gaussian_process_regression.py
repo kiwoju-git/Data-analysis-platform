@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal, localcontext
 from pathlib import Path
 
 import numpy as np
@@ -108,6 +109,64 @@ def test_static_rbf_posterior_matches_gpml_reference_fixture() -> None:
         reference["expected_predictive_standard_deviation"],
         abs=tolerance,
     )
+
+
+def test_posterior_mean_preserves_cancellation_and_is_query_batch_invariant() -> None:
+    x = np.array([[0.0], [1.0], [2.0], [3.0], [0.0]])
+    covariance = np.exp(-0.5 * (x - x.T) ** 2)
+    coefficients = np.array([1e16, 1.0, 0.0, 0.0, -1e16])
+    state = build_gaussian_process_state(
+        x_train_scaled=x,
+        cholesky=np.linalg.cholesky(covariance + np.eye(len(x)) * 0.3),
+        dual_coefficients=coefficients,
+        x_mean=np.zeros(1),
+        x_scale=np.ones(1),
+        y_mean=0.0,
+        y_scale=1.0,
+        predictor_medians=np.ones(1),
+        signal_kernel_payload={"preset": "rbf_ard", "amplitude": 1.0, "length_scales": [1.0]},
+        observation_noise_variance_scaled=0.3,
+    )
+    # Decimal sums the exact binary64 products independently of NumPy/BLAS reduction.
+    with localcontext() as context:
+        context.prec = 80
+        reference = float(
+            sum(
+                Decimal.from_float(float(weight)) * Decimal.from_float(float(coefficient))
+                for weight, coefficient in zip(covariance[0], coefficients, strict=True)
+            )
+        )
+    assert reference > 0.6
+    means = [
+        predict_from_gaussian_process_state(state, np.zeros((count, 1)))["mean"]
+        for count in (1, 256, 257)
+    ]
+    for actual in means:
+        assert actual == pytest.approx(reference, rel=0.0, abs=1e-15)
+        assert np.array_equal(actual, np.full(actual.shape, means[0][0]))
+
+
+@pytest.mark.parametrize("amplitude", [1.0, 2.0])
+def test_posterior_mean_overflow_remains_explicit_failure(amplitude: float) -> None:
+    state = build_gaussian_process_state(
+        x_train_scaled=np.zeros((3, 1)),
+        cholesky=np.linalg.cholesky(np.full((3, 3), amplitude) + np.eye(3)),
+        dual_coefficients=np.full(3, np.finfo(np.float64).max),
+        x_mean=np.zeros(1),
+        x_scale=np.ones(1),
+        y_mean=0.0,
+        y_scale=1.0,
+        predictor_medians=np.zeros(1),
+        signal_kernel_payload={
+            "preset": "rbf_ard",
+            "amplitude": amplitude,
+            "length_scales": [1.0],
+        },
+        observation_noise_variance_scaled=1.0,
+    )
+    with pytest.raises(GaussianProcessRegressionError) as error:
+        predict_from_gaussian_process_state(state, np.zeros((1, 1)))
+    assert error.value.code == "gp_prediction_failed"
 
 
 def test_cross_validation_is_deterministic_and_preserves_negative_r_squared() -> None:

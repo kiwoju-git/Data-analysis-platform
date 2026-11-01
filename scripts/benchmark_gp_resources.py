@@ -130,6 +130,46 @@ def _run_case_process(
         ), True
 
 
+def _prediction_accumulation_diagnostics(state: Any) -> dict[str, Any]:
+    """Inspect one synthetic training coordinate without refitting the model."""
+    import math
+
+    import numpy as np
+
+    query = state.x_train_scaled[:1]
+    cross = np.asarray(state.signal_kernel(query, state.x_train_scaled))[0]
+    batch_cross = np.asarray(
+        state.signal_kernel(state.x_train_scaled[:256], state.x_train_scaled)
+    )
+    coefficients = state.dual_coefficients
+    single_dot = float(cross @ coefficients)
+    batch_dot = float((batch_cross @ coefficients)[0])
+    fsum_dot = math.fsum(float(x) * float(y) for x, y in zip(cross, coefficients))
+    extended_dot = float(
+        np.sum(cross.astype(np.longdouble) * coefficients.astype(np.longdouble))
+    )
+
+    def raw(value: float) -> float:
+        return value * state.y_scale + state.y_mean
+
+    return {
+        "synthetic_fixture": True,
+        "training_count": len(coefficients),
+        "query_cross_max_absolute_difference": float(
+            np.max(np.abs(cross - batch_cross[0]))
+        ),
+        "single_row_mean": raw(single_dot),
+        "batch_256_mean": raw(batch_dot),
+        "fsum_mean": raw(fsum_dot),
+        "longdouble_mean": raw(extended_dot),
+        "longdouble_mantissa_bits": np.finfo(np.longdouble).nmant,
+        "sum_absolute_products": math.fsum(
+            abs(float(x) * float(y)) for x, y in zip(cross, coefficients)
+        ),
+        "response_scale": state.y_scale,
+    }
+
+
 def run_case(
     case: dict[str, Any], *, progress_path: Path | None = None
 ) -> dict[str, Any]:
@@ -306,7 +346,27 @@ def run_case(
             prediction_error = abs(
                 predicted.json()["rows"][0]["predicted_mean"] - first["fitted"]
             )
-            assert prediction_error <= 1e-9
+            if not prediction_error <= 1e-9:
+                from uuid import UUID
+
+                from app.services.gaussian_process_predictions import _load_state
+                from app.services.regression_models import get_regression_model_manifest
+
+                model = get_regression_model_manifest(
+                    Settings(workspace_root=workspace), UUID(pointer["model_id"])
+                )
+                state = _load_state(workspace, model.manifest, 2 if mixed else 1)
+                diagnostics = {
+                    **case,
+                    "fitted_mean": first["fitted"],
+                    "restored_mean": predicted.json()["rows"][0]["predicted_mean"],
+                    "absolute_error": prediction_error,
+                    "absolute_tolerance": 1e-9,
+                    "accumulation": _prediction_accumulation_diagnostics(state),
+                }
+                raise AssertionError(
+                    json.dumps(diagnostics, allow_nan=False, sort_keys=True)
+                )
             assert (workspace / owner.result_path).read_bytes() == stored
             _record_case_stage(progress_path, "stopping_app", started)
             return {

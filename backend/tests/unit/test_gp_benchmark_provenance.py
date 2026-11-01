@@ -4,7 +4,9 @@ import importlib.util
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "benchmark_gp_resources.py"
@@ -12,6 +14,23 @@ SPEC = importlib.util.spec_from_file_location("tested_gp_benchmark", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
 benchmark = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(benchmark)
+
+
+def test_prediction_failure_diagnostics_preserve_compensated_sum_and_no_raw_arrays():
+    state = SimpleNamespace(
+        x_train_scaled=np.array([[0.0], [0.5], [1.0]]),
+        signal_kernel=lambda query, train: np.ones((len(query), len(train))),
+        dual_coefficients=np.array([1e16, 1.0, -1e16]),
+        y_scale=2.0,
+        y_mean=3.0,
+    )
+    diagnostics = benchmark._prediction_accumulation_diagnostics(state)
+    assert diagnostics["fsum_mean"] == 5.0
+    assert diagnostics["query_cross_max_absolute_difference"] == 0.0
+    assert diagnostics["training_count"] == 3
+    assert diagnostics["longdouble_mantissa_bits"] >= 52
+    assert not any(isinstance(value, list | np.ndarray) for value in diagnostics.values())
+    json.dumps(diagnostics, allow_nan=False)
 
 
 def git(root: Path, *args: str) -> str:

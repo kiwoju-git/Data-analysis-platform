@@ -157,3 +157,51 @@ checksums stayed unchanged. The admitted/rejected configurations match Linux.
 The earlier Windows outer timeout was not reproduced here, but its unrecorded
 stage/root cause is still unknown. This rerun does not erase the earlier failure
 or establish all-machine performance. No timeout or budget was increased.
+
+## Posterior Mean Follow-up, 2026-11-01
+
+Run 41290140121 / Windows job 124799509164 failed its first 2000-row numeric,
+single-kernel, row-KFold case at the restored-prediction absolute-error assertion.
+Its preceding 24 cases passed. The failed assertion did not record the actual
+error, so its exact magnitude and fitted coefficients cannot be reconstructed
+from that artifact. This failure is not discarded or described as passing.
+The subsequent run 41291514419 at source `cddc36a` passed both native resource
+matrices before the summation correction below. That success was not caused by
+the later correction and does not establish the earlier failure's exact cause.
+
+A separate synthetic local diagnostic on Windows build 19045 / CPython 3.10.11,
+NumPy 2.2.6 / OpenBLAS 0.3.29 (Haswell), with thread limits 1, measured identical
+single-query and first-of-256 signal cross-covariance rows (maximum difference 0).
+The two BLAS reduction shapes nevertheless produced raw means
+0.19611094055885855 and 0.19611094022009606, respectively. The training diagnostic
+matched the batch result and restored prediction matched the single-row result.
+The difference 3.387624902817521e-10 passed the unchanged 1e-9 gate locally; this
+is a reproduced batch-dependence mechanism, not reproduction of the hosted
+runner's exact failing magnitude. The sum of absolute dot-product terms was
+5,401,726, demonstrating cancellation. Windows `longdouble` had only 52 mantissa
+bits and was not treated as an extended-precision reference.
+
+The posterior mean now uses per-row `math.fsum` of binary64 products, retaining
+the same signal kernel, coefficients, normalization, noise and optimizer policy.
+Query chunking remains 256. Only one training-length product vector is temporary;
+no query-by-query covariance or additional full training matrix is introduced.
+Non-finite products and summation overflow still fail with `gp_prediction_failed`.
+The stored artifact format and existing artifacts are unchanged.
+
+An independent 80-digit Decimal cancellation fixture gave 0.6065306597126334 where
+the previous reduction returned 0. It checks identical results for 1/256/257 query
+rows and keeps the existing numerical tolerances. The native resource matrix and
+full product gates must be rerun after this correction; local diagnostics do not
+replace exact-source Windows/Linux validation.
+
+Post-correction local checks passed 141 numeric/mixed, fixed/optimized,
+kernel-selection, saved-model API, group/time/lag, worker and provenance tests
+in 227.01 seconds; Ruff and the changed production module's mypy check passed.
+The same isolated 2000-row numeric single-kernel row-KFold API fixture then
+passed with restored-vs-fitted error exactly 0.0 and source-result checksum
+unchanged. Its request took 61.42 seconds (final fit 26.453, CV fit 24.687), with
+worker peak RSS 416,997,376 bytes and parent peak 227,454,976 bytes. These are
+separate process high-water marks. They are diagnostic measurements on edited
+source, not a clean release receipt or a controlled speed comparison.
+Existing artifacts are not rewritten. The mathematical posterior is unchanged;
+numerical differences arise from summation, not refitting or a new noise policy.

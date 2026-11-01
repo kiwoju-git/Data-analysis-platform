@@ -6,7 +6,7 @@ import warnings
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
-from math import isfinite, log, pi, sqrt
+from math import fsum, isfinite, log, pi, sqrt
 from typing import Any, Literal, cast
 
 import numpy as np
@@ -645,7 +645,16 @@ def _predict_scaled(state: GaussianProcessFittedState, scaled: FloatArray) -> di
         state.signal_kernel(scaled, state.x_train_scaled),
         dtype=np.float64,
     )
-    normalized_mean = cross_covariance @ state.dual_coefficients
+    # Keep cancellation-sensitive means independent of BLAS query-batch shape.
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            normalized_mean = np.fromiter(
+                (fsum(row * state.dual_coefficients) for row in cross_covariance),
+                dtype=np.float64,
+                count=len(cross_covariance),
+            )
+    except (FloatingPointError, OverflowError, ValueError) as exc:
+        raise GaussianProcessRegressionError("gp_prediction_failed") from exc
     solved = solve_triangular(
         state.cholesky,
         cross_covariance.T,
