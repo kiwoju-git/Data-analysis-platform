@@ -79,30 +79,44 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
         )
 
         held: list[tuple[Route, dict]] = []
+        revision_path = f"/api/v1/doe-designs/{design['design_id']}/response-revisions"
 
         def hold_save(route: Route) -> None:
-            if route.request.method != "PUT":
+            if route.request.method != "POST":
                 route.continue_()
                 return
             response = route.fetch()
-            assert response.status == 200, response.text()
+            assert response.status == 201, response.text()
             held.append((route, response.json()))
 
         first = page.get_by_label(f"Run {runs[0]['run_order']} 반응", exact=True)
-        # A second revision must differ from the committed one; duplicate saves are rejected.
+        expect(first).to_be_disabled()
+        page.get_by_role("button", name="새 revision으로 수정", exact=True).click()
         first.fill("0.25")
-        page.route("**" + response_path, hold_save)
-        save.click()
+        page.route("**" + revision_path, hold_save)
+        page.get_by_role("button", name="새 revision 저장", exact=True).click()
         _wait_held(page, held)
+        expect(first).to_be_disabled()
+        expect(page.get_by_role("button", name="반응값 붙여넣기", exact=True)).to_be_disabled()
+        # A source-draft edit invalidates the in-flight save before the response returns.
+        page.locator("#rsm-design-name").fill("Synthetic changed design draft")
         first.fill("0.5")
         pending_save, saved_response = held.pop()
-        pending_save.fulfill(status=200, json=saved_response)
+        pending_save.fulfill(status=201, json=saved_response)
         expect(first).to_have_value("0.5")
         expect(analyze).to_be_disabled()
-        expect(save).to_be_enabled()
-        page.unroute("**" + response_path)
+        page.unroute("**" + revision_path)
+        # The committed server revision is preserved and can be opened explicitly.
+        committed = page.request.get(base_url + revision_path + "/" + saved_response["response_revision_id"])
+        assert committed.status == 200
+        assert committed.json()["values"][0]["value"] == 0.25
+        page.get_by_role("button", name="반응 이력 새로고침", exact=True).click()
+        page.get_by_role("button", name=f"r{saved_response['revision_number']}", exact=True).click()
+        expect(first).to_have_value("0.25")
+        page.get_by_role("button", name="새 revision으로 수정", exact=True).click()
+        first.fill("0.5")
+        page.get_by_role("button", name="새 revision 저장", exact=True).click()
 
-        save.click()
         expect(analyze).to_be_enabled()
         analysis_path = (
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses"
@@ -116,12 +130,14 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
         page.route("**" + analysis_path, hold_analysis)
         analyze.click()
         _wait_held(page, held)
-        first.fill("0.75")
+        # Completed response revisions remain read-only. A model-option edit is
+        # a separate source intent and must reject the old analysis completion.
+        expect(first).to_be_disabled()
+        page.get_by_role("combobox", name="RSM 모형항", exact=True).select_option("linear")
         pending, payload = held.pop()
         pending.fulfill(status=201, json=payload)
         expect(page.locator("#rsm-result-title")).to_have_count(0)
-        expect(analyze).to_be_disabled()
-        expect(first).to_have_value("0.75")
+        expect(first).to_have_value("0.5")
         # The obsolete UI completion must not delete the committed server artifact.
         restored = page.request.get(
             base_url + analysis_path + "/" + payload["analysis_id"]
@@ -132,10 +148,7 @@ def verify_rsm_context(browser: Browser, base_url: str, output: Path) -> None:
         # The server may already lock the source after the obsolete completion.
         # Explicit correction must preserve the edited draft instead of restoring history.
         page.get_by_role("button", name="새 revision으로 수정", exact=True).click()
-        expect(first).to_have_value("0.75")
-        revision_path = (
-            f"/api/v1/doe-designs/{design['design_id']}/response-revisions"
-        )
+        first.fill("0.75")
         with page.expect_response(
             lambda response: response.request.method == "POST"
             and urlsplit(response.url).path == revision_path

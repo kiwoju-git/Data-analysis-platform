@@ -623,7 +623,8 @@ function GeneralFactorialResult({ analysis, design, onAnalyze, onSave, pending, 
     <h3>일반 완전요인 설계</h3>
     <div className="metadata-grid"><span>설계</span><strong>{design.name}</strong><span>실험 수</span><strong>{design.run_count}</strong><span>분석 coding</span><strong>Treatment coding</strong><span>범위</span><strong>숫자·문자 범주 수준</strong></div>
     <div className="table-wrap"><table className="result-table"><thead><tr><th>Run</th><th>Standard</th><th>Rep</th>{design.factors.map((factor) => <th key={factor.name}>{factor.name}</th>)}</tr></thead><tbody>{design.runs.map((run) => <tr key={run.run_order}><td>{run.run_order}</td><td>{run.standard_order}</td><td>{run.replicate_index}</td>{design.factors.map((factor) => <td key={factor.name}>{String(run.factor_levels[factor.name])}</td>)}</tr>)}</tbody></table></div>
-    <DoeResponsePasteDialog runOrders={design.runs.map((run) => run.run_order)} disabled={locked || pending !== null} onApply={setResponses} />
+    <DoeResponsePasteDialog sourceKey={JSON.stringify([design.design_id, design.design_sha256, responseName, correctionMode, locked])}
+      runOrders={design.runs.map((run) => run.run_order)} disabled={locked || pending !== null} onApply={setResponses} />
     <DoeSettingsTable ariaLabel="일반 완전요인 반응 설정" fields={[
       { key: "response", label: "반응 이름", controlId: "general-factorial-response", control: <input id="general-factorial-response" disabled={locked || correctionMode} value={responseName} onChange={(event) => setResponseName(event.currentTarget.value)} /> },
       { key: "unit", label: "반응 단위", controlId: "general-factorial-response-unit", control: <input id="general-factorial-response-unit" disabled={locked} value={responseUnit} onChange={(event) => setResponseUnit(event.currentTarget.value)} /> },

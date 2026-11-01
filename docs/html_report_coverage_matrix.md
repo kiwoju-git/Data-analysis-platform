@@ -5,11 +5,33 @@ reader schemas are joined in the [generated capability matrix](generated/analysi
 It is source-declaration evidence, not a replacement for per-source report checks
 or the executed [journey matrix](remediation_journey_matrix.md).
 
-## Pilot Follow-up Output Versions
+## Current RSM and Gage Follow-up
 
-The current DOE expansion contract is API **25**, metadata **23**. Full group identity
+The RSM/Gage follow-up uses API **27**, metadata **24** without a new SQL migration.
+The following declarations are taken from `dedicated_report_renderers.DEFINITIONS`,
+`report_coverage.report_definitions()` and `quality_report.QUALITY_REPORT_VARIANTS`.
+They describe saved-payload coverage, not a claim that every option has passed a
+browser or release-archive test.
+
+| Method / current version | Accepted result schemas / renderer | Saved HTML coverage and limit |
+| --- | --- | --- |
+| `doe.response_surface` / `0.5.0` | `1, 2, 3` / dedicated `1.5.0` | Source, model/terms/ANOVA, selection/final basis, diagnostics, stationary-point status, saved contour/conditional curves and explicit region/bounds. Result 3 adds raw and standardized four-in-one views with units, full/available/displayed counts and unavailability reasons; no refit or source-row reload. Legacy result 1/2 lacking these views remains readable with the residual section unavailable and a source-specific summary level. |
+| `doe.response_optimizer` / `0.5.0` | `2, 3` / dedicated `1.5.0` | Source, exact objectives/weights, input and search bounds, constraints, saved recommendation/desirability, search budget/termination, source eligibility and warnings. Result 3 preserves region policy, cube/axial/effective bounds and separate requested-bounds/constraint/hull status. Legacy schema 2 keeps original input-bound semantics; absent newer evidence is not reconstructed. This renderer does not declare an RSM optimizer profile-curve section. |
+| `quality.gage_rr` / `0.2.0` | `1, 2` / generic `2.2.0` | Replicate mode, requested/effective interaction policy, alpha/pooling reason, full pre-pooling and selected final ANOVA, final variance components, design/sample and warnings. Schema 1 retains explicit-replicate/interaction-retain interpretation. Level remains **summary** because `gage_interaction` is unavailable with reason `interaction_means_not_stored`; this is not a missing-ANOVA claim. |
+
+Current RSM plot bundle/view JSON schemas are 2 (legacy 1); the plot asset storage
+envelope remains 1. Exact custom-view reports read the explicitly saved view/hash,
+not the current unsaved controls. Existing result/export bytes are not rewritten.
+See [RSM contract](response_surface_method_contract.md),
+[optimizer contract](response_optimizer_contract.md),
+[Gage contract](gage_rr_method_contract.md) and
+[follow-up evidence](rsm_gage_followup.md).
+
+## Historical Pilot Follow-up Output Versions
+
+The earlier DOE expansion contract was API **25**, metadata **23**. Full group identity
 readers accept equal-variance schemas 1/2/3 and two-sample-t/Kruskal-Wallis
-schemas 1/2. New generic reports identify renderer **2.1.0**; completed/stored
+schemas 1/2. At that stage, new generic reports identified renderer **2.1.0**; completed/stored
 prediction and dedicated workflow reports identify **1.1.0**. These renderer
 changes add precision-aware axes/tables and full saved group names, not new
 statistical estimates. Existing export files and checksums are unchanged.
@@ -35,8 +57,9 @@ snapshot view is not a claim that JSON alone is a full report.
 | --- | --- | --- |
 | Completed PLS/GP prediction | Exact request rows, response/model/hash, all saved means and available latent/observation intervals, warnings | PLS has point predictions only; unsaved browser-only JSON cannot become a server source |
 | Legacy dataset/pasted regression prediction | Full saved prediction rows, actual intervals/warnings; pasted inputs | Dataset-prediction legacy inputs were not stored, so that report is summary; no raw-data reconstruction |
-| Factorial/general/RSM analysis | Source design/revision, config, model/ANOVA/coefficient/diagnostic tables, estimability/selection/LoF, stored diagnostics | RSM renderer 1.4.0 additionally preserves stored conditional curves and contour geometry; legacy missing sections remain unavailable |
-| RSM/regression optimizer | Exact model dependencies/objectives/constraints, saved optimum/predictions/desirability/profiles, confirmation warning | Profiles preserved as saved tables; no new optimum search |
+| Factorial/general/RSM analysis | Source design/revision, config, model/ANOVA/coefficient/diagnostic tables, estimability/selection/LoF, stored diagnostics | Current RSM renderer 1.5.0 also preserves saved raw/standardized four-in-one views, conditional curves, contour geometry and region evidence; legacy missing sections remain unavailable |
+| RSM optimizer | Exact model dependencies/objectives/constraints, saved optimum/predictions/desirability, region/hull status, search evidence and confirmation warning | No new optimum search; absent legacy region/hull evidence is not manufactured; no declared profile-curve section |
+| Regression optimizer | Exact model dependencies/objectives/constraints, saved optimum/predictions/desirability/profiles, confirmation warning | Profiles preserved as saved tables; no new optimum search |
 | LHS design/revision | Complete saved design/factor bounds/seed/settings/quality, explicit response revisions | Empty response list is design-only, not implicit latest responses |
 | BO history/recommendation/batch revision | Exact study/history observations and optional exact saved pending recommendation/batch, uncertainty/acquisition, history SVG | No live-trial overlay or fantasy values relabelled as observations |
 
@@ -110,7 +133,7 @@ Versions and accepted stored schemas are declared in the live catalog and
 | quality.attribute_control_chart | quality_report: p/np/c/u summaries/charts/signals | Point-varying limits and frozen Phase II dependency |
 | quality.run_chart | quality_report: runs/randomness/signals | Median only, no invented LCL/UCL |
 | quality.capability | quality_report: capability/nonconformance/histogram/specifications | Stored bins, zero LSL/target retained |
-| quality.gage_rr | quality_report: ANOVA/variance components/design | Current payload lacks interaction: summary |
+| quality.gage_rr | quality_report 2.2.0: replicate/interaction policy, full and final ANOVA, final variance components/design/sample | Method 0.2.0/result 2; schema 1 readable with explicit/retain semantics. Summary only because interaction means/plot are not stored, not because ANOVA or pooling policy is absent |
 | quality.gage_run_chart | quality_report: part/operator/replicate and separate run series | No cross-operator joins or invented timestamps |
 | quality.two_variances | two_variances_report: settings/groups/ratio/test/conditional interval/plots | BF intentionally has no ratio CI; Bonett deferred |
 | eda.equal_variances | Basic EDA: groups/tests/multiple-comparison intervals/pairs | Distinct from Two Variances ratio CI |
@@ -166,7 +189,12 @@ The large path/value Result Envelope table from artifact schema 1 is removed fro
 body. A closed `details` element may expose escaped pretty JSON for audit use, after all
 user-facing sections.
 
-## Method-Level Audit (2026-09-17)
+## Historical Method-Level Audit (2026-09-17 Baseline)
+
+This table preserves historical findings and later annotations as an audit trail.
+Its old RSM/optimizer "unsupported HTML" and Gage "full ANOVA absent" entries are
+superseded by the current RSM/Gage table above; they are not current capability
+claims. Do not infer current method versions or report levels from this table.
 
 The older family table above describes intent, not full UI parity. In particular,
 OLS and most hypothesis/categorical/quality renderers only emit summaries/tables,
@@ -177,7 +205,7 @@ optimizer evidence, OOF/residual/uncertainty/profile SVGs and a surface table.
 
 Audit source: 38-method backend registry, eight frontend domains and actual export
 routes. Every generic entry includes provenance and saved warnings. Schema below
-is the current result schema; legacy accepted versions are explicit in
+is the recorded audit schema; current accepted versions are explicit in
 `report_coverage.py`. Status `supported` does not claim every option was visually
 checked. `summary` means partial screen parity, not a complete user report.
 

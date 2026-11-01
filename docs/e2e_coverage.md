@@ -198,6 +198,22 @@ its API and built UI; verify_linux_release.py adds two offline installations and
 external-workspace restart/restore. See running validation record for executed
 versus pending checks; fixtures are synthetic and diagnostics remain ignored.
 
+## RSM/Gage Follow-up (2026-11-01)
+
+The `workflows` suite adds `gage_followup`: synthetic three-column crossed
+Gage, automatic preflight, auto-pool/retain, filtered imbalance rejection,
+stored result and bilingual managed HTML. `doe_rsm_completion` now checks
+31-run paste preview/apply, immutable revision controls, raw/standardized
+four-in-one residuals, CCC holds outside the cube, and optimizer keyboard/caret
+and obsolete completion rejection. `rsm_context` retains delayed save/analysis
+coverage using explicit correction and model/source edits. `optimizer_input.py`
+checks KO/EN at 1024/1280/1440 without equating viewport changes with browser
+zoom. Existing `doe_browser_zoom` continues actual 125/150 percent zoom.
+
+The installed archive suite invokes these same RSM/Gage journeys. New Linux
+Release publication is deferred; execution evidence belongs in
+`rsm_gage_followup.md`, not inferred from these test definitions.
+
 ## GPR/UI/Report Parity (2026-09-17)
 
 `dashboard_navigation.py`: all eight landings in KOR/ENG, 1440x900, 1280x800,

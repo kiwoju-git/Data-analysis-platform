@@ -127,7 +127,7 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
         "$capabilities = @{}; "
         "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
         "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
-        f"api_contract_version=26; metadata_schema_version={schema}; "
+        f"api_contract_version=27; metadata_schema_version={schema}; "
         "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "
         "Test-DevRuntimeCompatibility -RuntimeInfo $runtime "
         "-ExpectedBuildId test -RequireExactCommit"

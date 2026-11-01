@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from itertools import product
 from math import exp, isfinite, log
 from time import perf_counter
@@ -16,8 +17,10 @@ from app.statistics.doe_factor_domain import (
 )
 from app.statistics.rsm_coding import RsmFactorCoding, actual_to_coded
 from app.statistics.rsm_model_basis import predict_rsm_basis
+from app.statistics.rsm_plot_geometry import design_hull_equations, outside_design_hull
+from app.statistics.rsm_region import RsmRegionFactor, RsmRegionMode, on_rsm_lattice
 
-RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION: Final[Literal[2]] = 2
+RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION: Final[Literal[3]] = 3
 MIN_OPTIMIZER_OBJECTIVES = 1
 MAX_OPTIMIZER_OBJECTIVES = 8
 MAX_OPTIMIZER_FACTORS = 5
@@ -41,6 +44,7 @@ class OptimizerFactor:
     step: float | None = None
     display_decimals: int | None = None
     coding: RsmFactorCoding | None = None
+    region: RsmRegionFactor | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,7 @@ class OptimizerModel:
     terms: tuple[OptimizerTerm, ...]
     source_warnings: tuple[str, ...] = ()
     powers: tuple[tuple[int, ...], ...] | None = None
+    observed_coded_coordinates: tuple[tuple[float, ...], ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -235,6 +240,7 @@ def calculate_response_optimizer(
     linear_constraints: list[OptimizerLinearConstraint],
     search_options: OptimizerSearchOptions,
     source_model_eligibility: OptimizerSourceEligibility | None = None,
+    region_mode: RsmRegionMode = "legacy_input_bounds_v1",
 ) -> dict[str, object]:
     objective_tuple = tuple(objectives)
     constraint_tuple = tuple(linear_constraints)
@@ -363,6 +369,19 @@ def calculate_response_optimizer(
         for bound in search_bounds
     ):
         warnings.append("response_optimizer_recommendation_on_factor_bound")
+    observed = objectives[0].model.observed_coded_coordinates
+    outside_hull = (
+        None
+        if observed is None
+        else bool(
+            outside_design_hull(
+                np.asarray([[coded_by_name[name] for name in factor_names]]),
+                design_hull_equations(np.asarray(observed)),
+            )[0]
+        )
+    )
+    if outside_hull:
+        warnings.append("response_optimizer_outside_observed_design_hull")
     return {
         "schema_version": RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION,
         "summary_type": "response_optimizer",
@@ -376,6 +395,11 @@ def calculate_response_optimizer(
             "point_predictions_only": True,
         },
         "factor_region": {
+            "region_mode": region_mode,
+            "region_policy_version": 1,
+            "resolved_bounds": [
+                factor.region.payload() for factor in factors if factor.region is not None
+            ],
             "design_bounds": [
                 {
                     "factor_name": factor.name,
@@ -422,6 +446,11 @@ def calculate_response_optimizer(
             for objective in objective_tuple
         ],
         "recommendation": {
+            "within_requested_bounds": all(
+                bound.lower <= actual_by_name[bound.factor_name] <= bound.upper
+                for bound in search_bounds
+            ),
+            "outside_observed_hull": outside_hull,
             "actual_coordinates": actual_by_name,
             "coded_coordinates": coded_by_name,
             "composite_desirability": best.composite,
@@ -531,6 +560,7 @@ def _validate_inputs(
             or source.coding != expected.coding
             or source.domain_kind != expected.domain_kind
             or source.step != expected.step
+            or source.region != expected.region
             for source, expected in zip(objective.model.factors, factors, strict=True)
         ):
             raise ResponseOptimizerError("response_optimizer_factor_space_mismatch")
@@ -631,27 +661,25 @@ def _search_bounds(
     by_name = {bound.factor_name: bound for bound in requested}
     resolved = []
     for factor in factors:
+        permitted_low = factor.low if factor.region is None else factor.region.lower
+        permitted_high = factor.high if factor.region is None else factor.region.upper
         bound = by_name.get(
             factor.name,
-            OptimizerFactorBound(factor.name, factor.low, factor.high),
+            OptimizerFactorBound(factor.name, permitted_low, permitted_high),
         )
         if (
             not isfinite(bound.lower)
             or not isfinite(bound.upper)
             or bound.lower >= bound.upper
-            or bound.lower < factor.low - CONSTRAINT_TOLERANCE
-            or bound.upper > factor.high + CONSTRAINT_TOLERANCE
+            or bound.lower < permitted_low - CONSTRAINT_TOLERANCE
+            or bound.upper > permitted_high + CONSTRAINT_TOLERANCE
         ):
             raise ResponseOptimizerError("response_optimizer_factor_bound_invalid")
         if factor.domain_kind == "discrete_numeric":
-            domain = DoeFactorDomain(
-                low=factor.low,
-                high=factor.high,
-                domain_kind=factor.domain_kind,
-                step=factor.step,
-                display_decimals=factor.display_decimals,
-            )
-            if not domain.is_executable(bound.lower) or not domain.is_executable(bound.upper):
+            if not all(
+                on_rsm_lattice(value, factor.low, factor.step, factor.domain_kind)
+                for value in (bound.lower, bound.upper)
+            ):
                 raise ResponseOptimizerError("response_optimizer_factor_bound_not_executable")
         resolved.append(bound)
     return tuple(resolved)
@@ -726,18 +754,13 @@ def _factor_values_in_bounds(
 ) -> tuple[float, ...]:
     if factor.domain_kind == "continuous":
         return (bound.lower, bound.upper)
-    domain = DoeFactorDomain(
-        low=factor.low,
-        high=factor.high,
-        domain_kind=factor.domain_kind,
-        step=factor.step,
-        display_decimals=factor.display_decimals,
-    )
-    values = tuple(
-        value
-        for value in domain.levels()
-        if bound.lower - CONSTRAINT_TOLERANCE <= value <= bound.upper + CONSTRAINT_TOLERANCE
-    )
+    assert factor.step is not None
+    anchor, step = Decimal(str(factor.low)), Decimal(str(factor.step))
+    first = int(((Decimal(str(bound.lower)) - anchor) / step).to_integral_value())
+    last = int(((Decimal(str(bound.upper)) - anchor) / step).to_integral_value())
+    if last - first + 1 > 10_001:
+        raise ResponseOptimizerError("response_optimizer_factor_bound_invalid")
+    values = tuple(float(anchor + index * step) for index in range(first, last + 1))
     if not values:
         raise ResponseOptimizerError("response_optimizer_factor_bound_invalid")
     return values

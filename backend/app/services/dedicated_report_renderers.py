@@ -94,6 +94,7 @@ DEFINITIONS = {
         ("source", "model_summary", "terms", "anova"),
         (
             "diagnostics",
+            "residual_plots",
             "stationary_point",
             "surface_grid",
             "conditional_plots",
@@ -101,8 +102,8 @@ DEFINITIONS = {
             "final_basis",
             "warnings",
         ),
-        (1, 2),
-        "1.4.0",
+        (1, 2, 3),
+        "1.5.0",
     ),
     "response_optimizer": _definition(
         "doe.response_optimizer",
@@ -110,7 +111,8 @@ DEFINITIONS = {
         "response_optimizer",
         ("source", "objectives", "recommendation"),
         ("factor_region", "search", "source_eligibility", "warnings"),
-        (2,),
+        (2, 3),
+        "1.5.0",
     ),
     "lhs": _definition(
         "doe.latin_hypercube",
@@ -287,7 +289,11 @@ def _diagnostics(result: dict[str, Any], locale: ReportLocale) -> ReportSection:
     return section("diagnostics", "저장 잔차 진단", "Stored residual diagnostics", markup, locale)
 
 
-def _residual_views(final: dict[str, Any], locale: ReportLocale) -> ReportSection:
+def _residual_views(
+    final: dict[str, Any],
+    locale: ReportLocale,
+    unit: str | None = None,
+) -> ReportSection:
     views = final.get("residual_plots")
     if not isinstance(views, dict):
         return missing(
@@ -309,11 +315,37 @@ def _residual_views(final: dict[str, Any], locale: ReportLocale) -> ReportSectio
             if name == "raw"
             else text(locale, "표준화 잔차", "Standardized residual")
         )
+        if name == "raw" and unit:
+            label += f" ({unit})"
         markup += "<h4>" + escape(label) + "</h4>"
+        if view.get("unavailable_reason"):
+            markup += paragraph(
+                "표준화 가능 범위 제한: " + str(view["unavailable_reason"]),
+                "Standardization availability: " + str(view["unavailable_reason"]),
+                locale,
+            )
         markup += stored_table(view, locale)
         qq = view["qq_points"]
         points = view["points"]
         bins = view["histogram"]
+        reference = view.get("reference_line")
+        segments = []
+        if qq and isinstance(reference, dict):
+            left = min(report_number(row["theoretical_quantile"]) for row in qq)
+            right = max(report_number(row["theoretical_quantile"]) for row in qq)
+            slope, intercept = (
+                report_number(reference["slope"]),
+                report_number(reference["intercept"]),
+            )
+            segments = [
+                (
+                    text(locale, "정규 기준선", "Normal reference"),
+                    left,
+                    intercept + slope * left,
+                    right,
+                    intercept + slope * right,
+                )
+            ]
         markup += report_plot(
             label + " Q-Q",
             text(locale, "이론 분위수", "Theoretical quantile"),
@@ -331,6 +363,7 @@ def _residual_views(final: dict[str, Any], locale: ReportLocale) -> ReportSectio
                     ],
                 )
             ],
+            reference_segments=segments,
         )
         markup += report_plot(
             label,
@@ -351,6 +384,15 @@ def _residual_views(final: dict[str, Any], locale: ReportLocale) -> ReportSectio
             ("fitted", text(locale, "적합값", "Fitted")),
             ("run_order", text(locale, "실행순서", "Run order")),
         ):
+            if x_key == "fitted" and unit:
+                x_label += f" ({unit})"
+            run_ticks = None
+            if x_key == "run_order":
+                orders = sorted({int(row["run_order"]) for row in points})
+                indices = sorted({(len(orders) - 1) * index // 4 for index in range(5)})
+                run_ticks = (
+                    [(orders[index], str(orders[index])) for index in indices] if orders else []
+                )
             markup += report_plot(
                 label,
                 x_label,
@@ -369,6 +411,7 @@ def _residual_views(final: dict[str, Any], locale: ReportLocale) -> ReportSectio
                     )
                 ],
                 zero=True,
+                x_ticks=run_ticks,
             )
     return section(
         "residual_plots", "최종 모형 잔차 그래프", "Final-model residual plots", markup, locale
@@ -429,6 +472,7 @@ def render_doe_analysis_body(
     ]
     if family == "response_surface":
         sections += [
+            _residual_views(result, locale, result.get("response", {}).get("unit")),
             _saved(
                 "selection",
                 "모형 선택 단계",
@@ -530,6 +574,15 @@ def render_doe_analysis_body(
                         rsm_plot_report(RsmPlotBundle.model_validate(item), locale)
                         for item in overview
                     ),
+                    locale,
+                )
+            )
+        else:
+            sections.append(
+                missing(
+                    "conditional_plots",
+                    "저장된 조건부 주효과와 교호작용",
+                    "Stored conditional main-effect and interaction plots",
                     locale,
                 )
             )
@@ -654,7 +707,10 @@ def render_doe_analysis_body(
 
 def render_optimizer_body(payload: dict[str, Any], locale: ReportLocale) -> ReportBody:
     result = payload.get("result", {})
-    if result.get("schema_version") != 2 or result.get("summary_type") != "response_optimizer":
+    if (
+        result.get("schema_version") not in {2, 3}
+        or result.get("summary_type") != "response_optimizer"
+    ):
         return ReportBody("unsupported", (), "unsupported_result_schema")
     if not result.get("objectives") or not result.get("recommendation"):
         return ReportBody("unsupported", (), "required_result_section_missing")

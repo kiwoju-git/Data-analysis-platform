@@ -1,3 +1,7 @@
+import hashlib
+import json
+import re
+import xml.etree.ElementTree as ET
 from uuid import UUID
 
 import pytest
@@ -17,7 +21,7 @@ from app.services.response_optimizer import (
 from app.statistics.response_optimizer import _predict
 
 
-def test_rsm_presets_backward_restore_and_optimizer_use_final_terms(tmp_path):
+def test_rsm_presets_backward_restore_and_optimizer_use_final_terms(tmp_path, monkeypatch):
     settings = Settings(workspace_root=tmp_path)
     with TestClient(create_app(settings)) as client:
         response = client.post(
@@ -61,6 +65,15 @@ def test_rsm_presets_backward_restore_and_optimizer_use_final_terms(tmp_path):
             )
             assert fitted.status_code == 201, fitted.text
             analysis = fitted.json()
+            assert analysis["method_version"] == "0.5.0"
+            assert analysis["analysis_schema_version"] == 4
+            assert analysis["result"]["schema_version"] == 3
+            assert analysis["result"]["observed_response_summary"] == {
+                "n": 31,
+                "minimum": min(row["value"] for row in values),
+                "maximum": max(row["value"] for row in values),
+                "source": "all_used_responses",
+            }
             assert analysis["result"]["sample"]["parameter_count"] == count
             assert analysis["result"]["model_selection"]["method"] == "none"
             assert analysis["result"]["model_selection"]["removed_term_ids"] == []
@@ -72,6 +85,7 @@ def test_rsm_presets_backward_restore_and_optimizer_use_final_terms(tmp_path):
             json={
                 "response_name": "Y",
                 "model_selection": {"method": "backward_elimination"},
+                "point_limit": 2,
             },
         )
         assert fitted.status_code == 201, fitted.text
@@ -119,7 +133,46 @@ def test_rsm_presets_backward_restore_and_optimizer_use_final_terms(tmp_path):
             actual = {"A": point["x_actual"], "B": point["y_actual"], "C": 16, "D": 13}
             assert point["predicted"] == pytest.approx(expected, abs=1e-11)
             assert _predict(objectives[0].model, actual) == pytest.approx(expected, abs=1e-11)
-        body = render_doe_analysis_body(analysis, "response_surface", "en")
+        checksum = hashlib.sha256(json.dumps(analysis, sort_keys=True).encode()).hexdigest()
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError("report must use saved residual views, not fit or source rows")
+
+        with monkeypatch.context() as patches:
+            patches.setattr("app.statistics.response_surface._fit", forbidden)
+            patches.setattr("app.statistics.response_surface.select_rsm_terms", forbidden)
+            patches.setattr(
+                "app.services.doe_response_surface_analysis.load_response_revision_dependency",
+                forbidden,
+            )
+            body = render_doe_analysis_body(analysis, "response_surface", "en")
+            residual = next(
+                section for section in body.sections if section.section_id == "residual_plots"
+            )
+            assert residual.status == "rendered"
+            assert residual.markup.count("<svg") == 8
+            assert "Raw residual (g)" in residual.markup
+            assert "Standardized residual" in residual.markup
+            assert "Fitted (g)" in residual.markup
+            assert "Normal reference" in residual.markup
+            assert "Run order" in residual.markup
+            order_charts = []
+            for svg in re.findall(r"<svg\b.*?</svg>", residual.markup, flags=re.DOTALL):
+                chart = ET.fromstring(svg)
+                if (chart.findtext("desc") or "").startswith("Run order /"):
+                    order_charts.append(chart)
+                    labels = [
+                        node.text
+                        for node in chart.findall("./text[@text-anchor='middle'][@font-size='10']")
+                    ]
+                    assert labels == ["1", "2"]
+            assert len(order_charts) == 2
+            for mode in ("raw", "standardized"):
+                view = analysis["result"]["residual_plots"][mode]
+                assert view["n_displayed"] == 2
+                assert view["n_available"] == 31
+                assert sum(bin_["count"] for bin_ in view["histogram"]) == 31
+        assert hashlib.sha256(json.dumps(analysis, sort_keys=True).encode()).hexdigest() == checksum
         assert any(section.section_id == "selection" for section in body.sections)
         rejected = client.post(
             base + "/analyses",

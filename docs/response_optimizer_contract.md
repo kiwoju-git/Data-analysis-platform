@@ -1,10 +1,10 @@
 # Response Optimizer Contract
 
-Last updated: 2026-07-31
+Last updated: 2026-11-01
 
 ## Scope
 
-`doe.response_optimizer` v0.3.0 optimizes one or more checksum-validated
+`doe.response_optimizer` v0.5.0 optimizes one or more checksum-validated
 `doe.response_surface` saved final models over their shared declared factor
 region. It is catalog-available with `execution_mode=dedicated` through both
 the RSM panel and `/analysis/doe/doe.response_optimizer`. It does
@@ -51,23 +51,25 @@ Not implemented:
 
 | Contract | Version |
 | --- | ---: |
-| method | `0.3.0` |
-| optimizer config | `2` |
-| optimizer result | `2` |
-| source RSM result | `1` |
+| method | `0.5.0` |
+| optimizer config | `3` (legacy `2` readable) |
+| optimizer result | `3` (legacy `2` readable) |
+| source RSM result | `1`, `2`, `3` |
 | source bundle | `2` |
-| SQLite metadata | `10` |
+| SQLite metadata | `24` (unchanged by this extension) |
 
 `METHOD_VERSIONS["doe.response_optimizer"]` is the current write-version source;
 the legacy key remains registered only for exact historical restore. The first
-persisted contract was v0.1.0/schema 1. Typed eligibility and
-acknowledgment fields change persisted semantics, so the current contract is
-v0.2.0 with config/result schema 2. Version 0.3.0 keeps those optimizer schemas
+persisted contract was v0.1.0/schema 1 (not part of the currently accepted reader).
+Typed eligibility and acknowledgment fields introduced config/result schema2.
+Version 0.3.0 kept those optimizer schemas
 and calculations, but source bundle schema 2 now includes each RSM analysis's
 explicit response revision ID/number/SHA. Older optimizer records are not
 silently assigned the new version or migrated. Schema 10 stores the source RSM
 analysis-to-revision relation; optimizer records remain keyed by source
-analysis IDs and a source bundle SHA.
+analysis IDs and a source bundle SHA. Version0.5.0 adds the explicit region policy
+to config/result3 without a new SQL migration. Current readers accept canonical
+method0.3/0.4 with schema2 and method0.5 with schema3, plus legacy method-ID0.3/schema2.
 
 ## Dedicated API
 
@@ -152,9 +154,26 @@ range and zero outside it.
 
 ## Region, Constraints, And Search
 
-Default search bounds equal the RSM declared input actual bounds (CCI axial,
-CCC factorial cube, CCF both). User bounds
-may only narrow that region. Linear constraints are evaluated in actual factor
+New UI requests explicitly select `axial_bounds`, `factorial_cube`, or `custom`.
+The new UI default is the axial envelope. Custom bounds must specify every
+factor and remain within that envelope; no physical process limits are inferred.
+Omitted `region_mode` retains `legacy_input_bounds_v1`, including old config2
+records whose omitted factor bounds meant the input bounds, not the new UI default.
+
+The common `rsm_region.resolve_rsm_region` validates saved actual/coded runs and
+coding before resolving the region. It records input, factorial, axial, observed
+and effective bounds separately. Original input low/high, coding center/scale,
+and discrete lattice anchor never change when the region changes. For CCC input
+10..20 with alpha2, center15/scale5 stays fixed while the axial domain is5..25.
+The same transform is used for prediction, contour, curves and optimization.
+
+The axial box is not the observed convex hull. Recommendations separately record
+requested-bound validity, constraint validity and outside-observed-hull status.
+An outside-hull result carries an extrapolation/confirmation warning. This does
+not invent a nonlinear safety constraint or claim that points inside the box
+were observed. Stored source models and prior result/config bytes are not changed.
+
+Linear constraints are evaluated in actual factor
 units and must contain at least one nonzero finite coefficient.
 
 The algorithm evaluates the center, region corners, and seeded random
@@ -201,8 +220,10 @@ slice may add a lightweight verified summary/index, search/filter, exact-ID
 lookup, and hundreds-item benchmarks, but full dependency/checksum validation
 remains mandatory when a source is selected.
 
-These restore and navigation changes retain method `0.3.0`, config/result
-schemas 2/2, and source-bundle schema 2.
+Historical method0.3.0/0.4.0 dispatches to config/result2 and legacy input bounds.
+Method0.5.0 dispatches to config/result3 with explicit resolved-region metadata.
+Source-bundle schema2 and all source checksums remain unchanged. New region
+defaults are not inserted into an old hash input or written back to an old record.
 
 ## Stable Errors
 

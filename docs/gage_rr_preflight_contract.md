@@ -1,91 +1,46 @@
 # Gage R&R Preflight Contract
 
-Status: Gate C3 companion preflight API, not a statistical result.
+Updated: 2026-11-01. Response schema 2, executable method 0.2.0.
 
-## Scope
-
-`POST /api/v1/quality/gage-rr/preflight` checks whether a dataset version is ready for the executable `quality.gage_rr` balanced crossed ANOVA slice.
-
-It does not create an `analysis_run`, does not write result artifacts, and does not calculate ANOVA tables, variance components, %GRR, ndc, or plots. Execute `quality.gage_rr` through `POST /api/v1/analysis-runs` after the preflight is ready.
+`POST /api/v1/quality/gage-rr/preflight` validates a balanced crossed design
+without creating an analysis, computing ANOVA or writing a persistent snapshot.
 
 ## Request
 
-```json
-{
-  "dataset_version_id": "uuid",
-  "measurement_column_id": "column-id",
-  "part_column_id": "column-id",
-  "operator_column_id": "column-id",
-  "replicate_column_id": "column-id",
-  "missing_policy": "complete_case"
-}
-```
+Required: dataset_version_id, measurement_column_id, part_column_id,
+operator_column_id. Optional replicate_column_id and replicate_mode:
+`infer_from_rows` or `explicit_column`. The latter requires a distinct fourth
+column; omitted mode plus a supplied column preserves old explicit semantics.
+Missing policy remains complete_case. Optional filter_snapshot uses the same
+versioned conditions and frozen-row selection as execution.
 
-Rules:
+## Response And Ownership
 
-- `measurement_column_id` must be a numeric column.
-- part, operator, and replicate columns may be text, integer, decimal, or boolean.
-- the four role columns must be distinct.
-- rows are read only from the canonical dataset artifact.
-- filter snapshots are not applied in this shell.
+The response includes dataset version/schema hash, canonical artifact hash,
+filter snapshot hash, resolved role metadata and repeat mode, total/usable/
+excluded counts, crossing/cell-count distribution, structural balance, readiness,
+issues and next step. It never returns original part/operator/replicate values.
 
-## Response
+Counts are based on valid measurements per cell. Distinct repeat-ID sets across
+cells are informational, not a balance requirement. Duplicates within a cell
+remain errors. Automatic ordinals have no time/round interpretation.
 
-The endpoint returns a deterministic summary with:
+A ready result is descriptive, not authorization to bypass validation. Execution
+revalidates the exact current dataset/filter/options. The UI's Compute command
+performs a fresh preflight internally; the explicit preflight button remains for
+inspection. Source, role and filter changes invalidate the previous response,
+including pending success/catch/finally work.
 
-- dataset version and schema hash
-- selected role-column metadata
-- total/usable/excluded row counts
-- part count, operator count, replicate level count
-- expected and observed part-operator cell counts
-- missing cell count
-- min/max replicates per cell
-- cell replicate-count distribution
-- `ready_for_anova`
-- `issues`
-- `next_step`
+## Stable Failures
 
-Raw part/operator/replicate cell values are not returned.
+Structural/data codes include gage_rr_no_usable_measurements,
+gage_rr_part_count_too_small, gage_rr_operator_count_too_small,
+gage_rr_replicate_count_too_small, gage_rr_crossed_cells_missing,
+gage_rr_unbalanced_crossed_design, gage_rr_duplicate_replicates_per_cell,
+gage_rr_zero_total_variation. Unsupported mode/column combinations fail request
+validation. Measurement types and distinct selected columns remain validated.
 
-## Issue Codes
-
-Info:
-
-- `gage_rr_preflight_only_no_variance_components`
-- `gage_rr_requires_balanced_crossed_design`
-- `gage_rr_independence_not_proven`
-- `gage_rr_labels_redacted`
-
-Errors in the response body:
-
-- `gage_rr_no_usable_measurements`
-- `gage_rr_part_count_too_small`
-- `gage_rr_operator_count_too_small`
-- `gage_rr_replicate_count_too_small`
-- `gage_rr_crossed_cells_missing`
-- `gage_rr_unbalanced_crossed_design`
-- `gage_rr_duplicate_replicates_per_cell`
-
-Warnings in the response body:
-
-- `missing_values_excluded`
-- `non_numeric_values_excluded`
-- `gage_rr_identifier_missing_excluded`
-
-HTTP errors:
-
-- `gage_rr_missing_policy_unsupported`
-- `gage_rr_distinct_columns_required`
-- `gage_rr_measurement_column_not_found`
-- `gage_rr_measurement_column_not_numeric`
-- `gage_rr_measurement_column_is_id`
-- `gage_rr_part_column_not_found`
-- `gage_rr_part_column_not_supported`
-- `gage_rr_operator_column_not_found`
-- `gage_rr_operator_column_not_supported`
-- `gage_rr_replicate_column_not_found`
-- `gage_rr_replicate_column_not_supported`
-
-## Related Execution Contract
-
-The executable method contract is documented in `docs/gage_rr_method_contract.md`. The preflight remains useful because it reports balance and duplicate/missing-cell issues before an analysis run is created.
+Temporary snapshot files are not needed: preflight uses the shared
+`freeze_row_indices` selection plus the verified canonical iterator directly.
+The full calculation, pooling, legacy and report contracts are in
+[gage_rr_method_contract.md](gage_rr_method_contract.md).

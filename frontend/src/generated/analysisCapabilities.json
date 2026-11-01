@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "api_contract_version": 26,
+  "api_contract_version": 27,
   "metadata_schema_version": 24,
   "methods": [
     {
@@ -2505,7 +2505,7 @@
     },
     {
       "method_id": "doe.response_surface",
-      "method_version": "0.4.0",
+      "method_version": "0.5.0",
       "module_id": "doe",
       "label_ko": "반응표면법",
       "label_en": "Response Surface Method",
@@ -2529,10 +2529,11 @@
           "summary_type": "response_surface_analysis",
           "accepted_schemas": [
             1,
-            2
+            2,
+            3
           ],
           "renderer_id": "dedicated_response_surface",
-          "renderer_version": "1.4.0",
+          "renderer_version": "1.5.0",
           "variants": [
             {
               "variant_id": "response_surface",
@@ -2555,6 +2556,10 @@
                 },
                 {
                   "section_id": "diagnostics",
+                  "core": false
+                },
+                {
+                  "section_id": "residual_plots",
                   "core": false
                 },
                 {
@@ -2602,7 +2607,7 @@
     },
     {
       "method_id": "doe.response_optimizer",
-      "method_version": "0.4.0",
+      "method_version": "0.5.0",
       "module_id": "doe",
       "label_ko": "반응 최적화",
       "label_en": "Response Optimizer",
@@ -2625,10 +2630,11 @@
           "method_id": "doe.response_optimizer",
           "summary_type": "response_optimizer",
           "accepted_schemas": [
-            2
+            2,
+            3
           ],
           "renderer_id": "dedicated_response_optimizer",
-          "renderer_version": "1.1.0",
+          "renderer_version": "1.5.0",
           "variants": [
             {
               "variant_id": "response_optimizer",
@@ -3552,7 +3558,7 @@
     },
     {
       "method_id": "quality.gage_rr",
-      "method_version": "0.1.0",
+      "method_version": "0.2.0",
       "module_id": "quality",
       "label_ko": "Gage R&R",
       "label_en": "Gage R&R Study",
@@ -3575,10 +3581,11 @@
           "method_id": "quality.gage_rr",
           "summary_type": "gage_rr",
           "accepted_schemas": [
-            1
+            1,
+            2
           ],
           "renderer_id": "gage_rr",
-          "renderer_version": "2.1.0",
+          "renderer_version": "2.2.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3588,8 +3595,16 @@
                   "core": true
                 },
                 {
+                  "section_id": "gage_policy",
+                  "core": false
+                },
+                {
                   "section_id": "gage_anova",
                   "core": true
+                },
+                {
+                  "section_id": "gage_full_anova",
+                  "core": false
                 },
                 {
                   "section_id": "gage_variance_components",

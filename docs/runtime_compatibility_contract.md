@@ -1,5 +1,15 @@
 # Runtime Compatibility Contract
 
+## Current RSM/Gage Follow-up (API27)
+
+API27 adds optional Gage replicate-column/mode and interaction-policy contracts,
+RSM final residual views/observed response summary, and explicit plot/optimizer
+region policies. The frontend and Windows startup require API27/metadata24;
+Linux reads the same backend constants. There is no new SQL migration.
+RSM/optimizer method0.5.0 and Gage0.2.0 readers retain supported historical
+schemas and original checksums. See [follow-up evidence](rsm_gage_followup.md).
+Sections below describe earlier contract transitions, not current startup requirements.
+
 ## Noise-Aware BO and GPR Extension (API26)
 
 API26 introduces versioned noise-aware BO request/result contracts, explicit
@@ -148,7 +158,7 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `26`);
+- `api_contract_version` (currently `27`);
 - the actual metadata schema constant (currently `24`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
@@ -169,7 +179,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `26`, schema 24 or later, and every required
+The frontend expects API contract `27`, schema 24 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

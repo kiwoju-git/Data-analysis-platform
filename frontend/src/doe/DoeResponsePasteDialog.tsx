@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useI18n } from "../i18n/LocaleProvider";
 import { parseDoeResponsePaste, type DoeResponsePasteLayout, type DoeResponsePasteResult } from "./doeResponsePaste";
@@ -6,10 +6,11 @@ import { parseDoeResponsePaste, type DoeResponsePasteLayout, type DoeResponsePas
 interface Props {
   disabled: boolean;
   runOrders: readonly number[];
-  onApply: (values: Record<string, string>) => void;
+  sourceKey?: string;
+  onApply: (values: Record<string, string>, sourceKey: string) => void;
 }
 
-export function DoeResponsePasteDialog({ disabled, runOrders, onApply }: Props) {
+export function DoeResponsePasteDialog({ disabled, runOrders, onApply, sourceKey = JSON.stringify(runOrders) }: Props) {
   const { t } = useI18n();
   const id = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -20,6 +21,12 @@ export function DoeResponsePasteDialog({ disabled, runOrders, onApply }: Props) 
   const [hasHeader, setHasHeader] = useState(false);
   const [delimiter, setDelimiter] = useState("auto");
   const [preview, setPreview] = useState<DoeResponsePasteResult | null>(null);
+  const [previewSource, setPreviewSource] = useState<string | null>(null);
+  const currentSource = useRef(sourceKey);
+  currentSource.current = sourceKey;
+  useEffect(() => {
+    setOpen(false); setContent(""); setPreview(null); setPreviewSource(null);
+  }, [sourceKey]);
 
   function close() { setOpen(false); buttonRef.current?.focus(); }
   function parse() {
@@ -27,6 +34,7 @@ export function DoeResponsePasteDialog({ disabled, runOrders, onApply }: Props) 
       layout, hasHeader, delimiter: delimiter === "auto" ? undefined : delimiter === "tab" ? "\t" : ",",
     });
     setPreview(result);
+    setPreviewSource(sourceKey);
     if (!result.ok) textareaRef.current?.focus();
   }
 
@@ -59,9 +67,9 @@ export function DoeResponsePasteDialog({ disabled, runOrders, onApply }: Props) 
       <div className="button-row">
         <button className="secondary-button" type="button" onClick={close}>{t("doe.paste.cancel")}</button>
         <button className="secondary-button" type="button" onClick={parse}>{t("doe.paste.preview")}</button>
-        <button className="primary-button" type="button" disabled={!preview?.ok} onClick={() => {
-          if (!preview?.ok) return;
-          onApply(Object.fromEntries(preview.rows.map((row) => [String(row.runOrder), row.value])));
+        <button className="primary-button" type="button" disabled={!preview?.ok || previewSource !== sourceKey} onClick={() => {
+          if (disabled || !preview?.ok || previewSource !== currentSource.current) return;
+          onApply(Object.fromEntries(preview.rows.map((row) => [String(row.runOrder), row.value])), previewSource);
           setPreview(null); setContent(""); close();
         }}>{t("doe.paste.apply")}</button>
       </div>

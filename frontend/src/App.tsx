@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import "./dashboardNavigation.css";
 import { validStoredGroupIdentities } from "./groupIdentity";
+import { restoredGageRrOptions } from "./gageRrRestore";
 import {
   createAnalysisRun,
   createFactorialAnalysis,
@@ -326,6 +327,9 @@ export default function App() {
     null,
   );
   const [gageRrPreflightError, setGageRrPreflightError] = useState<string | null>(null);
+  const [gageRrReplicateMode, setGageRrReplicateMode] = useState<"infer_from_rows" | "explicit_column">("infer_from_rows");
+  const [gageRrInteractionPolicy, setGageRrInteractionPolicy] = useState<"retain" | "auto_pool">("auto_pool");
+  const [gageRrInteractionAlpha, setGageRrInteractionAlpha] = useState("0.05");
   const [selectedLinearModelResponseColumnId, setSelectedLinearModelResponseColumnId] = useState<
     string | null
   >(null);
@@ -667,6 +671,7 @@ export default function App() {
     invalidateCurrentAnalysis();
     gagePreflightRequest.current += 1;
     setIsGagePreflightRunning(false);
+    setGageRrPreflight(null);
     descriptiveQuickGraphRequestIdRef.current += 1;
     resetRestoredAnalysisResultState();
   }, [invalidateCurrentAnalysis, resetRestoredAnalysisResultState]);
@@ -1222,6 +1227,24 @@ export default function App() {
   const gageRrResult = isGageRrResult(gageRrAnalysisResult?.result)
     ? gageRrAnalysisResult.result
     : null;
+  const restoredGageEnvelope = restoredAnalysisResultState.restoredAnalysisResult;
+  useEffect(() => {
+    if (
+      restoredGageEnvelope?.method_id !== "quality.gage_rr" ||
+      !isGageRrResult(restoredGageEnvelope.result)
+    ) return;
+    const stored = restoredGageEnvelope.result;
+    const savedOptions = restoredGageRrOptions(stored);
+    setSelectedGageRrMeasurementColumnId(stored.columns.measurement.column_id);
+    setSelectedGageRrPartColumnId(stored.columns.part.column_id);
+    setSelectedGageRrOperatorColumnId(stored.columns.operator.column_id);
+    setSelectedGageRrReplicateColumnId(stored.columns.replicate?.column_id ?? null);
+    setGageRrReplicateMode(savedOptions.replicateMode);
+    setGageRrInteractionPolicy(savedOptions.interactionPolicy);
+    setGageRrInteractionAlpha(savedOptions.interactionAlpha);
+    setGageRrPreflight(null);
+    setGageRrPreflightError(null);
+  }, [restoredGageEnvelope]);
   const gageRunChartResult = isGageRunChartResult(gageRunChartAnalysisResult?.result)
     ? gageRunChartAnalysisResult.result
     : null;
@@ -1890,6 +1913,9 @@ export default function App() {
   }
 
   function resetGageRrSelection(columns: DatasetColumnResponse[]) {
+    setGageRrReplicateMode("infer_from_rows");
+    setGageRrInteractionPolicy("auto_pool");
+    setGageRrInteractionAlpha("0.05");
     const measurementColumnId = defaultGageRrMeasurementColumnId(columns);
     setSelectedGageRrMeasurementColumnId(measurementColumnId);
     setSelectedGageRrPartColumnId(defaultGageRrPartColumnId(columns, measurementColumnId));
@@ -3227,7 +3253,7 @@ export default function App() {
       selectedGageRrMeasurementColumnId === null ||
       selectedGageRrPartColumnId === null ||
       selectedGageRrOperatorColumnId === null ||
-      selectedGageRrReplicateColumnId === null
+      (gageRrReplicateMode === "explicit_column" && selectedGageRrReplicateColumnId === null)
     ) {
       setGageRrPreflightError("gage_rr_columns_required");
       return;
@@ -3236,9 +3262,9 @@ export default function App() {
       selectedGageRrMeasurementColumnId,
       selectedGageRrPartColumnId,
       selectedGageRrOperatorColumnId,
-      selectedGageRrReplicateColumnId,
+      ...(gageRrReplicateMode === "explicit_column" ? [selectedGageRrReplicateColumnId] : []),
     ]);
-    if (selectedColumns.size < 4) {
+    if (selectedColumns.size < (gageRrReplicateMode === "explicit_column" ? 4 : 3)) {
       setGageRrPreflightError("gage_rr_distinct_columns_required");
       return;
     }
@@ -3253,10 +3279,15 @@ export default function App() {
         measurement_column_id: selectedGageRrMeasurementColumnId,
         part_column_id: selectedGageRrPartColumnId,
         operator_column_id: selectedGageRrOperatorColumnId,
-        replicate_column_id: selectedGageRrReplicateColumnId,
+        replicate_column_id: gageRrReplicateMode === "explicit_column" ? selectedGageRrReplicateColumnId : null,
+        replicate_mode: gageRrReplicateMode,
+        filter_snapshot: { expression_version: 1, conditions: serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns) },
         missing_policy: "complete_case",
       });
-      if (request === gagePreflightRequest.current) setGageRrPreflight(response);
+      if (request === gagePreflightRequest.current) {
+        setGageRrPreflight(response);
+        return response;
+      }
     } catch (error) {
       if (request !== gagePreflightRequest.current) return;
       setGageRrPreflight(null);
@@ -3276,7 +3307,7 @@ export default function App() {
       selectedGageRrMeasurementColumnId === null ||
       selectedGageRrPartColumnId === null ||
       selectedGageRrOperatorColumnId === null ||
-      selectedGageRrReplicateColumnId === null
+      (gageRrReplicateMode === "explicit_column" && selectedGageRrReplicateColumnId === null)
     ) {
       currentAnalysis.setValidationError("gage_rr_columns_required");
       return;
@@ -3285,14 +3316,13 @@ export default function App() {
       currentAnalysis.setValidationError(analysisFilterValidationError);
       return;
     }
-    if (
-      gageRrPreflight === null ||
-      !gageRrPreflight.design.ready_for_anova ||
-      gageRrPreflight.dataset_version_id !== version.version_id
-    ) {
-      setGageRrPreflightError("gage_rr_ready_preflight_required");
+    const alpha = Number(gageRrInteractionAlpha);
+    if (gageRrInteractionAlpha.trim() === "" || !Number.isFinite(alpha) || alpha <= 0 || alpha >= 1) {
+      currentAnalysis.setValidationError("gage_rr_interaction_alpha_invalid");
       return;
     }
+    const checked = await handleGageRrPreflight();
+    if (checked === undefined || !checked.design.ready_for_anova) return;
 
     currentAnalysis.setValidationError(null);
     try {
@@ -3312,13 +3342,16 @@ export default function App() {
           measurement: selectedGageRrMeasurementColumnId,
           part: selectedGageRrPartColumnId,
           operator: selectedGageRrOperatorColumnId,
-          replicate: selectedGageRrReplicateColumnId,
+          ...(gageRrReplicateMode === "explicit_column" && selectedGageRrReplicateColumnId !== null ? { replicate: selectedGageRrReplicateColumnId } : {}),
         },
         options: {
           measurement_column_id: selectedGageRrMeasurementColumnId,
           part_column_id: selectedGageRrPartColumnId,
           operator_column_id: selectedGageRrOperatorColumnId,
-          replicate_column_id: selectedGageRrReplicateColumnId,
+          replicate_column_id: gageRrReplicateMode === "explicit_column" ? selectedGageRrReplicateColumnId : null,
+          replicate_mode: gageRrReplicateMode,
+          interaction_policy: gageRrInteractionPolicy,
+          alpha_to_remove_interaction: alpha,
           missing_policy: "complete_case",
         },
       });
@@ -4262,6 +4295,12 @@ export default function App() {
     gageRrPreflight,
     gageRrPreflightError,
     gageRrReplicateColumnId: selectedGageRrReplicateColumnId,
+    gageRrReplicateMode,
+    gageRrInteractionPolicy,
+    gageRrInteractionAlpha,
+    onGageRrReplicateModeChange: (value: "infer_from_rows" | "explicit_column") => { invalidateAnalysisInput(); setGageRrReplicateMode(value); },
+    onGageRrInteractionPolicyChange: (value: "retain" | "auto_pool") => { invalidateAnalysisInput(); setGageRrInteractionPolicy(value); },
+    onGageRrInteractionAlphaChange: (value: string) => { invalidateAnalysisInput(); setGageRrInteractionAlpha(value); },
     gageRrReplicateColumns,
     gageRrResult,
     gageRunChartAnalysisResult,
@@ -5798,6 +5837,7 @@ function isGageRrResult(
   const candidate = value as Record<string, unknown>;
   return (
     candidate.summary_type === "gage_rr" &&
+    (candidate.schema_version === 1 || candidate.schema_version === 2) &&
     Array.isArray(candidate.anova_table) &&
     typeof candidate.variance_components === "object" &&
     candidate.variance_components !== null

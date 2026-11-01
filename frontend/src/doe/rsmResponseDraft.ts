@@ -1,5 +1,10 @@
 import { parseDoeResponseNumber } from "./doeResponsePaste";
 
+export function validateRsmPasteApplication(sourceToken: string, currentToken: string,
+  editable: boolean, runOrders: readonly number[], values: Readonly<Record<number, string>>): boolean {
+  return editable && sourceToken === currentToken && parseRsmResponseDraft(runOrders, values).ok;
+}
+
 export function parseRsmResponseDraft(
   runOrders: readonly number[],
   draft: Readonly<Record<number, string>>,

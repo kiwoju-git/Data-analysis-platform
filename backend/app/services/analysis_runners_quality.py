@@ -966,14 +966,14 @@ def run_gage_rr_analysis(
     measurement_column_id = _gage_rr_required_column_id(options, "measurement_column_id")
     part_column_id = _gage_rr_required_column_id(options, "part_column_id")
     operator_column_id = _gage_rr_required_column_id(options, "operator_column_id")
-    replicate_column_id = _gage_rr_required_column_id(options, "replicate_column_id")
+    replicate_column_id = options.get("replicate_column_id")
     missing_policy = _gage_rr_missing_policy(options)
     (
         measurement_column,
         part_column,
         operator_column,
         replicate_column,
-    ) = _select_gage_run_chart_columns(
+    ) = select_gage_rr_columns(
         context.columns,
         measurement_column_id=measurement_column_id,
         part_column_id=part_column_id,
@@ -996,7 +996,15 @@ def run_gage_rr_analysis(
                 measurement_column=gage_rr_column_payload(measurement_column),
                 part_column=gage_rr_column_payload(part_column),
                 operator_column=gage_rr_column_payload(operator_column),
-                replicate_column=gage_rr_column_payload(replicate_column),
+                replicate_column=None
+                if replicate_column is None
+                else gage_rr_column_payload(replicate_column),
+                replicate_mode=options["replicate_mode"],
+                interaction_policy=options["interaction_policy"],
+                alpha_to_remove_interaction=options["alpha_to_remove_interaction"],
+                source_row_numbers=None
+                if row_snapshot.included_row_indices is None
+                else [index + 1 for index in row_snapshot.included_row_indices],
                 decimal=context.parsing.decimal,
                 thousands=context.parsing.thousands,
                 missing_policy=missing_policy,
@@ -1073,6 +1081,10 @@ def _gage_rr_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         ),
         "gage_rr_interaction_not_pooled": (
             "부품-측정자 interaction은 pooling하지 않고 별도 component로 보존했습니다."
+        ),
+        "gage_rr_interaction_pooled": (
+            "부품-측정자 interaction 검정과 지정 alpha에 따라 "
+            "interaction을 반복성 오차에 풀링했습니다."
         ),
         "gage_rr_independence_not_proven": (
             "부품 선정, 측정자 독립성, 반복 측정 순서는 소프트웨어가 증명할 수 없습니다."

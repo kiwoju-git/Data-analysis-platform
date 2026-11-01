@@ -11,7 +11,9 @@ import { strictRsmInteger } from "./rsmDesignDraft";
 import { DoeCompactPlotCard, DoeCompactPlotGrid } from "./DoeCompactPlotGrid";
 import { doePlotStatus } from "./doePlotStatus";
 import { paddedNumericRange } from "../charts/chartScale";
-import { rsmViewMatchesSnapshot } from "./rsmPlotSnapshot";
+import { rsmSettingsForPlotKind, rsmViewMatchesSnapshot } from "./rsmPlotSnapshot";
+import { isRsmExecutable, resolveRsmRegion } from "./rsmRegion";
+import { formatInterval } from "../statisticalNumberFormat";
 
 export function RsmPlotOptions({ analysis, design }: {
   analysis: DoeResponseSurfaceAnalysisResponse; design: ResponseSurfaceDesignResponse;
@@ -19,6 +21,11 @@ export function RsmPlotOptions({ analysis, design }: {
   const { t } = useI18n();
   const original = analysis.result.plot_bundle!;
   const [draft, setDraft] = useState(original.settings);
+  const [regionBounds, setRegionBounds] = useState<Record<string, { lower: string; upper: string }>>(() => Object.fromEntries(
+    resolveRsmRegion(design).map((region, index) => [`factor_${index + 1}`, {
+      lower: String(original.settings.custom_bounds?.[`factor_${index + 1}`]?.[0] ?? region.axial.lower),
+      upper: String(original.settings.custom_bounds?.[`factor_${index + 1}`]?.[1] ?? region.axial.upper),
+    }])));
   const [holds, setHolds] = useState<Record<string, string>>(Object.fromEntries(
     design.factors.map((factor, index) => [`factor_${index + 1}`, String(factor.low / 2 + factor.high / 2)])));
   const [levels, setLevels] = useState("");
@@ -67,15 +74,32 @@ export function RsmPlotOptions({ analysis, design }: {
       (thresholds && (thresholds.length < 2 || thresholds.length > 11 ||
         thresholds.some((value, index) => value === null || (index > 0 && value <= thresholds[index - 1]!))))) return null;
     const held: Record<string, number> = {};
-    for (const [index, factor] of design.factors.entries()) {
+    const custom: Record<string, [number, number]> = {};
+    if (draft.region_mode === "custom") {
+      for (const [index] of design.factors.entries()) {
+        const id = `factor_${index + 1}`;
+        const lower = parseDoeResponseNumber(regionBounds[id]?.lower ?? "");
+        const upper = parseDoeResponseNumber(regionBounds[id]?.upper ?? "");
+        if (lower === null || upper === null) return null;
+        custom[id] = [lower, upper];
+      }
+    }
+    let regions;
+    try {
+      regions = resolveRsmRegion(design, draft.region_mode ?? "legacy_input_bounds_v1",
+        Object.fromEntries(design.factors.map((factor, index) => [factor.name, {
+          lower: custom[`factor_${index + 1}`]?.[0], upper: custom[`factor_${index + 1}`]?.[1],
+        }])));
+    } catch { return null; }
+    for (const [index] of design.factors.entries()) {
       const id = `factor_${index + 1}`;
       if (id === draft.x_factor_id || id === draft.y_factor_id) continue;
       const value = parseDoeResponseNumber(holds[id] ?? "");
-      if (value === null || value < factor.low || value > factor.high) return null;
+      if (value === null || !isRsmExecutable(value, regions[index])) return null;
       held[id] = value;
     }
     if (draft.plot_kind !== "main_effect" && draft.x_factor_id === draft.y_factor_id) return null;
-    return { ...draft, grid_size: grid, held_actual_values: held,
+    return { ...draft, ...(draft.region_mode === undefined ? {} : {custom_bounds: draft.region_mode === "custom" ? custom : null}), grid_size: grid, held_actual_values: held,
       contour_levels: { count, thresholds: thresholds as number[] | null } };
   }
   async function generate() {
@@ -124,6 +148,10 @@ export function RsmPlotOptions({ analysis, design }: {
       }
       const settings = stored.view.bundle.settings;
       setView(stored.view); setDraft(settings);
+      setRegionBounds(Object.fromEntries(resolveRsmRegion(design).map((region, index) => {
+        const id = `factor_${index + 1}`;
+        return [id, { lower: String(settings.custom_bounds?.[id]?.[0] ?? region.axial.lower), upper: String(settings.custom_bounds?.[id]?.[1] ?? region.axial.upper) }];
+      })));
       setHolds({ ...Object.fromEntries(design.factors.map((factor, index) =>
         [`factor_${index + 1}`, String(factor.low / 2 + factor.high / 2)])),
         ...Object.fromEntries(Object.entries(settings.held_actual_values).map(([key, value]) => [key, String(value)])) });
@@ -142,11 +170,27 @@ export function RsmPlotOptions({ analysis, design }: {
   ]));
   return <section className="rsm-plot-options" aria-label={t("rsm.plot.title")}>
     <h5>{t("rsm.plot.title")}</h5>
+    <label>{t("rsm.region.mode")}<select aria-label="RSM plot region" value={draft.region_mode ?? "legacy_input_bounds_v1"}
+      onChange={(event) => { const value = event.currentTarget.value as NonNullable<RsmPlotSettings["region_mode"]>; edit({ region_mode: value, custom_bounds: value === "custom" ? draft.custom_bounds : null }); }}>
+      {draft.region_mode === undefined && <option value="legacy_input_bounds_v1">{t("rsm.region.legacy")}</option>}
+      <option value="axial_bounds">{t("rsm.region.axial")}</option><option value="factorial_cube">{t("rsm.region.cube")}</option>
+      <option value="custom">{t("rsm.region.custom")}</option></select></label>
+    <div className="table-wrap"><table className="result-table"><thead><tr><th>{t("rsm.region.factor")}</th>
+      <th>{t("rsm.region.input")}</th><th>{t("rsm.region.cube")}</th><th>{t("rsm.region.axial")}</th>
+      {draft.region_mode === "custom" && <><th>{t("rsm.region.lower")}</th><th>{t("rsm.region.upper")}</th></>}</tr></thead>
+      <tbody>{resolveRsmRegion(design).map((region, index) => { const id = `factor_${index + 1}`; return <tr key={id}>
+        <td>{region.factorName}</td><td>{formatInterval(region.input)}</td><td>{formatInterval(region.factorial)}</td><td>{formatInterval(region.axial)}</td>
+        {draft.region_mode === "custom" && (["lower", "upper"] as const).map((key) => <td key={key}><input inputMode="decimal"
+          aria-label={`${region.factorName} plot ${key}`} value={regionBounds[id]?.[key] ?? ""} onChange={(event) => {
+            const value = event.currentTarget.value; invalidate(); setRegionBounds((current) => ({ ...current, [id]: { ...current[id], [key]: value } }));
+          }} /></td>)}</tr>; })}</tbody></table></div>
+    <p>{t("rsm.region.hull")}</p>
+    {design.factors.some((factor) => factor.domain_kind === "discrete_numeric") &&
+      <p data-rsm-discrete-interpolation>{t("rsm.region.discreteInterpolation")}</p>}
     <div className="form-grid">
       <label>{t("rsm.plot.kind")}<select value={draft.plot_kind} onChange={(event) => {
-        const kind = event.target.value as RsmPlotSettings["plot_kind"];
-        edit({ plot_kind: kind, y_factor_id: kind === "main_effect" ? null
-          : draft.y_factor_id ?? (draft.x_factor_id === "factor_1" ? "factor_2" : "factor_1") });
+        const kind = event.currentTarget.value as RsmPlotSettings["plot_kind"];
+        edit(rsmSettingsForPlotKind(draft, kind));
       }}><option value="contour">{t("rsm.plot.contour")}</option><option value="main_effect">{t("rsm.plot.main")}</option>
         <option value="interaction">{t("rsm.plot.interaction")}</option></select></label>
       <label>{t("rsm.plot.x")}<select value={draft.x_factor_id} onChange={(event) => edit({ x_factor_id: event.target.value })}>
@@ -162,7 +206,8 @@ export function RsmPlotOptions({ analysis, design }: {
         return id === draft.x_factor_id || id === draft.y_factor_id ? null : <label key={id}>
           {t("rsm.plot.hold")} {factor.name} {factor.unit ? `(${factor.unit})` : ""}
           <input value={holds[id] ?? ""} inputMode="decimal" onChange={(event) => {
-            invalidate(); setHolds((current) => ({ ...current, [id]: event.target.value }));
+            const value = event.currentTarget.value;
+            invalidate(); setHolds((current) => ({ ...current, [id]: value }));
           }} /></label>;
       })}
       <label>{t("rsm.plot.grid")}<input type="number" min="11" max="51" step="2" value={gridSize}

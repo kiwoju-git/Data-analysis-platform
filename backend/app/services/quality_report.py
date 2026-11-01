@@ -24,7 +24,13 @@ _SECTIONS = {
     "attribute_control_chart": ("attribute_chart", "signals"),
     "run_chart": ("run_chart", "randomness_tests", "signals"),
     "capability_analysis": ("capability_indices", "capability_histogram"),
-    "gage_rr": ("gage_anova", "gage_variance_components", "gage_interaction"),
+    "gage_rr": (
+        "gage_policy",
+        "gage_anova",
+        "gage_full_anova",
+        "gage_variance_components",
+        "gage_interaction",
+    ),
     "gage_run_chart": ("gage_run_plot", "gage_group_summaries"),
 }
 QUALITY_REPORT_VARIANTS = {
@@ -417,11 +423,33 @@ def quality_report_body(payload: dict[str, Any], locale: ReportLocale = "en") ->
             )
         add("capability_histogram", "Capability Histogram", "공정능력 히스토그램", histogram)
     elif kind == "gage_rr":
+        selection = payload.get("interaction_selection")
+        policy = (
+            selection
+            if isinstance(selection, dict)
+            else {
+                "requested_policy": "retain",
+                "effective_policy": "retain",
+                "reason": "legacy_interaction_retained",
+            }
+        )
+        add(
+            "gage_policy",
+            "Stored Gage Policy",
+            "저장된 Gage 정책",
+            report_table(
+                scalar_headers,
+                [
+                    ["replicate_mode", payload.get("replicate_mode", "explicit_column")],
+                    *_scalar_rows(policy),
+                ],
+            ),
+        )
         anova = payload.get("anova_table")
         add(
             "gage_anova",
-            "Gage R&R ANOVA",
-            "Gage R&R 분산분석",
+            "Gage R&R Final ANOVA",
+            "Gage R&R 최종 분산분석",
             report_table(
                 [text("Source", "원인"), "DF", "SS", "MS", "F", "p", text("Denominator", "분모")],
                 [
@@ -441,6 +469,32 @@ def quality_report_body(payload: dict[str, Any], locale: ReportLocale = "en") ->
                 ],
             )
             if isinstance(anova, list) and anova
+            else None,
+        )
+        full_anova = payload.get("full_anova_table", anova)
+        add(
+            "gage_full_anova",
+            "Full ANOVA Before Pooling",
+            "풀링 전 전체 분산분석",
+            report_table(
+                [text("Source", "원인"), "DF", "SS", "MS", "F", "p", text("Denominator", "분모")],
+                [
+                    [
+                        row.get(key)
+                        for key in (
+                            "source",
+                            "degrees_of_freedom",
+                            "sum_of_squares",
+                            "mean_square",
+                            "f_statistic",
+                            "p_value",
+                            "denominator",
+                        )
+                    ]
+                    for row in full_anova
+                ],
+            )
+            if isinstance(full_anova, list) and full_anova
             else None,
         )
         components = payload.get("variance_components")

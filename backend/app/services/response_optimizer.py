@@ -6,6 +6,7 @@ from math import isfinite
 from typing import Any, Final, Literal
 from uuid import UUID, uuid4
 
+import numpy as np
 from fastapi import status
 from pydantic import ValidationError
 
@@ -32,6 +33,7 @@ from app.services.doe_response_surface_analysis import (
     get_response_surface_analysis,
 )
 from app.services.response_surface_designs import get_response_surface_design
+from app.services.rsm_regions import region_for_design
 from app.statistics.response_optimizer import (
     RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION,
     OptimizerEligibilityIssue,
@@ -47,6 +49,7 @@ from app.statistics.response_optimizer import (
     calculate_response_optimizer,
 )
 from app.statistics.rsm_coding import RsmFactorCoding
+from app.statistics.rsm_plot_geometry import design_hull_equations, outside_design_hull
 from app.storage.metadata import (
     ExperimentDesignAnalysisRecord,
     count_response_surface_analysis_catalog_records,
@@ -62,11 +65,11 @@ LEGACY_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
 SUPPORTED_RESPONSE_OPTIMIZER_METHOD_IDS: Final[frozenset[str]] = frozenset(
     {RESPONSE_OPTIMIZER_METHOD_ID, *LEGACY_RESPONSE_OPTIMIZER_METHOD_IDS}
 )
-RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[2]] = 2
+RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION: Final[Literal[3]] = 3
 RESPONSE_OPTIMIZER_RECORD_RESPONSE_NAME = "response_optimizer"
 SUPPORTED_RESPONSE_SURFACE_METHOD_VERSIONS: Final = {"0.2.0", *SUPPORTED_RSM_METHOD_SCHEMAS}
 SUPPORTED_RESPONSE_OPTIMIZER_METHOD_VERSIONS: Final = {
-    "doe.response_optimizer": {"0.3.0", "0.4.0"},
+    "doe.response_optimizer": {"0.3.0", "0.4.0", "0.5.0"},
     "regression.response_optimizer": {"0.3.0"},
 }
 
@@ -196,6 +199,7 @@ def create_response_optimizer(
             ],
             search_options=OptimizerSearchOptions(**body.search.model_dump()),
             source_model_eligibility=source_eligibility,
+            region_mode=body.region_mode,
         )
         result = ResponseOptimizerResult.model_validate(result_payload)
     except ResponseOptimizerError as exc:
@@ -299,8 +303,9 @@ def _validated_optimizer_response(
     if not isinstance(config, dict):
         raise _metadata_error("response_optimizer_metadata_invalid")
     config_sha256 = hashlib.sha256(record.config_json.encode("utf-8")).hexdigest()
+    expected_schema = 3 if record.method_version == "0.5.0" else 2
     if (
-        config.get("schema_version") != RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION
+        config.get("schema_version") != expected_schema
         or config.get("design_id") != str(design.design_id)
         or config.get("design_version_id") != str(design.design_version_id)
         or config.get("design_sha256") != design.design_sha256
@@ -310,9 +315,9 @@ def _validated_optimizer_response(
         or response.design_sha256 != design.design_sha256
         or response.method_id != record.method_id
         or response.method_version != record.method_version
-        or response.config_schema_version != RESPONSE_OPTIMIZER_CONFIG_SCHEMA_VERSION
-        or response.result_schema_version != RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION
-        or response.result.schema_version != RESPONSE_OPTIMIZER_RESULT_SCHEMA_VERSION
+        or response.config_schema_version != expected_schema
+        or response.result_schema_version != expected_schema
+        or response.result.schema_version != expected_schema
         or response.config_sha256 != config_sha256
         or response.source_bundle_sha256 != record.response_sha256
     ):
@@ -321,6 +326,8 @@ def _validated_optimizer_response(
         request = ResponseOptimizerCreateRequest.model_validate(config.get("request"))
     except ValidationError as exc:
         raise _metadata_error("response_optimizer_config_invalid") from exc
+    if expected_schema == 2 and request.region_mode != "legacy_input_bounds_v1":
+        raise _metadata_error("response_optimizer_config_invalid")
     objectives, source_dependencies, source_eligibility = _load_source_objectives(
         settings, design_id, request
     )
@@ -356,6 +363,19 @@ def _load_source_objectives(
     OptimizerSourceEligibility,
 ]:
     design = get_response_surface_design(settings, design_id)
+    try:
+        regions = region_for_design(
+            design,
+            body.region_mode,
+            {
+                item.factor_name: (float(item.lower), float(item.upper))
+                for item in body.factor_bounds
+            }
+            if body.region_mode == "custom"
+            else None,
+        )
+    except ValueError as exc:
+        raise _optimizer_api_error("response_optimizer_factor_bound_invalid") from exc
     factors = tuple(
         OptimizerFactor(
             name=factor.name,
@@ -371,8 +391,9 @@ def _load_source_objectives(
                 if design.coding is not None
                 else None
             ),
+            region=region,
         )
-        for factor in design.factors
+        for factor, region in zip(design.factors, regions, strict=True)
     )
     objectives: list[OptimizerObjective] = []
     dependencies: list[dict[str, object]] = []
@@ -402,6 +423,21 @@ def _load_source_objectives(
         confidence_level = _source_confidence_level(source_record.config_json)
         source_issues = _source_model_eligibility_issues(source, confidence_level)
         eligibility_issues.extend(source_issues)
+        if source.result.final_basis is not None:
+            try:
+                region_for_design(
+                    design,
+                    body.region_mode,
+                    {
+                        item.factor_name: (float(item.lower), float(item.upper))
+                        for item in body.factor_bounds
+                    }
+                    if body.region_mode == "custom"
+                    else None,
+                    source.result.final_basis,
+                )
+            except ValueError as exc:
+                raise _metadata_error("response_optimizer_factor_space_mismatch") from exc
         model = OptimizerModel(
             analysis_id=str(source.analysis_id),
             response_name=source.response_name,
@@ -420,6 +456,10 @@ def _load_source_objectives(
                 tuple(tuple(row) for row in source.result.final_basis.powers)
                 if source.result.final_basis is not None
                 else None
+            ),
+            observed_coded_coordinates=tuple(
+                tuple(run.coded_levels[factor.name] for factor in design.factors)
+                for run in design.runs
             ),
         )
         objectives.append(
@@ -506,19 +546,65 @@ def _validate_result_config_relationship(
         raise _metadata_error("response_optimizer_result_config_mismatch")
     requested_bounds = {item.factor_name: item for item in request.factor_bounds}
     expected_bounds = []
-    for factor in design.factors:
+    for factor in objectives[0].model.factors:
         requested = requested_bounds.get(factor.name)
         expected_bounds.append(
             {
                 "factor_name": factor.name,
-                "lower": factor.low if requested is None else float(requested.lower),
-                "upper": factor.high if requested is None else float(requested.upper),
+                "lower": (factor.region.lower if factor.region else factor.low)
+                if requested is None
+                else float(requested.lower),
+                "upper": (factor.region.upper if factor.region else factor.high)
+                if requested is None
+                else float(requested.upper),
             }
         )
     if [
         item.model_dump() for item in response.result.factor_region.search_bounds
     ] != expected_bounds:
         raise _metadata_error("response_optimizer_result_config_mismatch")
+    if response.result.schema_version == 3:
+        region = response.result.factor_region
+        expected_regions = [
+            factor.region.payload()
+            for factor in objectives[0].model.factors
+            if factor.region is not None
+        ]
+        if (
+            region.region_mode != request.region_mode
+            or region.region_policy_version != 1
+            or region.resolved_bounds is None
+            or [item.model_dump() for item in region.resolved_bounds] != expected_regions
+        ):
+            raise _metadata_error("response_optimizer_result_config_mismatch")
+        recommendation = response.result.recommendation
+        actual = recommendation.actual_coordinates
+        names = [factor.name for factor in objectives[0].model.factors]
+        if set(actual) != set(names) or any(not isfinite(value) for value in actual.values()):
+            raise _metadata_error("response_optimizer_result_config_mismatch")
+        within = all(
+            item.lower <= actual[item.factor_name] <= item.upper
+            for item in response.result.factor_region.search_bounds
+        )
+        coded = np.asarray(
+            [
+                [
+                    (actual[factor.name] - factor.region.center) / factor.region.scale
+                    for factor in objectives[0].model.factors
+                    if factor.region is not None
+                ]
+            ]
+        )
+        observed = objectives[0].model.observed_coded_coordinates
+        if observed is None or coded.shape[1] != len(names):
+            raise _metadata_error("response_optimizer_result_config_mismatch")
+        outside = bool(outside_design_hull(coded, design_hull_equations(np.asarray(observed)))[0])
+        if (
+            recommendation.within_requested_bounds != within
+            or not within
+            or recommendation.outside_observed_hull != outside
+        ):
+            raise _metadata_error("response_optimizer_result_config_mismatch")
     if [item.model_dump() for item in response.result.factor_region.linear_constraints] != [
         item.model_dump() for item in request.linear_constraints
     ]:

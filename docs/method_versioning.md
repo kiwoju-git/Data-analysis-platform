@@ -1,5 +1,17 @@
 # Method Versioning Policy
 
+## RSM/Gage Follow-up (API27)
+
+Metadata24 is unchanged. New RSM method0.5.0 writes result3/config4/envelope4
+with final-model residual views, observed response summary and explicit region
+metadata. The underlying CCD design and coding hashes are not rewritten.
+Optimizer method0.5.0 writes config/result3, preserving legacy omitted-bound
+semantics through schema dispatch. Gage method0.2.0 writes preflight/result2
+with repeat identification and requested/effective interaction pooling policy.
+Previously supported result/config readers remain available; older code may not
+read these new outputs. Shared formatting changes do not bump other methods.
+See [follow-up contract and evidence](rsm_gage_followup.md).
+
 ## BO/GPR Extension (2026-10-21)
 
 API26 / metadata24. BO method0.7.0 writes noise-aware config/result/item2 and

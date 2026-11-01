@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { t } from "./i18n/translate";
 
 import {
-  createResponseOptimizer,
   type DoeResponseSurfaceAnalysisResponse,
-  type ResponseOptimizerCreateRequest,
   type ResponseOptimizerEligibilityIssue,
+  type ResponseOptimizerCreateRequest,
   type ResponseOptimizerGoal,
   type ResponseOptimizerResponse,
   type ResponseSurfaceDesignResponse,
@@ -17,17 +16,10 @@ import {
   DoeFormSection,
 } from "./doe/DoeFormPrimitives";
 import { DoeSettingsTable } from "./doe/DoeSettingsTable";
-
-interface BoundDraft {
-  lower: string;
-  upper: string;
-}
-
-interface ThresholdDraft {
-  lower: string;
-  target: string;
-  upper: string;
-}
+import { defaultThresholds, optimizerBoundError, optimizerRequest, optimizerSourceKey, restoreOptimizerDraft, type BoundDraft, type ThresholdDraft } from "./doe/responseOptimizerDraft";
+import { useResponseOptimizerRun } from "./doe/useResponseOptimizerRun";
+import { formatMeasurement as formatNumber, formatInterval } from "./statisticalNumberFormat";
+import { resolveRsmRegion, type RsmRegionMode } from "./doe/rsmRegion";
 
 interface ResponseOptimizerPanelProps {
   design: ResponseSurfaceDesignResponse;
@@ -43,8 +35,10 @@ export function ResponseOptimizerPanel({
   onOptimizationCreated,
 }: ResponseOptimizerPanelProps) {
   const responseRange = useMemo(() => {
+    const observed = analysis.result.observed_response_summary;
+    if (observed) return { minimum: observed.minimum, maximum: observed.maximum, source: "observed" as const };
     const values = analysis.result.contour.points.map((point) => point.predicted);
-    return { minimum: Math.min(...values), maximum: Math.max(...values) };
+    return { minimum: Math.min(...values), maximum: Math.max(...values), source: "legacy_slice" as const };
   }, [analysis]);
   const sourceEligibility = useMemo(
     () => responseOptimizerSourceEligibility(analysis),
@@ -61,10 +55,17 @@ export function ResponseOptimizerPanel({
   const [lowerWeight, setLowerWeight] = useState("1");
   const [upperWeight, setUpperWeight] = useState("1");
   const [importance, setImportance] = useState("1");
+  const [regionMode, setRegionMode] = useState<RsmRegionMode>("axial_bounds");
+  const regions = useMemo(() => resolveRsmRegion(design), [design]);
+  const boundErrorId = useId();
+  const permittedBounds = Object.fromEntries(regions.map((region) => [region.factorName,
+    regionMode === "factorial_cube" ? region.factorial : regionMode === "legacy_input_bounds_v1" ? region.input : region.axial]));
   const [bounds, setBounds] = useState<Record<string, BoundDraft>>(() =>
     factorBounds(design),
   );
   const [linearEnabled, setLinearEnabled] = useState(false);
+  const [linearName, setLinearName] = useState("UI linear constraint");
+  const [additionalLinearConstraints, setAdditionalLinearConstraints] = useState<ResponseOptimizerCreateRequest["linear_constraints"]>([]);
   const [linearRelation, setLinearRelation] = useState<
     "less_than_or_equal" | "greater_than_or_equal"
   >("less_than_or_equal");
@@ -78,48 +79,57 @@ export function ResponseOptimizerPanel({
   const [maxIterations, setMaxIterations] = useState("120");
   const [maxEvaluations, setMaxEvaluations] = useState("5000");
   const [timeBudgetMs, setTimeBudgetMs] = useState("5000");
-  const [optimization, setOptimization] = useState<ResponseOptimizerResponse | null>(null);
-  const [isOptimizing, setIsOptimizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sourceWarningsAcknowledged, setSourceWarningsAcknowledged] = useState(false);
-  const requestRevision = useRef(0);
+  const sourceKey = optimizerSourceKey(design, analysis, initialOptimization);
+  const execution = useResponseOptimizerRun(sourceKey);
+  const { optimization, isOptimizing } = execution;
+  const sourceSnapshot = useRef({ design, analysis, initialOptimization, responseRange, restore: execution.restore });
+  sourceSnapshot.current = { design, analysis, initialOptimization, responseRange, restore: execution.restore };
 
   useEffect(() => {
-    requestRevision.current += 1;
-    setGoal("maximize");
-    setThresholds(defaultThresholds("maximize", responseRange.minimum, responseRange.maximum));
-    setBounds(factorBounds(design));
-    setLinearEnabled(false);
-    setLinearCoefficients(
-      Object.fromEntries(design.factors.map((factor) => [factor.name, "0"])),
-    );
-    setOptimization(
-      initialOptimization !== null &&
+    const { design, analysis, initialOptimization, responseRange, restore } = sourceSnapshot.current;
+    const saved = initialOptimization !== null &&
         initialOptimization.design_id === design.design_id &&
+        initialOptimization.design_version_id === design.design_version_id &&
+        initialOptimization.design_sha256 === design.design_sha256 &&
         initialOptimization.source_analysis_ids.length === 1 &&
         initialOptimization.source_analysis_ids[0] === analysis.analysis_id
         ? initialOptimization
-        : null,
-    );
-    setIsOptimizing(false);
+        : null;
+    const restored = saved === null ? null : restoreOptimizerDraft(saved);
+    setGoal(restored?.goal ?? "maximize");
+    setThresholds(restored?.thresholds ?? defaultThresholds("maximize", responseRange.minimum, responseRange.maximum));
+    setBounds(restored?.bounds ?? factorBounds(design));
+    setRegionMode(restored?.regionMode ?? "axial_bounds");
+    setLowerWeight(restored?.lowerWeight ?? "1"); setUpperWeight(restored?.upperWeight ?? "1"); setImportance(restored?.importance ?? "1");
+    setLinearEnabled(restored?.linearEnabled ?? false);
+    setLinearName(restored?.linearName ?? "UI linear constraint");
+    setAdditionalLinearConstraints(restored?.additionalLinearConstraints ?? []);
+    setLinearRelation(restored?.linearRelation ?? "less_than_or_equal"); setLinearBound(restored?.linearBound ?? "0");
+    setLinearCoefficients(restored?.linearCoefficients ?? Object.fromEntries(design.factors.map((factor) => [factor.name, "0"])));
+    setRandomSeed(restored?.randomSeed ?? "20260714"); setRandomCandidates(restored?.randomCandidates ?? "256");
+    setMultiStarts(restored?.multiStarts ?? "8"); setMaxIterations(restored?.maxIterations ?? "120");
+    setMaxEvaluations(restored?.maxEvaluations ?? "5000"); setTimeBudgetMs(restored?.timeBudgetMs ?? "5000");
+    restore(saved);
     setError(null);
-    setSourceWarningsAcknowledged(false);
-    return () => {
-      requestRevision.current += 1;
-    };
-  }, [
-    analysis.analysis_id,
-    design,
-    initialOptimization,
-    responseRange.maximum,
-    responseRange.minimum,
-  ]);
+    setSourceWarningsAcknowledged((saved?.acknowledged_source_warning_codes.length ?? 0) > 0);
+  }, [sourceKey]);
+
+  const invalidateDraft = () => { execution.invalidate(); setError(null); };
+  const updateThreshold = (key: keyof ThresholdDraft, value: string) => {
+    setThresholds((current) => ({ ...current, [key]: value }));
+  };
 
   const changeGoal = (nextGoal: ResponseOptimizerGoal) => {
     setGoal(nextGoal);
     setThresholds(defaultThresholds(nextGoal, responseRange.minimum, responseRange.maximum));
-    setOptimization(null);
   };
+
+  function applyRegion(mode: "axial_bounds" | "factorial_cube") {
+    invalidateDraft(); setRegionMode(mode);
+    setBounds(factorBounds(design, mode));
+  }
 
   const optimize = async () => {
     const request = optimizerRequest({
@@ -131,7 +141,11 @@ export function ResponseOptimizerPanel({
       upperWeight,
       importance,
       bounds,
+      regionMode,
+      permittedBounds,
       linearEnabled,
+      linearName,
+      additionalLinearConstraints,
       linearRelation,
       linearBound,
       linearCoefficients,
@@ -149,24 +163,12 @@ export function ResponseOptimizerPanel({
       setError(request);
       return;
     }
-    const revision = ++requestRevision.current;
-    setIsOptimizing(true);
-    setOptimization(null);
     setError(null);
-    try {
-      const created = await createResponseOptimizer(design.design_id, request);
-      if (requestRevision.current !== revision) return;
-      setOptimization(created);
-      onOptimizationCreated?.(created);
-    } catch (caught) {
-      if (requestRevision.current === revision) setError(errorCode(caught));
-    } finally {
-      if (requestRevision.current === revision) setIsOptimizing(false);
-    }
+    await execution.run(design.design_id, request, onOptimizationCreated);
   };
 
   return (
-    <section className="analysis-result-section" aria-labelledby="response-optimizer-title">
+    <section className="analysis-result-section" aria-labelledby="response-optimizer-title" onChangeCapture={invalidateDraft}>
       <div className="panel-heading compact-heading">
         <div>
           <h4 id="response-optimizer-title">Response Optimizer</h4>
@@ -195,6 +197,7 @@ export function ResponseOptimizerPanel({
         title="목적 반응 설정"
         description={`${analysis.response_name}의 desirability 목표와 중요도를 정합니다.`}
       >
+        <p className="field-helper">{t(responseRange.source === "observed" ? "doe.optimizer.observedDefaults" : "doe.optimizer.legacyDefaults")}</p>
         <DoeSettingsTable
           ariaLabel="Response Optimizer 목적 반응 설정"
           fields={[
@@ -229,12 +232,7 @@ export function ResponseOptimizerPanel({
                         aria-label="Optimizer lower"
                         inputMode="decimal"
                         value={thresholds.lower}
-                        onChange={(event) =>
-                          setThresholds((current) => ({
-                            ...current,
-                            lower: event.currentTarget.value,
-                          }))
-                        }
+                        onChange={(event) => { const value = event.currentTarget.value; updateThreshold("lower", value); }}
                       />
                     ),
                   },
@@ -252,12 +250,7 @@ export function ResponseOptimizerPanel({
                         aria-label="Optimizer target"
                         inputMode="decimal"
                         value={thresholds.target}
-                        onChange={(event) =>
-                          setThresholds((current) => ({
-                            ...current,
-                            target: event.currentTarget.value,
-                          }))
-                        }
+                        onChange={(event) => { const value = event.currentTarget.value; updateThreshold("target", value); }}
                       />
                     ),
                   },
@@ -275,12 +268,7 @@ export function ResponseOptimizerPanel({
                         aria-label="Optimizer upper"
                         inputMode="decimal"
                         value={thresholds.upper}
-                        onChange={(event) =>
-                          setThresholds((current) => ({
-                            ...current,
-                            upper: event.currentTarget.value,
-                          }))
-                        }
+                        onChange={(event) => { const value = event.currentTarget.value; updateThreshold("upper", value); }}
                       />
                     ),
                   },
@@ -336,25 +324,36 @@ export function ResponseOptimizerPanel({
 
       <DoeFactorEditor
         title="요인 검색 범위"
-        description="RSM 설계 범위 안에서 최적화가 탐색할 하한과 상한을 정합니다."
+        description={t("doe.optimizer.regionPolicy")}
       >
+        <div className="button-row">
+          <button type="button" className="secondary-button" onClick={() => applyRegion("axial_bounds")}>{t("doe.optimizer.applyAxial")}</button>
+          <button type="button" className="secondary-button" onClick={() => applyRegion("factorial_cube")}>{t("doe.optimizer.applyCube")}</button>
+          <span>{t("doe.optimizer.regionMode")}: {regionMode}</span>
+        </div>
         <div className="table-wrap">
           <table className="result-table doe-factor-table response-optimizer-factor-table">
             <thead>
               <tr>
                 <th>요인</th>
-                <th>설계 범위</th>
+                <th>{t("doe.optimizer.inputCubeAxial")}</th>
                 <th>탐색 하한</th>
                 <th>탐색 상한</th>
                 {linearEnabled ? <th>선형 계수</th> : null}
               </tr>
             </thead>
             <tbody>
-              {design.factors.map((factor) => (
+              {design.factors.map((factor, index) => {
+                const boundError = optimizerBoundError(bounds[factor.name], permittedBounds[factor.name],
+                  factor.domain_kind === "discrete_numeric" ? { anchor: factor.low, step: factor.step } : undefined);
+                const descriptionId = `${boundErrorId}-${index}`;
+                return (
                 <tr key={factor.name}>
                   <td>{factor.name}{factor.unit ? ` (${factor.unit})` : ""}</td>
                   <td>
-                    {formatNumber(factor.low)} – {formatNumber(factor.high)}
+                    <div>{t("doe.optimizer.input")}: {formatInterval(regions[index].input)}</div>
+                    <div>{t("doe.optimizer.cube")}: {formatInterval(regions[index].factorial)}</div>
+                    <div>{t("doe.optimizer.axial")}: {formatInterval(regions[index].axial)}</div>
                     {factor.domain_kind === "discrete_numeric" ? (
                       <small className="field-helper">실행 간격 {formatNumber(factor.step ?? 0)}</small>
                     ) : null}
@@ -362,18 +361,23 @@ export function ResponseOptimizerPanel({
                   <td>
                     <input
                       aria-label={`${factor.name} optimizer lower bound`}
+                      aria-invalid={boundError !== null}
+                      aria-describedby={boundError ? descriptionId : undefined}
                       inputMode="decimal"
                       value={bounds[factor.name]?.lower ?? ""}
-                      onChange={(event) => updateBound(setBounds, factor.name, "lower", event.currentTarget.value)}
+                      onChange={(event) => { const value = event.currentTarget.value; setRegionMode("custom"); updateBound(setBounds, factor.name, "lower", value); }}
                     />
                   </td>
                   <td>
                     <input
                       aria-label={`${factor.name} optimizer upper bound`}
+                      aria-invalid={boundError !== null}
+                      aria-describedby={boundError ? descriptionId : undefined}
                       inputMode="decimal"
                       value={bounds[factor.name]?.upper ?? ""}
-                      onChange={(event) => updateBound(setBounds, factor.name, "upper", event.currentTarget.value)}
+                      onChange={(event) => { const value = event.currentTarget.value; setRegionMode("custom"); updateBound(setBounds, factor.name, "upper", value); }}
                     />
+                    {boundError ? <small id={descriptionId} className="field-helper">{t(`doe.optimizer.boundError.${boundError}`)}</small> : null}
                   </td>
                   {linearEnabled ? (
                     <td>
@@ -381,17 +385,15 @@ export function ResponseOptimizerPanel({
                         aria-label={`${factor.name} linear constraint coefficient`}
                         inputMode="decimal"
                         value={linearCoefficients[factor.name] ?? "0"}
-                        onChange={(event) =>
-                          setLinearCoefficients((current) => ({
-                            ...current,
-                            [factor.name]: event.currentTarget.value,
-                          }))
-                        }
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          setLinearCoefficients((current) => ({ ...current, [factor.name]: value }));
+                        }}
                       />
                     </td>
                   ) : null}
                 </tr>
-              ))}
+              ); })}
             </tbody>
           </table>
         </div>
@@ -401,6 +403,13 @@ export function ResponseOptimizerPanel({
         title="제약조건"
         description="필요한 경우 실제 단위 선형 제약을 활성화합니다."
       >
+        {linearEnabled && additionalLinearConstraints.length > 0 ? <div className="table-wrap">
+          <p>{t("doe.optimizer.restoredConstraints")}</p>
+          <table className="result-table"><thead><tr><th>{t("doe.optimizer.constraintName")}</th><th>{t("doe.optimizer.constraintCoefficients")}</th><th>{t("doe.optimizer.constraintBound")}</th></tr></thead>
+            <tbody>{additionalLinearConstraints.map((constraint, index) => <tr key={`${index}:${constraint.name}`}>
+              <td>{constraint.name}</td><td>{Object.entries(constraint.coefficients).map(([name, value]) => `${name}: ${formatNumber(value)}`).join("; ")}</td>
+              <td>{constraint.relation === "less_than_or_equal" ? "≤" : "≥"} {formatNumber(constraint.bound)}</td>
+            </tr>)}</tbody></table></div> : null}
         <DoeSettingsTable
           ariaLabel="Response Optimizer 제약조건 설정"
           fields={[
@@ -568,6 +577,8 @@ export function ResponseOptimizerPanel({
         </button>
       </DoeActionBar>
       {error !== null ? <div className="error-box">오류 코드: {error}</div> : null}
+      {execution.error !== null ? <div className="error-box">오류 코드: {execution.error}</div> : null}
+      {execution.isStale ? <div className="notice-box">{t("doe.optimizer.draftChanged")}</div> : null}
       {optimization !== null ? <ResponseOptimizerResultView optimization={optimization} /> : null}
     </section>
   );
@@ -656,105 +667,6 @@ function ResponseOptimizerResultView({ optimization }: { optimization: ResponseO
   );
 }
 
-function optimizerRequest(input: {
-  analysis: DoeResponseSurfaceAnalysisResponse;
-  design: ResponseSurfaceDesignResponse;
-  goal: ResponseOptimizerGoal;
-  thresholds: ThresholdDraft;
-  lowerWeight: string;
-  upperWeight: string;
-  importance: string;
-  bounds: Record<string, BoundDraft>;
-  linearEnabled: boolean;
-  linearRelation: "less_than_or_equal" | "greater_than_or_equal";
-  linearBound: string;
-  linearCoefficients: Record<string, string>;
-  randomSeed: string;
-  randomCandidates: string;
-  multiStarts: string;
-  maxIterations: string;
-  maxEvaluations: string;
-  timeBudgetMs: string;
-  acknowledgedSourceWarningCodes: string[];
-}): ResponseOptimizerCreateRequest | string {
-  const lower = input.goal === "minimize" ? null : Number(input.thresholds.lower);
-  const target = input.goal === "range" ? null : Number(input.thresholds.target);
-  const upper = input.goal === "maximize" ? null : Number(input.thresholds.upper);
-  const lowerWeight = Number(input.lowerWeight);
-  const upperWeight = Number(input.upperWeight);
-  const importance = Number(input.importance);
-  if (
-    (lower !== null && !Number.isFinite(lower)) ||
-    (target !== null && !Number.isFinite(target)) ||
-    (upper !== null && !Number.isFinite(upper)) ||
-    ![lowerWeight, upperWeight, importance].every((value) => Number.isFinite(value) && value > 0)
-  ) {
-    return "response_optimizer_objective_invalid";
-  }
-  const factorBounds = input.design.factors.map((factor) => ({
-    factor_name: factor.name,
-    lower: Number(input.bounds[factor.name]?.lower),
-    upper: Number(input.bounds[factor.name]?.upper),
-  }));
-  if (
-    factorBounds.some((bound, index) => {
-      const factor = input.design.factors[index];
-      return !Number.isFinite(bound.lower) || !Number.isFinite(bound.upper) || bound.lower < factor.low || bound.upper > factor.high || bound.lower >= bound.upper;
-    })
-  ) {
-    return "response_optimizer_factor_bound_invalid";
-  }
-  const linearConstraints = [];
-  if (input.linearEnabled) {
-    const coefficients = Object.fromEntries(
-      input.design.factors.map((factor) => [factor.name, Number(input.linearCoefficients[factor.name])]),
-    );
-    const bound = Number(input.linearBound);
-    if (!Number.isFinite(bound) || Object.values(coefficients).some((value) => !Number.isFinite(value)) || Object.values(coefficients).every((value) => value === 0)) {
-      return "response_optimizer_linear_constraint_invalid";
-    }
-    linearConstraints.push({
-      name: "UI linear constraint",
-      coefficients,
-      relation: input.linearRelation,
-      bound,
-    });
-  }
-  const searchValues = [
-    input.randomSeed,
-    input.randomCandidates,
-    input.multiStarts,
-    input.maxIterations,
-    input.maxEvaluations,
-    input.timeBudgetMs,
-  ].map((value) => Number.parseInt(value, 10));
-  if (searchValues.some((value) => !Number.isInteger(value))) {
-    return "response_optimizer_search_budget_invalid";
-  }
-  return {
-    objectives: [{
-      source_analysis_id: input.analysis.analysis_id,
-      goal: input.goal,
-      lower,
-      target,
-      upper,
-      lower_weight: lowerWeight,
-      upper_weight: upperWeight,
-      importance,
-    }],
-    factor_bounds: factorBounds,
-    linear_constraints: linearConstraints,
-    search: {
-      random_seed: searchValues[0],
-      random_candidate_count: searchValues[1],
-      multi_start_count: searchValues[2],
-      max_iterations: searchValues[3],
-      max_evaluations: searchValues[4],
-      time_budget_ms: searchValues[5],
-    },
-    acknowledged_source_warning_codes: input.acknowledgedSourceWarningCodes,
-  };
-}
 
 function responseOptimizerSourceEligibility(
   analysis: DoeResponseSurfaceAnalysisResponse,
@@ -871,17 +783,10 @@ function responseOptimizerSourceEligibility(
   return issues;
 }
 
-function defaultThresholds(goal: ResponseOptimizerGoal, minimum: number, maximum: number): ThresholdDraft {
-  const spread = Math.max(maximum - minimum, Math.max(Math.abs(minimum), Math.abs(maximum), 1) * 0.1);
-  if (goal === "maximize") return { lower: String(minimum), target: String(maximum), upper: "" };
-  if (goal === "minimize") return { lower: "", target: String(minimum), upper: String(maximum) };
-  if (goal === "target") return { lower: String(minimum), target: String((minimum + maximum) / 2), upper: String(maximum) };
-  return { lower: String(minimum - spread * 0.1), target: "", upper: String(maximum + spread * 0.1) };
-}
 
-function factorBounds(design: ResponseSurfaceDesignResponse): Record<string, BoundDraft> {
+function factorBounds(design: ResponseSurfaceDesignResponse, mode: "axial_bounds" | "factorial_cube" = "axial_bounds"): Record<string, BoundDraft> {
   return Object.fromEntries(
-    design.factors.map((factor) => [factor.name, { lower: String(factor.low), upper: String(factor.high) }]),
+    resolveRsmRegion(design, mode).map((region) => [region.factorName, { lower: String(region.effective.lower), upper: String(region.effective.upper) }]),
   );
 }
 
@@ -895,12 +800,4 @@ function updateBound(
     ...current,
     [factorName]: { ...(current[factorName] ?? { lower: "", upper: "" }), [key]: value },
   }));
-}
-
-function errorCode(error: unknown): string {
-  return error instanceof Error ? error.message : "response_optimizer_unknown_error";
-}
-
-function formatNumber(value: number): string {
-  return Number.isFinite(value) ? value.toPrecision(6).replace(/\.?0+$/, "") : "-";
 }

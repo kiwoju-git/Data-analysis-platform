@@ -10,9 +10,10 @@ from app.api.v1.schemas.doe_model_workflow import (
     DoeFractionalEstimability,
     DoeModelSelectionOptions,
     DoeModelSelectionResult,
+    DoeResidualView,
     RsmModelSelectionOptions,
 )
-from app.api.v1.schemas.rsm_plots import RsmPlotBundle
+from app.api.v1.schemas.rsm_plots import RsmPlotBundle, RsmRegionFactorResponse
 from app.core.doe_capabilities import (
     FACTORIAL_AUTHORING_FACTOR_LIMIT,
     GENERAL_FACTORIAL_AUTHORING_FACTOR_LIMIT,
@@ -1133,6 +1134,8 @@ class DoeResponseSurfaceContourResponse(BaseModel):
     grid_size: int
     coded_range: list[float] = Field(min_length=2, max_length=2)
     points: list[DoeResponseSurfaceContourPointResponse]
+    region_mode: Literal["axial_bounds"] | None = None
+    region_policy_version: Literal[1] | None = None
 
 
 class DoeResponseSurfaceDiagnosticPointResponse(BaseModel):
@@ -1215,10 +1218,65 @@ class RsmFinalBasisResponse(BaseModel):
         return self
 
 
+class RsmResidualView(DoeResidualView):
+    n_total: int = Field(ge=0)
+    n_available: int = Field(ge=0)
+    n_displayed: int = Field(ge=0)
+    truncated: bool
+    unavailable_reason: str | None
+
+    @model_validator(mode="after")
+    def consistent_counts(self) -> RsmResidualView:
+        if (
+            self.n != self.n_available
+            or self.n_available > self.n_total
+            or self.n_displayed != len(self.points)
+            or self.n_displayed > self.n_available
+            or len(self.qq_points) != self.n_displayed
+            or sum(item.count for item in self.histogram) != self.n_available
+            or self.truncated != (self.n_displayed < self.n_available)
+            or len({point.run_order for point in self.points}) != self.n_displayed
+            or len({point.run_order for point in self.qq_points}) != self.n_displayed
+        ):
+            raise ValueError("doe_rsm_residual_counts_invalid")
+        return self
+
+
+class RsmResidualPlots(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    raw: RsmResidualView
+    standardized: RsmResidualView
+    n_total: int = Field(ge=1)
+    point_limit: int = Field(ge=1)
+    truncated: bool
+
+    @model_validator(mode="after")
+    def consistent_total(self) -> RsmResidualPlots:
+        if (
+            self.raw.n_total != self.n_total
+            or self.standardized.n_total != self.n_total
+            or self.truncated != (self.n_total > self.point_limit)
+            or self.raw.n_displayed != min(self.raw.n_available, self.point_limit)
+            or self.standardized.n_displayed != min(self.standardized.n_available, self.point_limit)
+        ):
+            raise ValueError("doe_rsm_residual_counts_invalid")
+        return self
+
+
+class RsmObservedResponseSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    n: int = Field(ge=1)
+    minimum: FiniteFloat
+    maximum: FiniteFloat
+    source: Literal["all_used_responses"]
+
+
 class DoeResponseSurfaceAnalysisResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     summary_type: Literal["response_surface_analysis"]
     method: Literal[
         "full_quadratic_ordinary_least_squares",
@@ -1235,6 +1293,8 @@ class DoeResponseSurfaceAnalysisResult(BaseModel):
     stationary_point: DoeResponseSurfaceStationaryPointResponse
     contour: DoeResponseSurfaceContourResponse
     diagnostics: DoeResponseSurfaceDiagnosticsResponse
+    residual_plots: RsmResidualPlots | None = None
+    observed_response_summary: RsmObservedResponseSummary | None = None
     warnings: list[str]
     term_preset: (
         Literal["linear", "linear_squares", "linear_interactions", "full_quadratic"] | None
@@ -1248,6 +1308,18 @@ class DoeResponseSurfaceAnalysisResult(BaseModel):
 
     @model_validator(mode="after")
     def validate_final_basis(self) -> DoeResponseSurfaceAnalysisResult:
+        if self.schema_version >= 3:
+            plots = self.residual_plots
+            summary = self.observed_response_summary
+            if (
+                plots is None
+                or summary is None
+                or plots.n_total != self.sample.n_observations
+                or summary.n != self.sample.n_observations
+                or summary.minimum > summary.maximum
+                or plots.raw.n_available != self.sample.n_observations
+            ):
+                raise ValueError("doe_rsm_residual_payload_invalid")
         if self.schema_version < 2:
             return self
         basis = self.final_basis
@@ -1372,6 +1444,9 @@ class ResponseOptimizerSearchOptionsRequest(BaseModel):
 
 class ResponseOptimizerCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    region_mode: Literal["axial_bounds", "factorial_cube", "custom", "legacy_input_bounds_v1"] = (
+        "legacy_input_bounds_v1"
+    )
 
     objectives: list[ResponseOptimizerObjectiveRequest] = Field(min_length=1, max_length=8)
     factor_bounds: list[ResponseOptimizerFactorBoundRequest] = Field(
@@ -1450,6 +1525,11 @@ class ResponseOptimizerFactorRegionResponse(BaseModel):
     design_bounds: list[ResponseOptimizerDesignBoundResponse]
     search_bounds: list[ResponseOptimizerSearchBoundResponse]
     linear_constraints: list[ResponseOptimizerLinearConstraintResponse]
+    region_mode: (
+        Literal["axial_bounds", "factorial_cube", "custom", "legacy_input_bounds_v1"] | None
+    ) = None
+    region_policy_version: Literal[1] | None = None
+    resolved_bounds: list[RsmRegionFactorResponse] | None = None
 
 
 class ResponseOptimizerObjectiveResponse(BaseModel):
@@ -1498,6 +1578,8 @@ class ResponseOptimizerRecommendationResponse(BaseModel):
     objectives: list[ResponseOptimizerRecommendationObjectiveResponse]
     constraints: list[ResponseOptimizerConstraintEvaluationResponse]
     all_constraints_satisfied: bool
+    within_requested_bounds: bool | None = None
+    outside_observed_hull: bool | None = None
 
 
 class ResponseOptimizerSearchResponse(BaseModel):
@@ -1522,7 +1604,7 @@ class ResponseOptimizerSearchResponse(BaseModel):
 class ResponseOptimizerResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[2]
+    schema_version: Literal[2, 3]
     summary_type: Literal["response_optimizer"]
     method: Literal["derringer_suich_bounded_multistart_slsqp"]
     model_policy: ResponseOptimizerModelPolicyResponse
@@ -1547,8 +1629,8 @@ class ResponseOptimizerResponse(BaseModel):
         "regression.response_optimizer",
     ]
     method_version: str
-    config_schema_version: Literal[2]
-    result_schema_version: Literal[2]
+    config_schema_version: Literal[2, 3]
+    result_schema_version: Literal[2, 3]
     config_sha256: str
     design_sha256: str
     source_analysis_ids: list[UUID]

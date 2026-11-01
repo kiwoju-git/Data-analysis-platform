@@ -562,7 +562,9 @@ export interface GageRrPreflightRequest {
   measurement_column_id: string;
   part_column_id: string;
   operator_column_id: string;
-  replicate_column_id: string;
+  replicate_column_id: string | null;
+  replicate_mode?: "infer_from_rows" | "explicit_column";
+  filter_snapshot?: import("./analyses").AnalysisFilterSnapshot;
   missing_policy: "complete_case";
 }
 
@@ -628,11 +630,14 @@ export interface GageRrPreflightResponse {
   summary_type: "gage_rr_preflight";
   method: "balanced_crossed_anova_preflight";
   missing_policy: "complete_case";
+  replicate_mode?: "infer_from_rows" | "explicit_column";
+  canonical_artifact_sha256?: string;
+  filter_snapshot_sha256?: string;
   columns: {
     measurement: GageRrPreflightColumn;
     part: GageRrPreflightColumn;
     operator: GageRrPreflightColumn;
-    replicate: GageRrPreflightColumn;
+    replicate: GageRrPreflightColumn | null;
   };
   sample: GageRrPreflightSample;
   design: GageRrPreflightDesign;
@@ -698,6 +703,17 @@ export interface GageRrResult {
   sample: GageRrSample;
   design: GageRrDesign;
   anova_table: GageRrAnovaRow[];
+  replicate_mode?: "infer_from_rows" | "explicit_column";
+  full_anova_table?: GageRrAnovaRow[];
+  reduced_anova_table?: GageRrAnovaRow[] | null;
+  interaction_selection?: {
+    requested_policy: "retain" | "auto_pool";
+    effective_policy: "retain" | "pooled";
+    alpha_to_remove_interaction: number;
+    interaction_p_value: number | null;
+    pooled: boolean;
+    reason: string;
+  };
   variance_components: {
     repeatability: GageRrVarianceComponent;
     operator: GageRrVarianceComponent;

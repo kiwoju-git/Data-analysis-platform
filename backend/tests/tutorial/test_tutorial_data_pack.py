@@ -212,13 +212,58 @@ def test_tutorial_doe_api_preserves_recorded_numeric_values(tmp_path: Path) -> N
         actual = smoke._collect_doe_results(client, METHOD_VERSIONS)
 
     # Historical fixture numbers remain the oracle when method metadata advances.
-    for method_id in ("doe.factorial_design", "doe.response_surface"):
+    for method_id in ("doe.factorial_design", "doe.response_surface", "doe.response_optimizer"):
         saved, current = expected[method_id], actual[method_id]
         assert current["method_version"] == METHOD_VERSIONS[method_id]
         assert current["input_file_sha256"] == saved["input_file_sha256"]
         assert current["absolute_tolerance"] == saved["absolute_tolerance"] == 1e-8
         assert current["relative_tolerance"] == saved["relative_tolerance"] == 1e-8
         smoke._compare(saved["result"], current["result"], f"$.results.{method_id}.result")
+
+
+def test_tutorial_gage_api_preserves_explicit_retain_numeric_values(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("tutorial_smoke", TUTORIAL_SMOKE_PATH)
+    assert spec is not None and spec.loader is not None
+    smoke = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(smoke)
+    section = json.loads(EXPECTED_RESULTS_PATH.read_text(encoding="utf-8"))["results"][
+        "quality.gage_rr"
+    ]
+    with smoke.TestClient(smoke.create_app(smoke.Settings(workspace_root=tmp_path))) as client:
+        version = smoke._upload(client, TUTORIAL_ROOT / "studio_gage_rr.csv")
+        columns = smoke._columns(version)
+        roles = {
+            "measurement": columns["measurement_mpa"],
+            "part": columns["part_id"],
+            "operator": columns["operator_id"],
+            "replicate": columns["replicate"],
+        }
+        response = smoke._analysis(
+            client,
+            METHOD_VERSIONS,
+            version,
+            "quality.gage_rr",
+            roles,
+            {
+                **{f"{key}_column_id": value for key, value in roles.items()},
+                "missing_policy": "complete_case",
+            },
+        )
+    assert response["method_version"] == METHOD_VERSIONS["quality.gage_rr"]
+    result = response["result"]
+    assert result["replicate_mode"] == "explicit_column"
+    assert result["interaction_selection"]["requested_policy"] == "retain"
+    assert result["interaction_selection"]["effective_policy"] == "retain"
+    actual = {
+        "n_used": result["sample"]["n_used"],
+        "balanced": result["design"]["balanced"],
+        **{
+            key: result["variance_components"][key]
+            for key in ("repeatability", "reproducibility", "total_gage_rr", "part_to_part", "ndc")
+        },
+        "warnings": result["warnings"],
+    }
+    smoke._compare(section["result"], actual, "$.results.quality.gage_rr.result")
 
 
 def test_tutorial_markdown_result_blocks_are_in_sync() -> None:

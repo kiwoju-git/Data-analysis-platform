@@ -5,7 +5,15 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    FiniteFloat,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 FactorId = Annotated[str, Field(pattern=r"^factor_[1-5]$")]
@@ -31,6 +39,8 @@ class RsmContourLevels(PlotModel):
 
 
 class RsmPlotSettings(PlotModel):
+    region_mode: Literal["axial_bounds", "factorial_cube", "custom"] | None = None
+    custom_bounds: dict[FactorId, tuple[FiniteFloat, FiniteFloat]] | None = None
     plot_kind: Literal["contour", "main_effect", "interaction"] = "contour"
     x_factor_id: FactorId
     y_factor_id: FactorId | None = None
@@ -45,6 +55,8 @@ class RsmPlotSettings(PlotModel):
 
     @model_validator(mode="after")
     def axes(self) -> RsmPlotSettings:
+        if (self.region_mode == "custom") != (self.custom_bounds is not None):
+            raise ValueError("doe_rsm_region_bounds_invalid")
         if self.grid_size % 2 == 0:
             raise ValueError("doe_rsm_contour_grid_size_invalid")
         if self.plot_kind == "main_effect":
@@ -55,6 +67,34 @@ class RsmPlotSettings(PlotModel):
         if self.plot_kind != "interaction" and self.trace_actual_values is not None:
             raise ValueError("doe_rsm_plot_trace_invalid")
         return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        result: dict[str, object] = handler(self)
+        if self.region_mode is None:
+            result.pop("region_mode", None)
+            result.pop("custom_bounds", None)
+        return result
+
+
+class RsmRegionFactorResponse(PlotModel):
+    factor_name: str
+    input_low: FiniteFloat
+    input_high: FiniteFloat
+    input_bounds_role: Literal["factorial", "axial", "factorial_and_axial"]
+    factorial_low: FiniteFloat
+    factorial_high: FiniteFloat
+    axial_low: FiniteFloat
+    axial_high: FiniteFloat
+    observed_low: FiniteFloat
+    observed_high: FiniteFloat
+    center: FiniteFloat
+    scale: FiniteFloat
+    lattice_anchor: FiniteFloat
+    step: FiniteFloat | None
+    domain_kind: Literal["continuous", "discrete_numeric"]
+    lower: FiniteFloat
+    upper: FiniteFloat
 
 
 class RsmPlotSource(PlotModel):
@@ -125,7 +165,9 @@ class RsmCurve(PlotModel):
 
 
 class RsmPlotBundle(PlotModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
+    resolved_region: list[RsmRegionFactorResponse] | None = None
+    region_policy_version: Literal[1] | None = None
     settings: RsmPlotSettings
     x_axis: RsmPlotAxis
     y_axis: RsmPlotAxis | None
@@ -140,9 +182,31 @@ class RsmPlotBundle(PlotModel):
     hull_policy: Literal["full_design_coded_convex_hull"] = "full_design_coded_convex_hull"
     final_term_ids: list[str]
 
+    @model_validator(mode="after")
+    def region_contract(self) -> RsmPlotBundle:
+        if self.schema_version == 2 and (
+            self.resolved_region is None
+            or self.region_policy_version != 1
+            or self.settings.region_mode is None
+        ):
+            raise ValueError("doe_rsm_region_metadata_missing")
+        if self.schema_version == 1 and (
+            self.resolved_region is not None or self.settings.region_mode is not None
+        ):
+            raise ValueError("doe_rsm_region_schema_mismatch")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        result: dict[str, object] = handler(self)
+        if self.schema_version == 1:
+            result.pop("resolved_region", None)
+            result.pop("region_policy_version", None)
+        return result
+
 
 class RsmPlotViewResponse(RsmPlotSource):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     design_id: UUID
     design_version_id: UUID
     design_sha256: Sha256

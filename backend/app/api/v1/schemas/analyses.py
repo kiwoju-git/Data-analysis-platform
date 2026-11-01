@@ -970,8 +970,19 @@ class GageRrOptions(BaseModel):
     measurement_column_id: str = Field(min_length=1)
     part_column_id: str = Field(min_length=1)
     operator_column_id: str = Field(min_length=1)
-    replicate_column_id: str = Field(min_length=1)
+    replicate_column_id: str | None = Field(default=None, min_length=1)
+    replicate_mode: Literal["infer_from_rows", "explicit_column"] | None = None
+    interaction_policy: Literal["retain", "auto_pool"] = "retain"
+    alpha_to_remove_interaction: float = Field(default=0.05, gt=0, lt=1, allow_inf_nan=False)
     missing_policy: str = "complete_case"
+
+    @model_validator(mode="after")
+    def validate_replicate_mode(self) -> "GageRrOptions":
+        if self.replicate_mode is not None and (
+            (self.replicate_mode == "explicit_column") != (self.replicate_column_id is not None)
+        ):
+            raise ValueError("gage_rr_replicate_mode_invalid")
+        return self
 
 
 class IndividualsChartOptions(BaseModel):
@@ -1957,8 +1968,18 @@ class GageRrPreflightRequest(BaseModel):
     measurement_column_id: str = Field(min_length=1)
     part_column_id: str = Field(min_length=1)
     operator_column_id: str = Field(min_length=1)
-    replicate_column_id: str = Field(min_length=1)
+    replicate_column_id: str | None = Field(default=None, min_length=1)
+    replicate_mode: Literal["infer_from_rows", "explicit_column"] | None = None
     missing_policy: Literal["complete_case"] = "complete_case"
+    filter_snapshot: AnalysisFilterSnapshot = Field(default_factory=AnalysisFilterSnapshot)
+
+    @model_validator(mode="after")
+    def validate_replicate_mode(self) -> "GageRrPreflightRequest":
+        if self.replicate_mode is not None and (
+            (self.replicate_mode == "explicit_column") != (self.replicate_column_id is not None)
+        ):
+            raise ValueError("gage_rr_replicate_mode_invalid")
+        return self
 
 
 class GageRrPreflightColumn(BaseModel):
@@ -2035,9 +2056,12 @@ class GageRrPreflightResponse(BaseModel):
     summary_type: Literal["gage_rr_preflight"]
     method: Literal["balanced_crossed_anova_preflight"]
     missing_policy: Literal["complete_case"]
+    replicate_mode: Literal["infer_from_rows", "explicit_column"]
+    canonical_artifact_sha256: str
+    filter_snapshot_sha256: str
     columns: dict[
         Literal["measurement", "part", "operator", "replicate"],
-        GageRrPreflightColumn,
+        GageRrPreflightColumn | None,
     ]
     sample: GageRrPreflightSample
     design: GageRrPreflightDesign

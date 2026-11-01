@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RsmPlotSettings, RsmPlotSource, RsmPlotView } from "../api/types/rsmPlots";
-import { rsmViewMatchesSnapshot } from "./rsmPlotSnapshot";
+import { rsmSettingsForPlotKind, rsmViewMatchesSnapshot } from "./rsmPlotSnapshot";
 
 function fixture() {
   const source: RsmPlotSource = {
@@ -33,6 +33,20 @@ function fixture() {
 }
 
 describe("RSM exact request snapshot matching", () => {
+  it("clears interaction traces when changing restored view kind without mutating saved settings", () => {
+    const settings: RsmPlotSettings = { ...fixture().snapshot.settings,
+      plot_kind: "interaction", trace_actual_values: [12.5, 17.5] };
+    const before = JSON.stringify(settings);
+    const contour = rsmSettingsForPlotKind(settings, "contour");
+    expect(contour.trace_actual_values).toBeNull();
+    expect(contour.y_factor_id).toBe("factor_2");
+    const main = rsmSettingsForPlotKind(settings, "main_effect");
+    expect(main.trace_actual_values).toBeNull();
+    expect(main.y_factor_id).toBeNull();
+    expect(rsmSettingsForPlotKind(main, "interaction").y_factor_id).toBe("factor_2");
+    expect(rsmSettingsForPlotKind(settings, "interaction").trace_actual_values).toEqual([12.5, 17.5]);
+    expect(JSON.stringify(settings)).toBe(before);
+  });
   it("accepts the exact immutable source and settings without mutating either", () => {
     const { snapshot, view } = fixture();
     const before = JSON.stringify({ snapshot, view });

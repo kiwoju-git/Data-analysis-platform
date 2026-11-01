@@ -1281,6 +1281,7 @@ describe("App", () => {
 
   it("renders bounded response optimizer objectives, constraints, and budgets", () => {
     const design = {
+      ...responseSurfaceDesignTestResponse("analyzed"),
       design_id: "00000000-0000-4000-8000-000000000201",
       factors: [
         { name: "Temperature", low: 60, high: 80, unit: "C" },
@@ -1339,7 +1340,7 @@ describe("App", () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Response Optimizer 실행<\/button>/);
   });
 
-  it("locks analyzed RSM response controls and warns before a completed analysis", () => {
+  it("locks completed and analyzed RSM revisions until explicit correction", () => {
     const analyzed = responseSurfaceDesignTestResponse("analyzed");
     const completed = responseSurfaceDesignTestResponse("completed");
     const common = {
@@ -1414,8 +1415,8 @@ describe("App", () => {
     expect((analyzedHtml.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(4);
     expect(analyzedHtml).toContain("현재 revision은 읽기 전용입니다");
     expect(analyzedHtml).toContain("새 revision으로 수정");
-    expect(completedHtml).toContain("분석을 실행하면 현재 설계의 반응값이 잠깁니다");
-    expect(completedHtml).not.toContain('role="status"');
+    expect(completedHtml).toContain("현재 revision은 읽기 전용입니다");
+    expect((completedHtml.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(4);
     expect(completedHtml).toContain("새 revision으로 수정");
     expect(unsavedHtml).not.toContain("새 revision으로 수정");
     expect(correctionHtml).toContain("새 revision을 편집 중입니다");

@@ -756,6 +756,7 @@ export function FactorialDesignPreview({
         </span>
       </div>
       <DoeResponsePasteDialog
+        sourceKey={JSON.stringify([design.design_id, design.design_sha256, responseName, correctionMode, responsesLocked])}
         disabled={responsesLocked || isSavingResponses || isSavingRevision}
         runOrders={design.runs.map((run) => run.run_order)}
         onApply={setResponseValues}

@@ -1,12 +1,21 @@
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
-from math import floor, isfinite, sqrt
+from math import floor, fsum, isfinite, sqrt
 
 from scipy import stats  # type: ignore[import-untyped]
 
-from app.statistics.gage_rr_preflight import GageRrColumn
+from app.statistics.gage_rr_data import (
+    GageObservation as _Observation,
+)
+from app.statistics.gage_rr_data import (
+    GageRrColumn,
+    GageRrDataError,
+    prepare_gage_data,
+    public_design,
+)
+from app.statistics.gage_rr_data import (
+    column_payload as _column_payload,
+)
 
 
 class GageRrError(ValueError):
@@ -15,52 +24,83 @@ class GageRrError(ValueError):
         self.code = code
 
 
-@dataclass(frozen=True)
-class _Observation:
-    part: str
-    operator: str
-    replicate: str
-    value: float
-
-
 def calculate_gage_rr_anova(
     rows: Iterable[Sequence[str | None]],
     *,
     measurement_column: GageRrColumn,
     part_column: GageRrColumn,
     operator_column: GageRrColumn,
-    replicate_column: GageRrColumn,
+    replicate_column: GageRrColumn | None = None,
+    replicate_mode: str | None = None,
+    interaction_policy: str = "retain",
+    alpha_to_remove_interaction: float = 0.05,
     decimal: str = ".",
     thousands: str | None = None,
     missing_policy: str = "complete_case",
+    source_row_numbers: Sequence[int] | None = None,
 ) -> dict[str, object]:
-    if missing_policy != "complete_case":
-        raise GageRrError("gage_rr_missing_policy_unsupported")
-
-    observations, sample = _collect_observations(
-        rows,
-        measurement_column=measurement_column,
-        part_column=part_column,
-        operator_column=operator_column,
-        replicate_column=replicate_column,
-        decimal=decimal,
-        thousands=thousands,
-    )
-    design = _balanced_design(observations)
+    if interaction_policy not in {"retain", "auto_pool"}:
+        raise GageRrError("gage_rr_interaction_policy_invalid")
+    if not isfinite(alpha_to_remove_interaction) or not 0 < alpha_to_remove_interaction < 1:
+        raise GageRrError("gage_rr_interaction_alpha_invalid")
+    try:
+        prepared = prepare_gage_data(
+            rows,
+            measurement_column=measurement_column,
+            part_column=part_column,
+            operator_column=operator_column,
+            replicate_column=replicate_column,
+            replicate_mode=replicate_mode,
+            decimal=decimal,
+            thousands=thousands,
+            missing_policy=missing_policy,
+            source_row_numbers=source_row_numbers,
+        )
+    except GageRrDataError as exc:
+        raise GageRrError(exc.code) from exc
+    observations, sample, design = prepared.observations, prepared.sample, prepared.design
     if not design["ready_for_anova"]:
-        raise GageRrError(str(design["error_code"]))
-
-    anova = _anova(observations, design)
-    components = _variance_components(anova, design)
+        errors = _string_list(design["error_codes"])
+        raise GageRrError(errors[0])
+    full = _anova(observations, design)
+    full_table = full["table"]
+    assert isinstance(full_table, list)
+    p_value = full_table[2]["p_value"]
+    pooled = (
+        interaction_policy == "auto_pool"
+        and p_value is not None
+        and isfinite(p_value)
+        and p_value >= alpha_to_remove_interaction
+    )
+    reduced = _pooled_anova(full) if pooled else None
+    anova = reduced if reduced is not None else full
+    components = _variance_components(anova, design, pooled=pooled)
     total_variation = _component_mapping(components["total_variation"])
     if _component_float(total_variation, "final_variance") <= 0:
         raise GageRrError("gage_rr_zero_total_variation")
-
+    reason = (
+        "interaction_not_significant"
+        if pooled
+        else "retained_by_request"
+        if interaction_policy == "retain"
+        else "interaction_test_unavailable"
+        if p_value is None or not isfinite(p_value)
+        else "interaction_significant"
+    )
+    selection = {
+        "requested_policy": interaction_policy,
+        "effective_policy": "pooled" if pooled else "retain",
+        "alpha_to_remove_interaction": alpha_to_remove_interaction,
+        "interaction_p_value": p_value,
+        "pooled": pooled,
+        "reason": reason,
+    }
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "gage_rr",
         "method": "balanced_crossed_anova",
         "missing_policy": missing_policy,
+        "replicate_mode": prepared.replicate_mode,
         "columns": {
             "measurement": _column_payload(measurement_column),
             "part": _column_payload(part_column),
@@ -68,147 +108,51 @@ def calculate_gage_rr_anova(
             "replicate": _column_payload(replicate_column),
         },
         "sample": sample,
-        "design": {
-            key: value
-            for key, value in design.items()
-            if key not in {"error_code", "part_ids", "operator_ids", "replicate_ids"}
-        },
+        "design": public_design(design),
         "anova_table": anova["table"],
+        "full_anova_table": full_table,
+        "reduced_anova_table": None if reduced is None else reduced["table"],
+        "interaction_selection": selection,
         "variance_components": components,
-        "warnings": _warnings(sample, components),
+        "warnings": _warnings(sample, components, pooled=pooled),
         "notes": [
-            "interaction_not_pooled",
+            "interaction_pooled" if pooled else "interaction_not_pooled",
             "negative_variance_components_clamped_to_zero",
             "part_operator_replicate_labels_redacted",
+            "automatic_replicate_ordinal_is_not_time_or_round"
+            if prepared.replicate_mode == "infer_from_rows"
+            else "explicit_replicate_identity_is_cell_local",
         ],
     }
 
 
-def _collect_observations(
-    rows: Iterable[Sequence[str | None]],
-    *,
-    measurement_column: GageRrColumn,
-    part_column: GageRrColumn,
-    operator_column: GageRrColumn,
-    replicate_column: GageRrColumn,
-    decimal: str,
-    thousands: str | None,
-) -> tuple[list[_Observation], dict[str, int]]:
-    n_total = 0
-    n_excluded_missing_measurement = 0
-    n_excluded_non_numeric_measurement = 0
-    n_excluded_missing_part = 0
-    n_excluded_missing_operator = 0
-    n_excluded_missing_replicate = 0
-    n_excluded_missing_identifier = 0
-    observations: list[_Observation] = []
-
-    for row in rows:
-        n_total += 1
-        raw_measurement = _row_value(row, measurement_column.column_index)
-        raw_part = _row_value(row, part_column.column_index)
-        raw_operator = _row_value(row, operator_column.column_index)
-        raw_replicate = _row_value(row, replicate_column.column_index)
-
-        measurement_missing = _is_missing(raw_measurement)
-        part_missing = _is_missing(raw_part)
-        operator_missing = _is_missing(raw_operator)
-        replicate_missing = _is_missing(raw_replicate)
-        if measurement_missing:
-            n_excluded_missing_measurement += 1
-        if part_missing:
-            n_excluded_missing_part += 1
-        if operator_missing:
-            n_excluded_missing_operator += 1
-        if replicate_missing:
-            n_excluded_missing_replicate += 1
-        if part_missing or operator_missing or replicate_missing:
-            n_excluded_missing_identifier += 1
-        if measurement_missing or part_missing or operator_missing or replicate_missing:
-            continue
-
-        measurement = _parse_number(raw_measurement, decimal=decimal, thousands=thousands)
-        if measurement is None:
-            n_excluded_non_numeric_measurement += 1
-            continue
-        observations.append(
-            _Observation(
-                part=_identifier_value(raw_part),
-                operator=_identifier_value(raw_operator),
-                replicate=_identifier_value(raw_replicate),
-                value=measurement,
-            ),
+def _pooled_anova(full: dict[str, object]) -> dict[str, object]:
+    table = full["table"]
+    assert isinstance(table, list)
+    interaction, error = table[2], table[3]
+    df = interaction["degrees_of_freedom"] + error["degrees_of_freedom"]
+    ss = interaction["sum_of_squares"] + error["sum_of_squares"]
+    mse = ss / df
+    rows = [
+        _anova_row(
+            source=row["source"],
+            degrees_of_freedom=row["degrees_of_freedom"],
+            sum_of_squares=row["sum_of_squares"],
+            mean_square=row["mean_square"],
+            denominator="repeatability",
+            denominator_mean_square=mse,
+            denominator_degrees_of_freedom=df,
         )
-
-    sample = {
-        "n_total": n_total,
-        "n_used": len(observations),
-        "n_excluded": n_total - len(observations),
-        "n_excluded_missing_measurement": n_excluded_missing_measurement,
-        "n_excluded_non_numeric_measurement": n_excluded_non_numeric_measurement,
-        "n_excluded_missing_part": n_excluded_missing_part,
-        "n_excluded_missing_operator": n_excluded_missing_operator,
-        "n_excluded_missing_replicate": n_excluded_missing_replicate,
-        "n_excluded_missing_identifier": n_excluded_missing_identifier,
-    }
-    return observations, sample
-
-
-def _balanced_design(observations: Sequence[_Observation]) -> dict[str, object]:
-    parts = sorted({observation.part for observation in observations})
-    operators = sorted({observation.operator for observation in observations})
-    replicate_sets: dict[tuple[str, str], set[str]] = defaultdict(set)
-    duplicate_replicates_per_cell = 0
-    for observation in observations:
-        cell_key = (observation.part, observation.operator)
-        if observation.replicate in replicate_sets[cell_key]:
-            duplicate_replicates_per_cell += 1
-        replicate_sets[cell_key].add(observation.replicate)
-
-    expected_cell_count = len(parts) * len(operators)
-    missing_cell_count = max(0, expected_cell_count - len(replicate_sets))
-    replicate_count_values = [len(replicates) for replicates in replicate_sets.values()]
-    min_replicates_per_cell = min(replicate_count_values, default=0)
-    max_replicates_per_cell = max(replicate_count_values, default=0)
-    unique_replicate_sets = {frozenset(replicates) for replicates in replicate_sets.values()}
-    replicate_set_consistent = len(unique_replicate_sets) == 1
-    replicate_ids = sorted(next(iter(unique_replicate_sets), frozenset()))
-
-    error_code: str | None = None
-    if not observations:
-        error_code = "gage_rr_no_usable_measurements"
-    elif len(parts) < 2:
-        error_code = "gage_rr_part_count_too_small"
-    elif len(operators) < 2:
-        error_code = "gage_rr_operator_count_too_small"
-    elif min_replicates_per_cell < 2:
-        error_code = "gage_rr_replicate_count_too_small"
-    elif missing_cell_count > 0:
-        error_code = "gage_rr_crossed_cells_missing"
-    elif min_replicates_per_cell != max_replicates_per_cell or not replicate_set_consistent:
-        error_code = "gage_rr_unbalanced_crossed_design"
-    elif duplicate_replicates_per_cell > 0:
-        error_code = "gage_rr_duplicate_replicates_per_cell"
-
-    return {
-        "design_type": "crossed",
-        "balanced": error_code is None,
-        "ready_for_anova": error_code is None,
-        "part_count": len(parts),
-        "operator_count": len(operators),
-        "replicate_count": min_replicates_per_cell if error_code is None else None,
-        "expected_cell_count": expected_cell_count,
-        "observed_cell_count": len(replicate_sets),
-        "missing_cell_count": missing_cell_count,
-        "min_replicates_per_cell": min_replicates_per_cell,
-        "max_replicates_per_cell": max_replicates_per_cell,
-        "replicate_set_consistent": replicate_set_consistent,
-        "duplicate_replicates_per_cell": duplicate_replicates_per_cell,
-        "error_code": error_code,
-        "part_ids": parts,
-        "operator_ids": operators,
-        "replicate_ids": replicate_ids,
-    }
+        for row in table[:2]
+    ]
+    rows.extend(
+        [
+            {**error, "degrees_of_freedom": df, "sum_of_squares": ss, "mean_square": mse},
+            table[4],
+        ]
+    )
+    means = _float_dict(full["mean_squares"])
+    return {**full, "table": rows, "mean_squares": {**means, "repeatability": mse}}
 
 
 def _anova(
@@ -217,10 +161,9 @@ def _anova(
 ) -> dict[str, object]:
     part_ids = _string_list(design["part_ids"])
     operator_ids = _string_list(design["operator_ids"])
-    replicate_ids = _string_list(design["replicate_ids"])
     part_count = len(part_ids)
     operator_count = len(operator_ids)
-    replicate_count = len(replicate_ids)
+    replicate_count = _object_int(design["replicate_count"])
 
     cell_values: dict[tuple[str, str], list[float]] = defaultdict(list)
     part_values: dict[str, list[float]] = defaultdict(list)
@@ -377,6 +320,8 @@ def _anova_row(
 def _variance_components(
     anova: dict[str, object],
     design: dict[str, object],
+    *,
+    pooled: bool = False,
 ) -> dict[str, object]:
     mean_squares = _float_dict(anova["mean_squares"])
     part_count = _object_int(design["part_count"])
@@ -384,18 +329,18 @@ def _variance_components(
     replicate_count = _object_int(design["replicate_count"])
 
     raw_repeatability = mean_squares["repeatability"]
+    comparison_ms = raw_repeatability if pooled else mean_squares["part_operator"]
     raw_part_operator = (mean_squares["part_operator"] - mean_squares["repeatability"]) / (
         replicate_count
     )
-    raw_operator = (mean_squares["operator"] - mean_squares["part_operator"]) / (
-        part_count * replicate_count
-    )
-    raw_part = (mean_squares["part"] - mean_squares["part_operator"]) / (
-        operator_count * replicate_count
-    )
+    if pooled:
+        raw_part_operator = 0.0
+    raw_operator = (mean_squares["operator"] - comparison_ms) / (part_count * replicate_count)
+    raw_part = (mean_squares["part"] - comparison_ms) / (operator_count * replicate_count)
 
     repeatability = _component("repeatability", raw_repeatability)
     part_operator = _component("part_operator", raw_part_operator)
+    part_operator["status"] = "removed_from_model" if pooled else "retained"
     operator = _component("operator", raw_operator)
     reproducibility = _derived_component(
         "reproducibility",
@@ -449,7 +394,9 @@ def _variance_components(
         "ndc": ndc,
         "ndc_formula": "floor(1.41 * part_to_part_sd / total_gage_rr_sd)",
         "negative_component_policy": "raw_estimate_reported_final_variance_clamped_to_zero",
-        "interaction_policy": "preserve_part_operator_interaction_no_pooling",
+        "interaction_policy": "interaction_pooled_into_repeatability"
+        if pooled
+        else "preserve_part_operator_interaction_no_pooling",
     }
 
 
@@ -476,10 +423,12 @@ def _derived_component(name: str, final_variance: float) -> dict[str, object]:
     }
 
 
-def _warnings(sample: dict[str, int], components: dict[str, object]) -> list[str]:
+def _warnings(
+    sample: dict[str, int], components: dict[str, object], *, pooled: bool = False
+) -> list[str]:
     warnings = [
         "gage_rr_balanced_crossed_anova_assumed",
-        "gage_rr_interaction_not_pooled",
+        "gage_rr_interaction_pooled" if pooled else "gage_rr_interaction_not_pooled",
         "gage_rr_independence_not_proven",
         "gage_rr_labels_redacted",
     ]
@@ -497,47 +446,8 @@ def _warnings(sample: dict[str, int], components: dict[str, object]) -> list[str
     return warnings
 
 
-def _row_value(row: Sequence[str | None], column_index: int) -> str | None:
-    return row[column_index] if column_index < len(row) else None
-
-
-def _is_missing(value: str | None) -> bool:
-    return value is None or value.strip() == ""
-
-
-def _identifier_value(value: str | None) -> str:
-    if value is None:
-        raise GageRrError("gage_rr_identifier_missing")
-    stripped = value.strip()
-    if stripped == "":
-        raise GageRrError("gage_rr_identifier_missing")
-    return stripped
-
-
-def _parse_number(value: str | None, *, decimal: str, thousands: str | None) -> float | None:
-    if value is None:
-        return None
-    normalized = value.strip()
-    if normalized == "":
-        return None
-    if thousands is not None:
-        normalized = normalized.replace(thousands, "")
-    if decimal != ".":
-        normalized = normalized.replace(decimal, ".")
-    try:
-        parsed = Decimal(normalized)
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite():
-        return None
-    as_float = float(parsed)
-    if not isfinite(as_float):
-        return None
-    return as_float
-
-
 def _mean(values: Sequence[float]) -> float:
-    return sum(values) / len(values)
+    return fsum(values) / len(values)
 
 
 def _ratio_percent(numerator: float, denominator: float) -> float | None:
@@ -582,15 +492,3 @@ def _component_float(component: dict[str, object], key: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise GageRrError("gage_rr_internal_component_invalid")
     return float(value)
-
-
-def _column_payload(column: GageRrColumn) -> dict[str, object]:
-    return {
-        "column_id": column.column_id,
-        "column_index": column.column_index,
-        "display_name": column.display_name,
-        "data_type": column.data_type,
-        "measurement_level": column.measurement_level,
-        "role": column.role,
-        "unit": column.unit,
-    }

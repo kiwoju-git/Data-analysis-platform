@@ -1,25 +1,18 @@
-from collections import Counter
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
-from math import isfinite
+
+from app.statistics.gage_rr_data import (
+    GageRrColumn as GageRrColumn,
+)
+from app.statistics.gage_rr_data import (
+    GageRrDataError,
+    column_payload,
+    prepare_gage_data,
+    public_design,
+)
 
 
-class GageRrPreflightError(ValueError):
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
-
-
-@dataclass(frozen=True)
-class GageRrColumn:
-    column_id: str
-    column_index: int
-    display_name: str
-    data_type: str
-    measurement_level: str
-    role: str
-    unit: str | None
+class GageRrPreflightError(GageRrDataError):
+    pass
 
 
 def calculate_gage_rr_preflight(
@@ -28,193 +21,68 @@ def calculate_gage_rr_preflight(
     measurement_column: GageRrColumn,
     part_column: GageRrColumn,
     operator_column: GageRrColumn,
-    replicate_column: GageRrColumn,
+    replicate_column: GageRrColumn | None = None,
+    replicate_mode: str | None = None,
     decimal: str = ".",
     thousands: str | None = None,
     missing_policy: str = "complete_case",
+    source_row_numbers: Sequence[int] | None = None,
 ) -> dict[str, object]:
-    if missing_policy != "complete_case":
-        raise GageRrPreflightError("gage_rr_missing_policy_unsupported")
-
-    n_total = 0
-    n_used = 0
-    n_excluded_missing_measurement = 0
-    n_excluded_non_numeric_measurement = 0
-    n_excluded_missing_part = 0
-    n_excluded_missing_operator = 0
-    n_excluded_missing_replicate = 0
-    n_excluded_missing_identifier = 0
-    duplicate_replicates_per_cell = 0
-
-    parts: set[str] = set()
-    operators: set[str] = set()
-    replicate_levels: set[str] = set()
-    cells: dict[tuple[str, str], set[str]] = {}
-
-    for row in rows:
-        n_total += 1
-        raw_measurement = _row_value(row, measurement_column.column_index)
-        raw_part = _row_value(row, part_column.column_index)
-        raw_operator = _row_value(row, operator_column.column_index)
-        raw_replicate = _row_value(row, replicate_column.column_index)
-
-        measurement_missing = _is_missing(raw_measurement)
-        part_missing = _is_missing(raw_part)
-        operator_missing = _is_missing(raw_operator)
-        replicate_missing = _is_missing(raw_replicate)
-
-        if measurement_missing:
-            n_excluded_missing_measurement += 1
-        if part_missing:
-            n_excluded_missing_part += 1
-        if operator_missing:
-            n_excluded_missing_operator += 1
-        if replicate_missing:
-            n_excluded_missing_replicate += 1
-        if part_missing or operator_missing or replicate_missing:
-            n_excluded_missing_identifier += 1
-        if measurement_missing or part_missing or operator_missing or replicate_missing:
-            continue
-
-        measurement = _parse_number(raw_measurement, decimal=decimal, thousands=thousands)
-        if measurement is None:
-            n_excluded_non_numeric_measurement += 1
-            continue
-
-        part = _identifier_value(raw_part)
-        operator = _identifier_value(raw_operator)
-        replicate = _identifier_value(raw_replicate)
-        parts.add(part)
-        operators.add(operator)
-        replicate_levels.add(replicate)
-        cell_key = (part, operator)
-        cell_replicates = cells.setdefault(cell_key, set())
-        if replicate in cell_replicates:
-            duplicate_replicates_per_cell += 1
-        else:
-            cell_replicates.add(replicate)
-        n_used += 1
-
-    part_count = len(parts)
-    operator_count = len(operators)
-    replicate_level_count = len(replicate_levels)
-    expected_cell_count = part_count * operator_count
-    observed_cell_count = len(cells)
-    missing_cell_count = max(0, expected_cell_count - observed_cell_count)
-    replicate_counts = [len(replicates) for replicates in cells.values()]
-    min_replicates_per_cell = min(replicate_counts, default=0)
-    max_replicates_per_cell = max(replicate_counts, default=0)
-    replicate_sets = {frozenset(replicates) for replicates in cells.values()}
-    replicate_set_consistent = len(replicate_sets) <= 1
-    cell_replicate_distribution = _cell_replicate_distribution(replicate_counts)
-
+    try:
+        prepared = prepare_gage_data(
+            rows,
+            measurement_column=measurement_column,
+            part_column=part_column,
+            operator_column=operator_column,
+            replicate_column=replicate_column,
+            replicate_mode=replicate_mode,
+            decimal=decimal,
+            thousands=thousands,
+            missing_policy=missing_policy,
+            source_row_numbers=source_row_numbers,
+        )
+    except GageRrDataError as exc:
+        raise GageRrPreflightError(exc.code) from exc
+    design = public_design(prepared.design)
+    design["expected_replicates_per_cell"] = design.pop("replicate_count")
+    sample = prepared.sample
     issues = _design_issues(
-        n_used=n_used,
-        part_count=part_count,
-        operator_count=operator_count,
-        replicate_level_count=replicate_level_count,
-        missing_cell_count=missing_cell_count,
-        min_replicates_per_cell=min_replicates_per_cell,
-        max_replicates_per_cell=max_replicates_per_cell,
-        replicate_set_consistent=replicate_set_consistent,
-        duplicate_replicates_per_cell=duplicate_replicates_per_cell,
-        n_excluded_missing_measurement=n_excluded_missing_measurement,
-        n_excluded_non_numeric_measurement=n_excluded_non_numeric_measurement,
-        n_excluded_missing_identifier=n_excluded_missing_identifier,
+        n_used=sample["n_used"],
+        part_count=int(str(design["part_count"])),
+        operator_count=int(str(design["operator_count"])),
+        min_replicates_per_cell=int(str(design["min_replicates_per_cell"])),
+        max_replicates_per_cell=int(str(design["max_replicates_per_cell"])),
+        missing_cell_count=int(str(design["missing_cell_count"])),
+        duplicate_replicates_per_cell=int(str(design["duplicate_replicates_per_cell"])),
+        n_excluded_missing_measurement=sample["n_excluded_missing_measurement"],
+        n_excluded_non_numeric_measurement=sample["n_excluded_non_numeric_measurement"],
+        n_excluded_missing_identifier=sample["n_excluded_missing_identifier"],
     )
-    ready_for_anova = not any(issue["severity"] == "error" for issue in issues)
-
+    error_codes = prepared.design["error_codes"]
+    assert isinstance(error_codes, list)
+    if "gage_rr_zero_total_variation" in error_codes:
+        issues.append(
+            _issue("gage_rr_zero_total_variation", "error", "측정값의 총 변동이 0입니다.")
+        )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "summary_type": "gage_rr_preflight",
         "method": "balanced_crossed_anova_preflight",
         "missing_policy": missing_policy,
+        "replicate_mode": prepared.replicate_mode,
         "columns": {
-            "measurement": _column_payload(measurement_column),
-            "part": _column_payload(part_column),
-            "operator": _column_payload(operator_column),
-            "replicate": _column_payload(replicate_column),
+            "measurement": column_payload(measurement_column),
+            "part": column_payload(part_column),
+            "operator": column_payload(operator_column),
+            "replicate": column_payload(replicate_column),
         },
-        "sample": {
-            "n_total": n_total,
-            "n_used": n_used,
-            "n_excluded": n_total - n_used,
-            "n_excluded_missing_measurement": n_excluded_missing_measurement,
-            "n_excluded_non_numeric_measurement": n_excluded_non_numeric_measurement,
-            "n_excluded_missing_part": n_excluded_missing_part,
-            "n_excluded_missing_operator": n_excluded_missing_operator,
-            "n_excluded_missing_replicate": n_excluded_missing_replicate,
-            "n_excluded_missing_identifier": n_excluded_missing_identifier,
-        },
-        "design": {
-            "design_type": "crossed",
-            "balanced": ready_for_anova,
-            "ready_for_anova": ready_for_anova,
-            "part_count": part_count,
-            "operator_count": operator_count,
-            "replicate_level_count": replicate_level_count,
-            "expected_cell_count": expected_cell_count,
-            "observed_cell_count": observed_cell_count,
-            "missing_cell_count": missing_cell_count,
-            "min_replicates_per_cell": min_replicates_per_cell,
-            "max_replicates_per_cell": max_replicates_per_cell,
-            "expected_replicates_per_cell": (min_replicates_per_cell if ready_for_anova else None),
-            "replicate_set_consistent": replicate_set_consistent,
-            "duplicate_replicates_per_cell": duplicate_replicates_per_cell,
-            "cell_replicate_count_distribution": cell_replicate_distribution,
-        },
+        "sample": sample,
+        "design": design,
         "issues": issues,
-        "next_step": (
-            "ready_for_balanced_crossed_anova" if ready_for_anova else "fix_design_before_gage_rr"
-        ),
+        "next_step": "ready_for_balanced_crossed_anova"
+        if design["ready_for_anova"]
+        else "fix_design_before_gage_rr",
     }
-
-
-def _row_value(row: Sequence[str | None], column_index: int) -> str | None:
-    return row[column_index] if column_index < len(row) else None
-
-
-def _is_missing(value: str | None) -> bool:
-    return value is None or value.strip() == ""
-
-
-def _identifier_value(value: str | None) -> str:
-    if value is None:
-        raise GageRrPreflightError("gage_rr_identifier_missing")
-    stripped = value.strip()
-    if stripped == "":
-        raise GageRrPreflightError("gage_rr_identifier_missing")
-    return stripped
-
-
-def _parse_number(value: str | None, *, decimal: str, thousands: str | None) -> float | None:
-    if value is None:
-        return None
-    normalized = value.strip()
-    if normalized == "":
-        return None
-    if thousands is not None:
-        normalized = normalized.replace(thousands, "")
-    if decimal != ".":
-        normalized = normalized.replace(decimal, ".")
-    try:
-        parsed = Decimal(normalized)
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite():
-        return None
-    as_float = float(parsed)
-    if not isfinite(as_float):
-        return None
-    return as_float
-
-
-def _cell_replicate_distribution(replicate_counts: Sequence[int]) -> list[dict[str, int]]:
-    distribution = Counter(replicate_counts)
-    return [
-        {"replicate_count": replicate_count, "cell_count": distribution[replicate_count]}
-        for replicate_count in sorted(distribution)
-    ]
 
 
 def _design_issues(
@@ -222,11 +90,9 @@ def _design_issues(
     n_used: int,
     part_count: int,
     operator_count: int,
-    replicate_level_count: int,
     missing_cell_count: int,
     min_replicates_per_cell: int,
     max_replicates_per_cell: int,
-    replicate_set_consistent: bool,
     duplicate_replicates_per_cell: int,
     n_excluded_missing_measurement: int,
     n_excluded_non_numeric_measurement: int,
@@ -242,7 +108,8 @@ def _design_issues(
         _issue(
             "gage_rr_requires_balanced_crossed_design",
             "info",
-            "첫 Gage R&R 계산 slice는 balanced crossed ANOVA 설계만 지원할 예정입니다.",
+            "Gage R&R은 balanced crossed ANOVA 설계를 지원합니다. "
+            "반복측정은 필요하며 별도 반복번호 열은 선택사항입니다.",
         ),
         _issue(
             "gage_rr_independence_not_proven",
@@ -282,7 +149,7 @@ def _design_issues(
                 operator_count,
             ),
         )
-    if replicate_level_count < 2 or min_replicates_per_cell < 2:
+    if min_replicates_per_cell < 2:
         issues.append(
             _issue(
                 "gage_rr_replicate_count_too_small",
@@ -300,12 +167,12 @@ def _design_issues(
                 missing_cell_count,
             ),
         )
-    if min_replicates_per_cell != max_replicates_per_cell or not replicate_set_consistent:
+    if min_replicates_per_cell != max_replicates_per_cell:
         issues.append(
             _issue(
                 "gage_rr_unbalanced_crossed_design",
                 "error",
-                "부품-측정자 조합별 반복 수 또는 반복 ID 집합이 일치하지 않습니다.",
+                "부품-측정자 조합별 유효 측정 행 수가 일치하지 않습니다.",
             ),
         )
     if duplicate_replicates_per_cell > 0:
@@ -358,16 +225,4 @@ def _issue(
         "severity": severity,
         "message": message,
         "count": count,
-    }
-
-
-def _column_payload(column: GageRrColumn) -> dict[str, object]:
-    return {
-        "column_id": column.column_id,
-        "column_index": column.column_index,
-        "display_name": column.display_name,
-        "data_type": column.data_type,
-        "measurement_level": column.measurement_level,
-        "role": column.role,
-        "unit": column.unit,
     }

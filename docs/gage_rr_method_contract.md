@@ -1,150 +1,103 @@
 # Gage R&R Method Contract
 
-Status: Gate C3 balanced crossed ANOVA first slice.
+Updated: 2026-11-01. Method `quality.gage_rr` 0.2.0, result schema 2.
+API 27 integrates this change; no SQL migration is required.
 
-## Scope
+## Supported Design
 
-`quality.gage_rr` runs through `POST /api/v1/analysis-runs` and returns a stored analysis result envelope. It reads rows from the confirmed canonical dataset artifact, applies the optional Workbench filter snapshot through the common row-snapshot path, and then validates a balanced crossed design.
+Balanced crossed random-effects ANOVA requires at least two parts, two
+operators and two valid measurements in every part-by-operator cell.
+All cells must exist and have the same count r; N = parts * operators * r.
+A 10 * 3 * 2 synthetic fixture is a test, not an assumption about user data.
 
-This first slice supports:
+Required columns are measurement, part and operator. New UI requests explicitly
+use `replicate_mode=infer_from_rows` and a null replicate column. Each existing
+measurement row is an observation; none is copied, averaged, interpolated or
+deduplicated. The optional within-cell ordinal is not time, experimental round
+or a covariance factor.
 
-- one numeric measurement column
-- one part column
-- one operator column
-- one replicate column
-- complete-case missing handling
-- balanced crossed ANOVA
-- raw and final variance components
-- percent contribution
-- percent study variation
-- ndc
+Advanced `explicit_column` requires a fourth distinct column. IDs must be unique
+within each cell, but different cells may use different ID sets. Replication is
+the cell observation count, not the number of global replicate labels.
+Omitted mode resolves to explicit when a column is present, otherwise inferred;
+an explicit contradictory mode/column pair is rejected.
 
-This first slice does not support nested, unbalanced, expanded, or crossed-with-missing-cell designs. It also does not support tolerance/process variation inputs, interaction pooling options, component/interaction plots, Gage Run Chart, or exported chart artifacts.
+Identifiers retain their full stripped strings. No case folding, numerical
+coercion or display truncation is used for grouping. Original IDs are not
+returned in diagnostic payloads or errors. Complete-case exclusions and counts
+are recorded. Structural `balanced` and overall `ready_for_anova` are distinct;
+duplicate replicate IDs or constant measurements do not falsely imply unequal
+cell counts.
 
-## Request Options
+Nested/unbalanced REML, one-operator studies, Xbar-R, tolerance/process variation,
+component confidence intervals and interaction-mean plots are not implemented.
+Gage Run Chart retains its separate explicit-repeat/order contract.
 
-```json
-{
-  "method_id": "quality.gage_rr",
-  "method_version": "0.1.0",
-  "dataset_version_id": "uuid",
-  "roles": {
-    "measurement": "column-id",
-    "part": "column-id",
-    "operator": "column-id",
-    "replicate": "column-id"
-  },
-  "options": {
-    "measurement_column_id": "column-id",
-    "part_column_id": "column-id",
-    "operator_column_id": "column-id",
-    "replicate_column_id": "column-id",
-    "missing_policy": "complete_case"
-  }
-}
-```
+## Common Preparation And Filters
 
-Rules:
+`gage_rr_data.prepare_gage_data` owns measurement/identifier parsing, original
+row identity, cell counts, crossing, balance and duplicate checks for both
+preflight and calculation. Neither trusts a prior browser preflight.
+Both use the confirmed version, schema and canonical artifact, with the same
+frozen filter predicate semantics. Preflight does not create an analysis or
+persistent row snapshot; it records canonical and filter hashes. Execution
+preserves its normal immutable row snapshot. Role/filter/source edits invalidate
+pending preflight responses.
 
-- the measurement column must be numeric;
-- part, operator, and replicate columns may be text, integer, decimal, or boolean;
-- the four role columns must be distinct;
-- only `complete_case` is supported;
-- raw part/operator/replicate labels are not returned in the result payload.
+## Interaction Policy
 
-## Result Payload
+The API default remains `retain` for old callers that omit policy. The new UI
+explicitly sends `auto_pool` and `alpha_to_remove_interaction=0.05`.
+Alpha must be finite and strictly between zero and one.
 
-The result envelope `result` field has:
+The full model is always computed first. For a parts, b operators, r repeats:
 
-- `summary_type: "gage_rr"`
-- `method: "balanced_crossed_anova"`
-- selected column metadata
-- sample counts and exclusion counts
-- design counts without raw labels
-- ANOVA table for part, operator, part-operator interaction, repeatability, and total
-- variance components for repeatability, operator, part-operator, reproducibility, total Gage R&R, part-to-part, and total variation
-- raw variance, final variance, standard deviation, study variation, clamped-to-zero flag, percent contribution, and percent study variation for each component
-- `ndc`
-- `negative_component_policy`
-- `interaction_policy`
-- deterministic warnings and notes
+| Source | DF | Raw variance |
+| --- | --- | --- |
+| Repeatability | ab(r-1) | MS_error |
+| Part x operator | (a-1)(b-1) | (MS_interaction - MS_error)/r |
+| Operator | b-1 | (MS_operator - MS_interaction)/(ar) |
+| Part | a-1 | (MS_part - MS_interaction)/(br) |
 
-Negative raw variance components are reported as raw estimates and final variance is clamped to zero. This policy is visible in the component row and warning list; it is not silently hidden.
+With auto-pool and a finite interaction p >= alpha, interaction SS and DF are
+added to error. The reduced error MS replaces the denominator for the final
+part/operator F tests and their component estimates. Interaction is zero because
+it was removed from the model, not because a negative estimate was clamped.
+An unavailable test never triggers automatic pooling.
 
-## Stable Error Codes
+Raw negative component estimates remain visible; final components clamp at zero
+with a persistent warning. Derived reproducibility, total GRR, total variation,
+%Contribution, %StudyVar and NDC all use the same selected final components.
+Zero denominators yield unavailable tests, not invented p-values.
 
-Request or column validation:
+## Storage And Reports
 
-- `dataset_version_required`
-- `gage_rr_measurement_column_required`
-- `gage_rr_part_column_required`
-- `gage_rr_operator_column_required`
-- `gage_rr_replicate_column_required`
-- `gage_rr_missing_policy_unsupported`
-- `gage_rr_distinct_columns_required`
-- `gage_rr_measurement_column_not_found`
-- `gage_rr_measurement_column_not_numeric`
-- `gage_rr_measurement_column_is_id`
-- `gage_rr_part_column_not_found`
-- `gage_rr_part_column_not_supported`
-- `gage_rr_operator_column_not_found`
-- `gage_rr_operator_column_not_supported`
-- `gage_rr_replicate_column_not_found`
-- `gage_rr_replicate_column_not_supported`
+New results record replicate mode, sample/design diagnostics, requested and
+effective policy, alpha, interaction p, pooling reason, full ANOVA, optional
+reduced ANOVA, and final ANOVA in the existing `anova_table` field.
+Schema 1 results remain readable as explicit-repeat/full-retain historical
+results. No new defaults are injected into old stored checksum bytes.
+The generic reader checks the original artifact; report coverage accepts schemas
+1 and 2. Renderer 2.2.0 reads stored tables/components only and visibly identifies
+full versus final ANOVA and the saved policy. It never reloads rows or recomputes
+ANOVA during export. Missing interaction-mean plots remain summary limitations.
 
-Design or calculation validation:
+## Verification
 
-- `gage_rr_no_usable_measurements`
-- `gage_rr_part_count_too_small`
-- `gage_rr_operator_count_too_small`
-- `gage_rr_replicate_count_too_small`
-- `gage_rr_crossed_cells_missing`
-- `gage_rr_unbalanced_crossed_design`
-- `gage_rr_duplicate_replicates_per_cell`
-- `gage_rr_zero_total_variation`
+- Original hand/reference no-pooling fixtures remain applicable.
+- `test_gage_rr_three_columns.py`: independent NumPy balanced-array SS/DF/F and
+  component calculations on deterministic 60-row weak/strong interaction data;
+  inference versus explicit IDs, shuffle/relabel/long IDs, duplicates, missing
+  cells, unequal counts, single repeats and unavailable zero-error tests.
+- `test_gage_rr_followup_api.py`: real upload, filtered preflight and execution,
+  immutable restore, Korean/English report policy and full/final tables.
+- `GageRrPreflightPanel.test.tsx`: three-column execution enabled, explicit-mode
+  fourth-column and filter validation. Browser journeys are in
+  `tests/e2e/gage_followup.py`; execution status belongs to the follow-up log.
 
-## Persistent Warnings
-
-- `gage_rr_balanced_crossed_anova_assumed`
-- `gage_rr_interaction_not_pooled`
-- `gage_rr_independence_not_proven`
-- `gage_rr_labels_redacted`
-- `gage_rr_negative_variance_component_clamped`
-- `missing_values_excluded`
-- `non_numeric_values_excluded`
-- `gage_rr_identifier_missing_excluded`
-
-## Test Coverage
-
-The current slice includes:
-
-- hand-checkable balanced crossed ANOVA fixture;
-- negative raw variance component fixture with clamp-policy assertions;
-- unbalanced design and zero total variation rejection;
-- API execution from a confirmed dataset version;
-- API rejection for unbalanced data without a result payload;
-- stored result retrieval through the common checksum-validated result API.
-
-## Reference Validation
-
-`backend/tests/reference/fixtures/quality_gage_rr_crossed_reference.json`
-records a small numerical summary from Minitab's official Crossed Gage R&R
-example and formula documentation:
-
-- `https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/before-you-start/example/`
-- `https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/gage-r-r-table/`
-
-The published design has 10 parts, 3 operators, and 3 replicates. The fixture
-uses the published full-model interaction ANOVA mean squares to validate the
-application's variance-component formulas, negative interaction component
-clamp, percent contribution, percent study variation, and ndc. The interaction
-F/p calculation is checked against the published rounded `F=0.434` and
-`p=0.974`.
-
-Minitab removes the interaction at its default alpha because `p >= 0.05` and
-publishes reduced-model final variance components. This application explicitly
-preserves the interaction without pooling, so those reduced-model values are
-recorded for convention review but are not asserted as direct parity. No raw
-Minitab worksheet, screenshot, or measurement rows are stored in this
-repository. This reference-only slice does not change the method version,
-runtime formulas, or the no-pooling policy.
+Official input and pooling policy were checked against
+[Minitab input documentation](https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/perform-the-analysis/enter-your-data/)
+and [Minitab method documentation](https://support.minitab.com/en-us/minitab/help-and-how-to/quality-and-process-improvement/measurement-system-analysis/how-to/gage-study/crossed-gage-r-r-study/methods-and-formulas/method-of-analysis/).
+No same-data Minitab run was supplied or executed for this change. Existing
+published rounded full-model summaries are reference evidence only; this is not
+a claim of complete Minitab numerical parity or unsupported output coverage.

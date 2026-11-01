@@ -1,5 +1,15 @@
 import type { RsmPlotSettings, RsmPlotSource, RsmPlotView } from "../api/types/rsmPlots";
 
+export function rsmSettingsForPlotKind(
+  settings: RsmPlotSettings, kind: RsmPlotSettings["plot_kind"],
+): RsmPlotSettings {
+  return { ...settings, plot_kind: kind,
+    y_factor_id: kind === "main_effect" ? null
+      : settings.y_factor_id ?? (settings.x_factor_id === "factor_1" ? "factor_2" : "factor_1"),
+    trace_actual_values: kind === "interaction" ? settings.trace_actual_values : null,
+  };
+}
+
 function stable(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
   if (value !== null && typeof value === "object") return `{${Object.entries(value)

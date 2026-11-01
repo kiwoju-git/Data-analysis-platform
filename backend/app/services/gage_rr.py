@@ -1,3 +1,6 @@
+import hashlib
+from typing import overload
+
 from fastapi import status
 
 from app.api.v1.schemas.analyses import (
@@ -6,6 +9,7 @@ from app.api.v1.schemas.analyses import (
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
+from app.services.analysis_run_execution import canonical_json_bytes, freeze_row_indices
 from app.services.dataset_rows import get_dataset_rows_context, iter_dataset_rows
 from app.statistics.gage_rr_preflight import (
     GageRrColumn,
@@ -37,23 +41,38 @@ def get_gage_rr_preflight(
         replicate_column_id=body.replicate_column_id,
     )
 
+    included = freeze_row_indices(context, body.filter_snapshot)
+    included_set = None if included is None else set(included)
+    rows = (
+        row
+        for index, row in enumerate(iter_dataset_rows(context))
+        if included_set is None or index in included_set
+    )
     try:
         result = calculate_gage_rr_preflight(
-            iter_dataset_rows(context),
+            rows,
             measurement_column=gage_rr_column_payload(measurement_column),
             part_column=gage_rr_column_payload(part_column),
             operator_column=gage_rr_column_payload(operator_column),
-            replicate_column=gage_rr_column_payload(replicate_column),
+            replicate_column=None
+            if replicate_column is None
+            else gage_rr_column_payload(replicate_column),
+            replicate_mode=body.replicate_mode,
             decimal=context.parsing.decimal,
             thousands=context.parsing.thousands,
             missing_policy=body.missing_policy,
+            source_row_numbers=None if included is None else [index + 1 for index in included],
         )
     except GageRrPreflightError as exc:
         raise gage_rr_api_error(exc.code) from exc
 
     return GageRrPreflightResponse.model_validate(
         {
-            "schema_version": 1,
+            "schema_version": 2,
+            "canonical_artifact_sha256": context.canonical_rows_artifact.sha256,
+            "filter_snapshot_sha256": hashlib.sha256(
+                canonical_json_bytes(body.filter_snapshot.model_dump(mode="json"))
+            ).hexdigest(),
             "method_id": "quality.gage_rr",
             "preflight_type": "balanced_crossed_anova",
             "dataset_version_id": str(body.dataset_version_id),
@@ -64,6 +83,7 @@ def get_gage_rr_preflight(
     )
 
 
+@overload
 def select_gage_rr_columns(
     columns: list[DatasetColumnRecord],
     *,
@@ -71,12 +91,37 @@ def select_gage_rr_columns(
     part_column_id: str,
     operator_column_id: str,
     replicate_column_id: str,
-) -> tuple[DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord]:
+) -> tuple[DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord]: ...
+
+
+@overload
+def select_gage_rr_columns(
+    columns: list[DatasetColumnRecord],
+    *,
+    measurement_column_id: str,
+    part_column_id: str,
+    operator_column_id: str,
+    replicate_column_id: str | None,
+) -> tuple[
+    DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord | None
+]: ...
+
+
+def select_gage_rr_columns(
+    columns: list[DatasetColumnRecord],
+    *,
+    measurement_column_id: str,
+    part_column_id: str,
+    operator_column_id: str,
+    replicate_column_id: str | None,
+) -> tuple[
+    DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord, DatasetColumnRecord | None
+]:
     selected_column_ids = [
         measurement_column_id,
         part_column_id,
         operator_column_id,
-        replicate_column_id,
+        *([] if replicate_column_id is None else [replicate_column_id]),
     ]
     if len(set(selected_column_ids)) != len(selected_column_ids):
         raise ApiError(
@@ -87,7 +132,9 @@ def select_gage_rr_columns(
         _selected_measurement_column(columns, measurement_column_id),
         _selected_identifier_column(columns, part_column_id, "part"),
         _selected_identifier_column(columns, operator_column_id, "operator"),
-        _selected_identifier_column(columns, replicate_column_id, "replicate"),
+        None
+        if replicate_column_id is None
+        else _selected_identifier_column(columns, replicate_column_id, "replicate"),
     )
 
 
@@ -170,7 +217,7 @@ def gage_rr_api_error(code: str) -> ApiError:
             "일부 부품-측정자 조합이 없어 crossed 설계가 완전하지 않습니다."
         ),
         "gage_rr_unbalanced_crossed_design": (
-            "부품-측정자 조합별 반복 수 또는 반복 ID 집합이 일치하지 않습니다."
+            "부품-측정자 조합별 유효 측정 행 수가 일치하지 않습니다."
         ),
         "gage_rr_duplicate_replicates_per_cell": (
             "같은 부품-측정자 조합 안에 중복 반복 ID가 있습니다."

@@ -76,6 +76,7 @@ def create_rsm_plot_view(
         raise _error(code) from exc
     digest = hashlib.sha256(_json(bundle.model_dump(mode="json"))).hexdigest()
     return RsmPlotViewResponse(
+        schema_version=bundle.schema_version,
         **source.model_dump(),
         design_id=design_id,
         design_version_id=design.design_version_id,
@@ -106,7 +107,7 @@ def save_rsm_plot_view(
         str(asset_id),
         str(analysis_id),
         "plot_view",
-        1,
+        1,  # Asset envelope is unchanged; the JSON view/bundle versions are independent.
         None,
         view.expected_result_sha256,
         digest,
@@ -145,6 +146,7 @@ def read_rsm_plot_view(
         raise _error("doe_rsm_plot_view_invalid") from exc
     if (
         (expected_sha256 is not None and record.sha256 != expected_sha256)
+        or view.bundle.schema_version != view.schema_version
         or record.source_analysis_sha256 != source.expected_result_sha256
         or view.analysis_id != analysis_id
         or view.design_id != design_id

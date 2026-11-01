@@ -190,6 +190,7 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
     from fractional_completion import verify_fractional_completion
     from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
     from gp_validation_extension import verify_gp_validation_extension
+    from gage_followup import verify_gage_followup
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -208,6 +209,9 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
             )
             result["doe_rsm_receipt"] = verify_doe_rsm_completion(
                 browser, base, output / "doe-rsm"
+            )
+            result["gage_followup_receipt"] = verify_gage_followup(
+                browser, base, output / "gage-followup"
             )
         finally:
             browser.close()

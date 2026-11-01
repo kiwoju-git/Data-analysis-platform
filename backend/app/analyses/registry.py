@@ -46,13 +46,13 @@ METHOD_VERSIONS: dict[str, str] = {
     "quality.subgroup_chart": METHOD_VERSION,
     "quality.run_chart": "0.2.0",
     "quality.capability": METHOD_VERSION,
-    "quality.gage_rr": METHOD_VERSION,
+    "quality.gage_rr": "0.2.0",
     "quality.gage_run_chart": METHOD_VERSION,
     "doe.factorial_design": "0.10.0",
     "doe.general_factorial_design": "0.4.1",
     "doe.latin_hypercube": "0.3.0",
-    "doe.response_surface": "0.4.0",
-    "doe.response_optimizer": "0.4.0",
+    "doe.response_surface": "0.5.0",
+    "doe.response_optimizer": "0.5.0",
     "doe.bayesian_optimization": "0.7.0",
 }
 

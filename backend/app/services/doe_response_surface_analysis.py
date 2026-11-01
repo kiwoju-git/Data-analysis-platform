@@ -52,13 +52,14 @@ from app.storage.metadata import (
     insert_experiment_design_analysis_record,
 )
 
-DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 3
-DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 3
+DOE_RESPONSE_SURFACE_ANALYSIS_SCHEMA_VERSION = 4
+DOE_RESPONSE_SURFACE_CONFIG_SCHEMA_VERSION = 4
 # These methods share the immutable revision-based envelope and config contract.
 SUPPORTED_RSM_METHOD_SCHEMAS = {
     "0.3.0": (2, 1, 2),
     "0.3.1": (2, 1, 2),
     "0.4.0": (3, 2, 3),
+    "0.5.0": (4, 3, 4),
 }
 
 
@@ -337,11 +338,11 @@ def _validated_analysis_response(
             raise _metadata_error("doe_rsm_analysis_basis_mismatch")
         default_plot = response.result.plot_bundle
         overview = response.result.plot_overview
-        expected_views = default_rsm_overview_settings(design)
+        expected_views = default_rsm_overview_settings(design, legacy=result_schema < 3)
         if (
             default_plot is None
             or overview is None
-            or default_plot.settings != default_rsm_plot_settings(design)
+            or default_plot.settings != default_rsm_plot_settings(design, legacy=result_schema < 3)
             or [item.settings for item in overview] != expected_views
             or any(
                 item.final_term_ids != basis.term_ids

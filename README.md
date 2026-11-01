@@ -40,6 +40,19 @@ JSON/NPZ artifacts are not rewritten. Current implementation and actual validati
 scope are recorded in the [extension evidence](docs/bo_gpr_noise_validation_extension.md)
 and [JMP comparison](docs/jmp_gp_bo_alignment.md), without claiming JMP numeric parity.
 
+### RSM and Gage Follow-up
+
+The API27 source update adds source-locked RSM response paste, final-model raw/
+standardized residual diagnostics, explicit CCC cube/axial search regions, and
+stable optimizer numeric drafts. Balanced crossed Gage R&R can use three columns
+(part, operator, measurement); repeated measurements remain required. The new UI
+explicitly requests auto-pooling of a nonsignificant interaction, while legacy
+retain-policy results remain readable. Metadata24 is unchanged. See
+[implementation and validation scope](docs/rsm_gage_followup.md).
+
+This update does not publish a new Linux Release. The existing archive below
+is the earlier BO/GPR release, not the API27 source build.
+
 ### Linux Prerelease
 
 Windows PowerShell/Python3.10 remains supported. Linux source/CI adds Python3.11

@@ -1270,7 +1270,7 @@ Cpm, 비정규 분포 capability, Box-Cox/Johnson 변환, bootstrap CI는 P1로 
 
 ## 13.7 Gage R&R Study (`quality.gage_rr`)
 
-현재 구현 상태: `quality.gage_rr`는 balanced crossed ANOVA first slice로 실행 가능하다. `POST /api/v1/quality/gage-rr/preflight`는 canonical rows를 읽어 측정값, 부품, 측정자, 반복 컬럼의 balanced crossed 설계 준비 여부를 사전점검하고, `POST /api/v1/analysis-runs`는 같은 역할 컬럼으로 실제 Gage R&R ANOVA를 실행한다. 실행 결과는 row snapshot provenance와 함께 저장되며 `GET /api/v1/analysis-runs/{analysis_id}/result`로 checksum 검증 후 재조회된다. 결과 payload는 ANOVA table, raw/final variance components, repeatability, reproducibility, total Gage R&R, part-to-part, total variation, % contribution, % study variation, ndc, negative variance component clamp policy, interaction no-pooling policy를 포함한다. 원문 part/operator/replicate label은 preflight와 result payload 모두에서 반환하지 않는다. Nested, unbalanced, expanded Gage R&R, tolerance/process variation, component/interaction plot, pooling 선택 UI는 아직 구현하지 않는다. Gage Run Chart는 별도 `quality.gage_run_chart` method로 구현한다. 상세 계약은 `docs/gage_rr_preflight_contract.md`와 `docs/gage_rr_method_contract.md`를 따른다.
+현재 구현 상태: `quality.gage_rr` 0.2.0은 balanced crossed ANOVA를 지원한다. 측정값·부품·작업자 세 열을 기본으로 선택하고 같은 cell의 유효 행에서 반복 수를 확인한다. 명시적 반복번호 열은 고급 옵션이다. 사전점검과 실행은 같은 필터 및 공통 데이터 준비를 사용한다. 새 UI는 `auto_pool`과 임계값 0.05를 명시적으로 전송하며, 정책을 생략한 기존 요청과 schema1 저장 결과의 `retain` 의미는 보존한다. 결과에는 full/final ANOVA, 선택 정책, raw/final 분산성분, %Contribution, %StudyVar, NDC와 source/checksum이 포함된다. 원문 part/operator/replicate label은 반환하지 않는다. Nested, unbalanced, 단일 작업자, Xbar-R, tolerance/process variation 및 저장되지 않은 interaction plot은 이번 지원 밖이다. Gage Run Chart는 별도의 명시적 반복번호/순서 계약을 유지한다. 상세 계약은 `docs/gage_rr_preflight_contract.md`와 `docs/gage_rr_method_contract.md`를 따른다.
 
 ### P0 설계
 
@@ -1309,7 +1309,7 @@ Cpm, 비정규 분포 capability, Box-Cox/Johnson 변환, bootstrap CI는 P1로 
 
 음수 variance component는 조용히 숨기지 않는다. 최종 보고에서 0으로 제한한다면 raw estimate, 제한 정책 및 경고를 함께 남긴다.
 
-part×operator interaction을 pooling하는 옵션은 명시적으로 설정하고 임계값을 기록한다. 기본은 상호작용을 보존하는 방향으로 시작한다.
+part×operator interaction pooling은 명시적 옵션과 임계값을 기록한다. 새 UI 기본은 `auto_pool`이며, 기존 요청의 생략 의미와 구버전 결과는 `retain`이다. 반복측정은 필수지만 별도 반복번호 열은 선택사항이다.
 
 Nested, unbalanced, expanded Gage R&R은 P1/P2이다.
 

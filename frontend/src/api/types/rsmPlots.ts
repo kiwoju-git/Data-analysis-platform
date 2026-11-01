@@ -1,4 +1,6 @@
 export interface RsmPlotSettings {
+  region_mode?: "axial_bounds" | "factorial_cube" | "custom";
+  custom_bounds?: Record<string, [number, number]> | null;
   plot_kind: "contour" | "main_effect" | "interaction";
   x_factor_id: string;
   y_factor_id: string | null;
@@ -31,7 +33,9 @@ export interface RsmContourGeometry {
   bands: { lower: number | null; upper: number | null; polygons: { rings: RsmVertex[][] }[] }[];
 }
 export interface RsmPlotBundle {
-  schema_version: 1; settings: RsmPlotSettings;
+  schema_version: 1 | 2; settings: RsmPlotSettings;
+  region_policy_version?: 1;
+  resolved_region?: RsmRegionFactor[];
   x_axis: RsmPlotAxis; y_axis: RsmPlotAxis | null;
   response_name: string; response_unit: string | null;
   held_actual_values: Record<string, number>;
@@ -43,7 +47,7 @@ export interface RsmPlotBundle {
   hull_policy: "full_design_coded_convex_hull"; final_term_ids: string[];
 }
 export interface RsmPlotView extends RsmPlotSource {
-  schema_version: 1; design_id: string; design_version_id: string; design_sha256: string;
+  schema_version: 1 | 2; design_id: string; design_version_id: string; design_sha256: string;
   analysis_id: string; view_sha256: string; bundle: RsmPlotBundle;
 }
 export interface RsmPlotViewDescriptor {
@@ -51,4 +55,12 @@ export interface RsmPlotViewDescriptor {
 }
 export interface RsmSavedPlotView extends RsmPlotViewDescriptor {
   view: RsmPlotView;
+}
+export interface RsmRegionFactor {
+  factor_name: string; input_low: number; input_high: number;
+  input_bounds_role: "factorial" | "axial" | "factorial_and_axial";
+  factorial_low: number; factorial_high: number; axial_low: number; axial_high: number;
+  observed_low: number; observed_high: number; center: number; scale: number;
+  lattice_anchor: number; step: number | null; domain_kind: "continuous" | "discrete_numeric";
+  lower: number; upper: number;
 }

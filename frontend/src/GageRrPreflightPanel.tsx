@@ -1,4 +1,6 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { formatMeasurement, formatProbability } from "./statisticalNumberFormat";
 
 import type {
   AnalysisResultEnvelope,
@@ -23,6 +25,12 @@ interface GageRrPreflightPanelProps {
   preflight: GageRrPreflightResponse | null;
   replicateColumnId: string | null;
   replicateColumns: DatasetColumnResponse[];
+  replicateMode?: "infer_from_rows" | "explicit_column";
+  interactionPolicy?: "retain" | "auto_pool";
+  interactionAlpha?: string;
+  onReplicateModeChange?: (mode: "infer_from_rows" | "explicit_column") => void;
+  onInteractionPolicyChange?: (policy: "retain" | "auto_pool") => void;
+  onInteractionAlphaChange?: (value: string) => void;
   result: GageRrResult | null;
   version: DatasetVersionResponse | null;
   onMeasurementColumnChange: (columnId: string) => void;
@@ -48,6 +56,12 @@ export function GageRrPreflightPanel({
   preflight,
   replicateColumnId,
   replicateColumns,
+  replicateMode = "infer_from_rows",
+  interactionPolicy = "auto_pool",
+  interactionAlpha = "0.05",
+  onReplicateModeChange = () => undefined,
+  onInteractionPolicyChange = () => undefined,
+  onInteractionAlphaChange = () => undefined,
   result,
   version,
   onMeasurementColumnChange,
@@ -57,8 +71,9 @@ export function GageRrPreflightPanel({
   onRunAnalysis,
   onRunPreflight,
 }: GageRrPreflightPanelProps) {
+  const { t } = useI18n();
   const distinctColumns = new Set(
-    [measurementColumnId, partColumnId, operatorColumnId, replicateColumnId].filter(
+    [measurementColumnId, partColumnId, operatorColumnId, ...(replicateMode === "explicit_column" ? [replicateColumnId] : [])].filter(
       (columnId): columnId is string => columnId !== null,
     ),
   );
@@ -66,14 +81,10 @@ export function GageRrPreflightPanel({
     measurementColumnId !== null &&
     partColumnId !== null &&
     operatorColumnId !== null &&
-    replicateColumnId !== null;
-  const hasDuplicateRoleColumn = allColumnsSelected && distinctColumns.size < 4;
-  const canRunPreflight = version !== null && allColumnsSelected && !hasDuplicateRoleColumn;
-  const canRunAnalysis =
-    canRunPreflight &&
-    filterValidationError === null &&
-    preflight !== null &&
-    preflight.design.ready_for_anova;
+    (replicateMode === "infer_from_rows" || replicateColumnId !== null);
+  const hasDuplicateRoleColumn = allColumnsSelected && distinctColumns.size < (replicateMode === "explicit_column" ? 4 : 3);
+  const canRunPreflight = version !== null && allColumnsSelected && !hasDuplicateRoleColumn && filterValidationError === null;
+  const canRunAnalysis = canRunPreflight;
   const errorCount = preflight?.issues.filter((issue) => issue.severity === "error").length ?? 0;
   const warningCount =
     preflight?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
@@ -103,28 +114,44 @@ export function GageRrPreflightPanel({
               value={operatorColumnId}
               onChange={onOperatorColumnChange}
             />
-            <ColumnSelect
-              columns={replicateColumns}
-              label="반복"
-              value={replicateColumnId}
-              onChange={onReplicateColumnChange}
-            />
             <div className="option-note">
               <strong>Scope</strong>
               <span>balanced crossed ANOVA</span>
             </div>
             <div className="option-note">
               <strong>Data</strong>
-              <span>canonical dataset version 전체</span>
+              <span>{t("gage.followup.currentData")}</span>
             </div>
           </div>
+          <p>{t("gage.followup.repeatedMeasurements")}</p>
+          <div className="option-grid">
+            <label><span>{t("gage.followup.replicateMode")}</span>
+              <select aria-label="Gage replicate mode" value={replicateMode} onChange={(event) => onReplicateModeChange(event.currentTarget.value as "infer_from_rows" | "explicit_column")}>
+                <option value="infer_from_rows">{t("gage.followup.inferReplicates")}</option>
+                <option value="explicit_column">{t("gage.followup.explicitReplicates")}</option>
+              </select>
+            </label>
+            <label><span>{t("gage.followup.interactionPolicy")}</span>
+              <select aria-label="Gage interaction policy" value={interactionPolicy} onChange={(event) => onInteractionPolicyChange(event.currentTarget.value as "retain" | "auto_pool")}>
+                <option value="auto_pool">{t("gage.followup.autoPool")}</option>
+                <option value="retain">{t("gage.followup.retain")}</option>
+              </select>
+            </label>
+          </div>
+          <details open={replicateMode === "explicit_column"}>
+            <summary>{t("gage.followup.advanced")}</summary>
+            {replicateMode === "explicit_column" ? <ColumnSelect columns={replicateColumns} label={t("gage.followup.replicateId")} value={replicateColumnId} onChange={onReplicateColumnChange} /> : null}
+            <label><span>{t("gage.followup.interactionAlpha")}</span>
+              <input aria-label="Gage interaction alpha" inputMode="decimal" value={interactionAlpha} onChange={(event) => onInteractionAlphaChange(event.currentTarget.value)} />
+            </label>
+          </details>
           {hasDuplicateRoleColumn ? (
             <div className="notice-box notice-warning">
               측정값, 부품, 측정자, 반복 컬럼은 서로 달라야 합니다.
             </div>
           ) : null}
           <button
-            className="primary-button"
+            className="secondary-button"
             disabled={isRunning || !canRunPreflight}
             onClick={() => {
               onRunPreflight();
@@ -134,7 +161,7 @@ export function GageRrPreflightPanel({
             {isRunning ? "점검 중" : "설계 사전점검"}
           </button>
           <button
-            className="secondary-button"
+            className="primary-button"
             disabled={isRunning || !canRunAnalysis}
             onClick={() => {
               onRunAnalysis();
@@ -217,6 +244,10 @@ export function GageRrPreflightPanel({
           ) : null}
           {result !== null ? (
             <>
+              <div className="notice-box" data-gage-policy>
+                {t("gage.followup.storedPolicy")}: {result.replicate_mode ?? "explicit_column"} / {result.interaction_selection?.requested_policy ?? "retain"}
+                {result.interaction_selection ? <> · alpha {formatMeasurement(result.interaction_selection.alpha_to_remove_interaction)} · p {formatProbability(result.interaction_selection.interaction_p_value)} · {result.interaction_selection.reason}</> : null}
+              </div>
               <div className="metadata-grid" aria-label="Gage R&R 결과 요약">
                 <span>사용 N</span>
                 <strong>
@@ -246,6 +277,7 @@ export function GageRrPreflightPanel({
               </div>
               <div className="table-wrap">
                 <table className="result-table">
+                  <caption>{t("gage.followup.finalAnova")}</caption>
                   <thead>
                     <tr>
                       <th>Source</th>
@@ -270,6 +302,11 @@ export function GageRrPreflightPanel({
                   </tbody>
                 </table>
               </div>
+              {result.full_anova_table ? <details><summary>{t("gage.followup.fullAnova")}</summary>
+                <div className="table-wrap"><table className="result-table"><thead><tr><th>Source</th><th>DF</th><th>SS</th><th>MS</th><th>F</th><th>p</th></tr></thead>
+                  <tbody>{result.full_anova_table.map((row) => <tr key={row.source}><td>{sourceLabel(row.source)}</td><td>{row.degrees_of_freedom}</td><td>{formatMeasurement(row.sum_of_squares)}</td><td>{formatMeasurement(row.mean_square)}</td><td>{formatMeasurement(row.f_statistic)}</td><td>{formatProbability(row.p_value)}</td></tr>)}</tbody>
+                </table></div>
+              </details> : null}
               <div className="table-wrap">
                 <table className="result-table">
                   <thead>
@@ -374,7 +411,7 @@ function componentLabel(component: string): string {
 }
 
 function formatNumber(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  return formatMeasurement(value);
 }
 
 function formatOptionalNumber(value: number | null): string {

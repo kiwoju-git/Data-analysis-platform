@@ -1,10 +1,10 @@
 # Response Surface Method Contract
 
-Last updated: 2026-10-21
+Last updated: 2026-11-01
 
 ## Scope
 
-`doe.response_surface` v0.4.0 is an available dedicated-API method for a
+`doe.response_surface` v0.5.0 is an available dedicated-API method for a
 Central Composite Design and hierarchical ordinary least-squares response
 surface. It does not execute through the generic analysis-run endpoint.
 
@@ -44,20 +44,23 @@ Not implemented in this slice:
 
 | Contract | Version |
 | --- | ---: |
-| method | `0.4.0` |
+| method | `0.5.0` |
 | explicit CCD design payload | `3` |
 | legacy design payload | `1`, `2` |
-| analysis envelope | `3` |
-| analysis config | `3` |
-| analysis result | `2` |
+| analysis envelope | `4` |
+| analysis config | `4` |
+| analysis result | `3` |
 | response revision | `1` |
-| API contract | `25` |
-| plot view / geometry schema | `1` |
-| SQLite metadata (plot-view asset kind migration) | `23` |
+| API contract | `27` |
+| plot bundle schema (new / legacy) | `2` / `1` |
+| plot view JSON (new / legacy) | `2` / `1` |
+| plot asset storage envelope / geometry schema | `1` |
+| SQLite metadata | `24` (unchanged by this follow-up) |
 
 The registry `METHOD_VERSIONS["doe.response_surface"]` is the method-version
 source of truth. The reader explicitly dispatches v0.3.0/v0.3.1 to the old
-envelope2/result1/config2 and v0.4.0 to envelope3/result2/config3. Existing
+envelope2/result1/config2, v0.4.0 to envelope3/result2/config3, and v0.5.0 to
+envelope4/result3/config4. Existing
 artifacts are read without rewriting their bytes or checksums. This does not
 claim support for earlier method versions not accepted by the current reader.
 Design payload schema 2 corrects only family metadata: new designs store family
@@ -116,8 +119,13 @@ All new transforms use `actual = center + scale * coded`:
 CCC preview shows the actual axial extent before explicit confirmation.
 Discrete-domain feasibility is checked, never rounded/clamped. No separate
 process-limit field is introduced; input bounds must not be mistaken for a
-second set of process limits in CCC. Optimizer default search bounds remain
-the declared input bounds, not an automatic CCC axial-box expansion.
+second set of process limits in CCC. New UI plot/search requests explicitly use
+`axial_bounds`, with `factorial_cube` and narrower `custom` alternatives. The
+shared resolver keeps input, cube, axial, observed and effective bounds separate;
+it never changes the stored center/scale or discrete lattice anchor. Old omitted
+optimizer bounds retain their original input-bound meaning by schema dispatch.
+An axial bounding box is not the observed convex hull; outside-hull warnings
+remain separate from bound/linear-constraint feasibility.
 
 Legacy schema1/2 generation and checksums retain the original formula:
 
@@ -198,6 +206,40 @@ Cook's distance, Durbin-Watson, Shapiro-Wilk where supported, and Q-Q points.
 Randomization and independence remain design assumptions the application cannot
 prove.
 
+### Stored Four-In-One Views (v0.5.0)
+
+The final selected model produces both raw and standardized residual views.
+Raw residuals are observed minus fitted, in response units; standardized residuals
+are residual / sqrt(MSE * (1 - leverage)), without units. Zero residual DF, zero
+or nonfinite MSE, and leverage indistinguishable from one produce unavailable
+standardized values, never fabricated zeroes. QR leverage uses the final matrix.
+
+Each view stores histogram bins, Q-Q points/reference, residual-versus-fitted and
+residual-versus-actual-run-order points. Histogram and Q-Q reference use every
+available final residual before the point display cap. Q-Q ties use actual
+run_order; standard_order is never substituted. Per-view total, available and
+displayed counts and unavailable reasons are explicit. The shared helper keeps
+the previous factorial bin/Blom quantile policies and its legacy payload shape.
+
+The RSM panel opens the raw view by default, with a raw/standardized selector,
+two-column/four-in-one layout, stored identities and shared keyboard/tooltip
+behavior. HTML renderer 1.5.0 emits both saved modes, response units and reference
+lines without fitting or loading source rows. Run-order ticks use stored integer
+run identities, including when only one or two points are displayed. Historical result1/2 remains
+readable, but a missing four-in-one payload is explicitly unavailable; its old
+diagnostic data and checksum remain unchanged.
+
+`observed_response_summary` records N/minimum/maximum over all used responses.
+It is descriptive metadata for optimizer initial suggestions, not specifications
+or inferred process preferences. It is not derived from a capped diagnostic set
+or a contour slice. New summary/view fields are required for result3 only.
+
+The four plot types and raw/standardized distinction follow the documented
+[Minitab RSM graph workflow](https://support.minitab.com/en-us/minitab/help-and-how-to/statistical-modeling/doe/how-to/response-surface/analyze-response-surface-design/perform-the-analysis/select-the-graphs-to-display/).
+Deleted residuals are not implemented. The numerical checks use independent QR
+and hand-checkable synthetic fixtures, not a supplied Minitab worksheet/output;
+no Minitab numerical parity is asserted.
+
 ## Stationary Point And Contour
 
 The stationary point solves the fitted gradient using the quadratic Hessian.
@@ -210,8 +252,9 @@ design bounds and inside the `[-1, +1]` factorial cube. The point is a model
 diagnostic, not an optimizer recommendation.
 
 The legacy `contour` payload remains readable with its first-pair/cube/center
-policy. New `plot_bundle` is the separately identified default first-pair view
-over declared actual input bounds, with other factors held at their centers.
+policy. New result3 `contour` and `plot_bundle` use the same explicit axial
+region, with other factors held at their centers. Old result2 bundles remain
+on their original declared input bounds; they are not relabeled as axial.
 `plot_overview` stores every main and pair conditional curve. Neither is a
 factorial marginal mean. Actual/coded coordinates use the saved center/scale.
 

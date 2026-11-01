@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { parseDoeResponsePaste } from "./doeResponsePaste";
 
 describe("factorial response paste", () => {
+  it("validates every run of a 31-run CCC for values and reversed explicit mapping", () => {
+    const runs = Array.from({ length: 31 }, (_, index) => index + 1);
+    const values = runs.map((run) => run === 1 ? "0" : run === 2 ? "-1.25" : `${run}e-6`);
+    const result = parseDoeResponsePaste(values.join("\n"), runs, { layout: "values", hasHeader: false });
+    const explicit = parseDoeResponsePaste("run_order,value\n" + runs.map((run, i) => `${run},${values[i]}`).reverse().join("\n"), runs, { layout: "run_order", hasHeader: true });
+    expect(result.ok).toBe(true);
+    expect(explicit).toEqual(result);
+    for (const invalid of [values.slice(1), [...values, "32"], [...values.slice(0, 30), "Infinity"]]) {
+      expect(parseDoeResponsePaste(invalid.join("\n"), runs, { layout: "values", hasHeader: false }).ok).toBe(false);
+    }
+  });
   it("maps one column by ascending run order without saving", () => {
     expect(parseDoeResponsePaste("94.1\n95.2\n", [2, 1], { layout: "values", hasHeader: false })).toEqual({
       ok: true, rows: [{ runOrder: 1, value: "94.1" }, { runOrder: 2, value: "95.2" }],

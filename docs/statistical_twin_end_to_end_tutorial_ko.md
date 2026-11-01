@@ -465,11 +465,16 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **Menu/module/method:** `분석` > `품질 관리` > `Gage R&R`
 - **Column role:** Measurement=`measurement_mpa`, Part=`part_id`, Operator=`operator_id`,
   Replicate=`replicate`.
-- **Option:** balanced crossed ANOVA, complete-case.
-- **클릭 순서:** 역할 > Gage preflight > balanced 확인 > 실행.
+- **Option:** balanced crossed ANOVA, complete-case, 고급 설정의 명시적 반복번호 열과
+  interaction `retain`. 아래 기준 수치는 이 기존 정책을 유지해 API로 다시 검증했다.
+- **클릭 순서:** 역할 > 고급 설정에서 반복번호 열/interaction 유지 선택 >
+  Gage preflight로 balanced 확인(선택 사항) > 실행.
+- **새 기본값:** 별도 반복번호 열 없이 세 열로 실행할 수 있고 interaction은 `auto_pool`이다.
+  자동 반복은 기존 행을 세는 방식이며 측정값을 생성하지 않는다. 기본 정책으로 실행한 결과를
+  아래 `retain` 기준값과 설정 확인 없이 비교하지 않는다.
 - **실행 전 확인:** 10 x 3 cells마다 replicate 2개가 있고 ID가 비어 있지 않은지 본다.
 <!-- TUTORIAL_RESULT:quality.gage_rr:start -->
-- **검증 source:** `quality.gage_rr` v0.1.0 · input SHA-256 `1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64`
+- **검증 source:** `quality.gage_rr` v0.2.0 · input SHA-256 `1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64`
 - **예상 실제 결과 (표시 반올림):**
   - N=60, balanced=true, repeatability %study=3.9713, reproducibility=10.5090
   - total Gage R&R=11.2344, part-to-part=99.3669, ndc=12
@@ -516,7 +521,7 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **클릭 순서:** CCD 생성 > coordinates 매칭 > 13 responses 저장 > quadratic model 실행.
 - **실행 전 확인:** center 반복과 pure error, factor region, response lock 안내를 확인한다.
 <!-- TUTORIAL_RESULT:doe.response_surface:start -->
-- **검증 source:** `doe.response_surface` v0.4.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+- **검증 source:** `doe.response_surface` v0.5.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - R-squared=0.99874, adjusted=0.99784, warnings=4
   - stationary `maximum`: temperature=76.4437, pressure=9.6718, predicted=90.9986, inside region=true
@@ -537,10 +542,12 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **Column role:** stored source RSM analysis, response goal maximize.
 - **Option:** source contour lower/target, design bounds 유지, seed 20260718,
   candidates 256, multi-start 8, max evaluations 5000, time 5000ms.
+- **기준값 재현:** 이 예제는 기존 contour 기반 선호기준을 명시적으로 유지한다. 새 화면의
+  전체 관측 반응 min/max 제안값과는 출처가 다르다. 이 CCF의 cube와 axial 범위는 같다.
 - **클릭 순서:** 저장된 RSM source 선택 > eligibility 확인/필요 warning 승인 > goal/bounds > 실행.
 - **실행 전 확인:** blocker 없음, advisory는 code별 명시 승인, constraints와 bounds를 검토한다.
 <!-- TUTORIAL_RESULT:doe.response_optimizer:start -->
-- **검증 source:** `doe.response_optimizer` v0.4.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
+- **검증 source:** `doe.response_optimizer` v0.5.0 · input SHA-256 `49889302f08c4f7ae6ec28ac2da31dbb4c4c638eaaa09d92ef8e86354d1b7cb2`
 - **예상 실제 결과 (표시 반올림):**
   - goal `maximize`, temperature=76.5545, pressure=9.6828, predicted=90.9982
   - composite desirability=1.0000, termination `search_completed`, global optimum guaranteed=false

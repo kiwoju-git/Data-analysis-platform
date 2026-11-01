@@ -53,6 +53,7 @@ from report_center_context import verify_report_center_context
 from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from doe_rsm_completion import verify_doe_rsm_completion
+from gage_followup import verify_gage_followup
 from doe_browser_zoom import verify_doe_browser_zoom
 from fractional_completion import verify_fractional_completion
 from desktop_resize import verify_desktop_resize
@@ -226,14 +227,14 @@ SUITE_STAGES = {
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "bo_noise_extension", "legacy_workflow",
+        "pilot_groups", "fractional_completion", "doe_rsm_completion", "gage_followup", "doe_browser_zoom", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "bo_noise_extension",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "gage_followup", "doe_browser_zoom", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
@@ -817,6 +818,9 @@ def run_browser_flow(
                     playwright, frontend_base_url, diagnostics.root,
                     rsm_receipt["design_id"], rsm_receipt["analysis_id"],
                 )
+            if "gage_followup" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify Gage three-column repeat/pooling/filter/report workflow")
+                verify_gage_followup(browser, frontend_base_url, diagnostics.root / "gage-followup")
             if "bo_noise_extension" in stages:
                 diagnostics.step("verify noise-aware target/batch/replicate visible workflow")
                 verify_bo_noise_extension(browser, frontend_base_url, diagnostics.root / "bo-noise-extension")

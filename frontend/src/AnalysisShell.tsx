@@ -240,6 +240,12 @@ export interface AnalysisShellProps {
   gageRrPreflightError?: string | null;
   gageRrReplicateColumnId?: string | null;
   gageRrReplicateColumns?: DatasetColumnResponse[];
+  gageRrReplicateMode?: "infer_from_rows" | "explicit_column";
+  gageRrInteractionPolicy?: "retain" | "auto_pool";
+  gageRrInteractionAlpha?: string;
+  onGageRrReplicateModeChange?: (value: "infer_from_rows" | "explicit_column") => void;
+  onGageRrInteractionPolicyChange?: (value: "retain" | "auto_pool") => void;
+  onGageRrInteractionAlphaChange?: (value: string) => void;
   gageRrResult?: GageRrResult | null;
   gageRunChartAnalysisResult?: AnalysisResultEnvelope | null;
   gageRunChartOrderColumnId?: string | null;
@@ -639,6 +645,12 @@ export function AnalysisShell({
   gageRrPreflightError = null,
   gageRrReplicateColumnId = null,
   gageRrReplicateColumns = [],
+  gageRrReplicateMode = "infer_from_rows",
+  gageRrInteractionPolicy = "auto_pool",
+  gageRrInteractionAlpha = "0.05",
+  onGageRrReplicateModeChange = () => undefined,
+  onGageRrInteractionPolicyChange = () => undefined,
+  onGageRrInteractionAlphaChange = () => undefined,
   gageRrResult = null,
   gageRunChartAnalysisResult = null,
   gageRunChartOrderColumnId = null,
@@ -1713,6 +1725,12 @@ export function AnalysisShell({
             if (method.method_id === "quality.gage_rr") {
               return (
                 <GageRrPreflightPanel
+                  replicateMode={gageRrReplicateMode}
+                  interactionPolicy={gageRrInteractionPolicy}
+                  interactionAlpha={gageRrInteractionAlpha}
+                  onReplicateModeChange={onGageRrReplicateModeChange}
+                  onInteractionPolicyChange={onGageRrInteractionPolicyChange}
+                  onInteractionAlphaChange={onGageRrInteractionAlphaChange}
                   analysisResult={gageRrAnalysisResult}
                   error={gageRrPreflightError}
                   filterValidationError={analysisFilterValidationError}

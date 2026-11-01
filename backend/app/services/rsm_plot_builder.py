@@ -9,7 +9,7 @@ import numpy as np
 
 from app.api.v1.schemas.doe import ResponseSurfaceDesignResponse, RsmFinalBasisResponse
 from app.api.v1.schemas.rsm_plots import RsmPlotBundle, RsmPlotSettings
-from app.statistics.doe_factor_domain import DoeFactorDomain
+from app.services.rsm_regions import region_for_design
 from app.statistics.rsm_model_basis import evaluate_rsm_basis
 from app.statistics.rsm_plot_geometry import (
     contour_geometry,
@@ -19,8 +19,11 @@ from app.statistics.rsm_plot_geometry import (
 )
 
 
-def default_rsm_plot_settings(design: ResponseSurfaceDesignResponse) -> RsmPlotSettings:
+def default_rsm_plot_settings(
+    design: ResponseSurfaceDesignResponse, *, legacy: bool = False
+) -> RsmPlotSettings:
     return RsmPlotSettings(
+        region_mode=None if legacy else "axial_bounds",
         x_factor_id="factor_1",
         y_factor_id="factor_2",
         held_actual_values={
@@ -31,10 +34,13 @@ def default_rsm_plot_settings(design: ResponseSurfaceDesignResponse) -> RsmPlotS
     )
 
 
-def default_rsm_overview_settings(design: ResponseSurfaceDesignResponse) -> list[RsmPlotSettings]:
+def default_rsm_overview_settings(
+    design: ResponseSurfaceDesignResponse, *, legacy: bool = False
+) -> list[RsmPlotSettings]:
     indices = list(range(len(design.factors)))
     return [
         RsmPlotSettings(
+            region_mode=None if legacy else "axial_bounds",
             plot_kind="main_effect" if len(pair) == 1 else "interaction",
             x_factor_id=f"factor_{pair[0] + 1}",
             y_factor_id=None if len(pair) == 1 else f"factor_{pair[1] + 1}",
@@ -60,6 +66,16 @@ def build_rsm_plot_bundle(
     ids = [f"factor_{index + 1}" for index in range(len(names))]
     if names != basis.factor_names or settings.x_factor_id not in ids:
         raise ValueError("doe_rsm_plot_source_invalid")
+    if settings.custom_bounds is not None and set(settings.custom_bounds) != set(ids):
+        raise ValueError("doe_rsm_region_bounds_invalid")
+    regions = region_for_design(
+        design,
+        settings.region_mode or "legacy_input_bounds_v1",
+        None
+        if settings.custom_bounds is None
+        else {names[ids.index(key)]: value for key, value in settings.custom_bounds.items()},
+        basis,
+    )
     x_index = ids.index(settings.x_factor_id)
     y_index = ids.index(settings.y_factor_id) if settings.y_factor_id in ids else None
     if settings.plot_kind != "main_effect" and y_index is None:
@@ -73,18 +89,14 @@ def build_rsm_plot_bundle(
     held = centers.copy()
     for key, value in settings.held_actual_values.items():
         index = ids.index(key)
-        factor = design.factors[index]
-        if not DoeFactorDomain(
-            factor.low, factor.high, factor.domain_kind, factor.step, factor.display_decimals
-        ).is_executable(value):
+        if not regions[index].is_executable(value):
             raise ValueError("doe_rsm_plot_hold_outside_region")
         held[index] = value
     coded_design = np.array([[run.coded_levels[name] for name in names] for run in design.runs])
     equations = design_hull_equations(coded_design)
 
     def coordinates(index: int) -> np.ndarray:
-        factor = design.factors[index]
-        return np.linspace(factor.low, factor.high, settings.grid_size)
+        return np.linspace(regions[index].lower, regions[index].upper, settings.grid_size)
 
     def display(index: int, value: float) -> float:
         return float(
@@ -97,8 +109,8 @@ def build_rsm_plot_bundle(
             "factor_id": ids[index],
             "name": names[index],
             "unit": factor.unit if settings.axis_scale == "actual" else None,
-            "minimum": display(index, factor.low),
-            "maximum": display(index, factor.high),
+            "minimum": display(index, regions[index].lower),
+            "maximum": display(index, regions[index].upper),
         }
 
     x_actual = coordinates(x_index)
@@ -116,11 +128,8 @@ def build_rsm_plot_bundle(
         traces: list[float | None] = [None]
         if settings.plot_kind == "interaction":
             assert y_index is not None
-            factor = design.factors[y_index]
-            traces = list(settings.trace_actual_values or [factor.low, factor.high])
-            domain = DoeFactorDomain(
-                factor.low, factor.high, factor.domain_kind, factor.step, factor.display_decimals
-            )
+            domain = regions[y_index]
+            traces = list(settings.trace_actual_values or [domain.lower, domain.upper])
             if len(set(traces)) != len(traces) or any(
                 value is None or not domain.is_executable(value) for value in traces
             ):
@@ -210,7 +219,15 @@ def build_rsm_plot_bundle(
             )
     return RsmPlotBundle.model_validate(
         {
-            "schema_version": 1,
+            "schema_version": 1 if settings.region_mode is None else 2,
+            **(
+                {
+                    "resolved_region": [item.payload() for item in regions],
+                    "region_policy_version": 1,
+                }
+                if settings.region_mode is not None
+                else {}
+            ),
             "settings": settings,
             "x_axis": axis(x_index),
             "y_axis": axis(y_index) if y_index is not None else None,

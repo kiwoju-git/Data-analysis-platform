@@ -1,4 +1,4 @@
-import type { DoeFinalModelWorkflow, DoeModelSelectionOptions, DoeModelSelectionResult, DoeFractionalEstimability } from "./doeModelWorkflow";
+import type { DoeFinalModelWorkflow, DoeModelSelectionOptions, DoeModelSelectionResult, DoeFractionalEstimability, DoeResidualView } from "./doeModelWorkflow";
 
 export interface TwoLevelNumericFactorRequest {
   factor_kind: "numeric";
@@ -669,8 +669,26 @@ export interface DoeResponseSurfaceDiagnosticPoint extends DoeFactorialDiagnosti
   point_type: "factorial" | "axial" | "center";
 }
 
+export interface RsmResidualView extends DoeResidualView {
+  n_total: number;
+  n_available: number;
+  n_displayed: number;
+  truncated: boolean;
+  unavailable_reason: string | null;
+}
+
+export interface RsmResidualPlots {
+  raw: RsmResidualView;
+  standardized: RsmResidualView;
+  n_total: number;
+  point_limit: number;
+  truncated: boolean;
+}
+
 export interface DoeResponseSurfaceAnalysisResult {
-  schema_version: 1 | 2;
+  schema_version: 1 | 2 | 3;
+  observed_response_summary?: { n: number; minimum: number; maximum: number; source: "all_used_responses" } | null;
+  residual_plots?: RsmResidualPlots | null;
   summary_type: "response_surface_analysis";
   method: "full_quadratic_ordinary_least_squares" | "hierarchical_response_surface_ordinary_least_squares";
   response: { name: string; unit: string | null };
@@ -837,6 +855,7 @@ export interface ResponseOptimizerSearchOptionsRequest {
 }
 
 export interface ResponseOptimizerCreateRequest {
+  region_mode?: "axial_bounds" | "factorial_cube" | "custom" | "legacy_input_bounds_v1";
   objectives: ResponseOptimizerObjectiveRequest[];
   factor_bounds: ResponseOptimizerFactorBoundRequest[];
   linear_constraints: ResponseOptimizerLinearConstraintRequest[];
@@ -864,7 +883,7 @@ export interface ResponseOptimizerSourceEligibility {
 }
 
 export interface ResponseOptimizerResult {
-  schema_version: 2;
+  schema_version: 2 | 3;
   summary_type: "response_optimizer";
   method: "derringer_suich_bounded_multistart_slsqp";
   model_policy: {
@@ -876,6 +895,9 @@ export interface ResponseOptimizerResult {
     point_predictions_only: boolean;
   };
   factor_region: {
+    region_mode?: "axial_bounds" | "factorial_cube" | "custom" | "legacy_input_bounds_v1" | null;
+    region_policy_version?: 1 | null;
+    resolved_bounds?: import("./rsmPlots").RsmRegionFactor[] | null;
     design_bounds: Array<{
       factor_name: string;
       lower: number;
@@ -921,6 +943,8 @@ export interface ResponseOptimizerResult {
       satisfied: boolean;
     }>;
     all_constraints_satisfied: boolean;
+    within_requested_bounds?: boolean | null;
+    outside_observed_hull?: boolean | null;
   };
   search: {
     algorithm: "seeded_candidates_plus_slsqp_multistart";
@@ -950,8 +974,8 @@ export interface ResponseOptimizerResponse {
   design_version_number: number;
   method_id: "doe.response_optimizer" | "regression.response_optimizer";
   method_version: string;
-  config_schema_version: 2;
-  result_schema_version: 2;
+  config_schema_version: 2 | 3;
+  result_schema_version: 2 | 3;
   config_sha256: string;
   design_sha256: string;
   source_analysis_ids: string[];

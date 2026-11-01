@@ -205,8 +205,8 @@ def test_response_optimizer_api_creates_and_restores_bounded_auditable_result(
     assert restored == created
     assert created["method_id"] == "doe.response_optimizer"
     assert created["method_version"] == METHOD_VERSIONS["doe.response_optimizer"]
-    assert created["config_schema_version"] == 2
-    assert created["result_schema_version"] == 2
+    assert created["config_schema_version"] == 3
+    assert created["result_schema_version"] == 3
     assert created["source_analysis_ids"] == [analysis["analysis_id"]]
     assert len(created["source_bundle_sha256"]) == 64
     assert len(created["config_sha256"]) == 64
@@ -215,7 +215,7 @@ def test_response_optimizer_api_creates_and_restores_bounded_auditable_result(
     assert created["package_versions"]["numpy"]
     assert created["package_versions"]["scipy"]
     result = created["result"]
-    assert result["schema_version"] == 2
+    assert result["schema_version"] == 3
     assert result["source_model_eligibility"]["eligible"] is True
     assert result["source_model_eligibility"]["acknowledgment_required"] is False
     assert result["acknowledged_source_warning_codes"] == []
@@ -249,6 +249,27 @@ def test_response_optimizer_restores_legacy_method_id_without_rewriting_record(
             legacy_result = json.loads(result_json)
             legacy_result["method_id"] = "regression.response_optimizer"
             legacy_result["method_version"] = "0.3.0"
+            legacy_result["config_schema_version"] = 2
+            legacy_result["result_schema_version"] = 2
+            legacy_result["result"]["schema_version"] = 2
+            for key in ("region_mode", "region_policy_version", "resolved_bounds"):
+                legacy_result["result"]["factor_region"].pop(key)
+            for key in ("within_requested_bounds", "outside_observed_hull"):
+                legacy_result["result"]["recommendation"].pop(key)
+            config = json.loads(
+                connection.execute(
+                    "SELECT config_json FROM experiment_design_analyses WHERE analysis_id = ?",
+                    (created["optimization_id"],),
+                ).fetchone()[0]
+            )
+            config["schema_version"] = 2
+            config["request"].pop("region_mode")
+            legacy_config_json = json.dumps(
+                config, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            )
+            legacy_result["config_sha256"] = hashlib.sha256(
+                legacy_config_json.encode("utf-8")
+            ).hexdigest()
             legacy_result_json = json.dumps(
                 legacy_result,
                 ensure_ascii=False,
@@ -258,13 +279,15 @@ def test_response_optimizer_restores_legacy_method_id_without_rewriting_record(
             legacy_result_sha256 = hashlib.sha256(legacy_result_json.encode("utf-8")).hexdigest()
             connection.execute(
                 "UPDATE experiment_design_analyses "
-                "SET method_id = ?, method_version = ?, result_json = ?, result_sha256 = ? "
+                "SET method_id = ?, method_version = ?, result_json = ?, "
+                "result_sha256 = ?, config_json = ? "
                 "WHERE analysis_id = ?",
                 (
                     "regression.response_optimizer",
                     "0.3.0",
                     legacy_result_json,
                     legacy_result_sha256,
+                    legacy_config_json,
                     created["optimization_id"],
                 ),
             )

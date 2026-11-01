@@ -165,6 +165,17 @@ def test_selected_rsm_basis_drives_all_fitted_and_contour_values():
     )
     h = np.diag(x @ np.linalg.inv(x.T @ x) @ x.T)
     y = np.array([run.response for run in runs])
+    mse = float(np.sum((y - expected) ** 2)) / (len(y) - 5)
+    np.testing.assert_allclose(
+        [row["residual"] for row in result["residual_plots"]["raw"]["points"]],
+        y - expected,
+        atol=1e-11,
+    )
+    np.testing.assert_allclose(
+        [row["residual"] for row in result["residual_plots"]["standardized"]["points"]],
+        (y - expected) / np.sqrt(mse * (1 - h)),
+        atol=1e-10,
+    )
     assert result["press"] == pytest.approx(
         float(np.sum(((y - expected) / (1 - h)) ** 2)), abs=1e-11
     )

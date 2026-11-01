@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from playwright.sync_api import Browser, Page, expect
 
 from app_readiness import diagnosed_page, wait_for_app_ready
+from optimizer_input import verify_optimizer_input, verify_optimizer_request_context
 
 
 def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict:
@@ -68,6 +69,7 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
             )
 
         names = [factor["name"] for factor in design["factors"]]
+        response_values: dict[int, str] = {}
         for run in design["runs"]:
             a, b, _, _ = [run["coded_levels"][name] for name in names]
             value = (
@@ -78,9 +80,20 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
                 + 5 * a * a
                 + 0.013 * (run["run_order"] % 5 - 2)
             )
-            page.get_by_label(f"Run {run['run_order']} 반응", exact=True).fill(
-                str(value)
-            )
+            response_values[run["run_order"]] = str(value)
+        page.get_by_role("button", name="반응값 붙여넣기", exact=True).click()
+        paste = page.locator(".doe-response-paste")
+        text = paste.get_by_role("textbox")
+        text.fill("\n".join(response_values[run] for run in sorted(response_values)[:-1]))
+        paste.get_by_role("button", name="미리보기", exact=True).click()
+        expect(paste.locator('[role="alert"]')).to_be_visible()
+        expect(page.get_by_label("Run 1 반응", exact=True)).to_have_value("")
+        text.fill("\n".join(response_values[run] for run in sorted(response_values)))
+        paste.get_by_role("button", name="미리보기", exact=True).click()
+        expect(paste.locator("tbody tr")).to_have_count(31)
+        paste.get_by_role("button", name="반응값 입력표에 적용", exact=True).click()
+        for run, value in response_values.items():
+            expect(page.get_by_label(f"Run {run} 반응", exact=True)).to_have_value(value)
         response_path = (
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/responses"
         )
@@ -90,6 +103,8 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         ) as pending:
             page.get_by_role("button", name="반응 저장", exact=True).click()
         assert pending.value.status == 200, pending.value.text()
+        expect(page.get_by_role("button", name="반응값 붙여넣기", exact=True)).to_be_disabled()
+        expect(page.get_by_label("Run 1 반응", exact=True)).to_be_disabled()
         analysis_path = (
             f"/api/v1/doe-designs/response-surface/{design['design_id']}/analyses"
         )
@@ -121,6 +136,16 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         )
         assert saved_analysis.status == 200
         original_bytes = saved_analysis.body()
+        residuals = page.locator(".factorial-residual-plots")
+        expect(residuals).to_have_attribute("open", "")
+        expect(residuals.locator(".chart-panel")).to_have_count(4)
+        assert result["residual_plots"]["n_total"] == 31
+        assert sum(row["count"] for row in result["residual_plots"]["raw"]["histogram"]) == 31
+        residuals.locator("select").select_option("standardized")
+        expect(residuals.locator("svg")).to_have_count(4)
+        verify_optimizer_input(page, output / "rsm-completion")
+        optimizer = verify_optimizer_request_context(page, base, design["design_id"])
+        receipt["optimization_id"] = optimizer["optimization_id"]
         plots = page.locator(".rsm-plot-options")
         expect(plots.locator('path[fill-rule="evenodd"]').first).to_be_visible()
         requests: list[str] = []
@@ -131,7 +156,8 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
             else None,
         )
         plots.get_by_role("combobox", name="X 요인", exact=True).select_option("factor_3")
-        held_value = design["factors"][0]["low"] / 2 + design["factors"][0]["high"] / 2
+        # CCC: hold outside the cube but inside the saved axial envelope.
+        held_value = design["coding"][names[0]]["center"] + 1.5 * design["coding"][names[0]]["scale"]
         plots.get_by_label("고정 실제값: " + names[0], exact=False).fill(
             str(held_value)
         )

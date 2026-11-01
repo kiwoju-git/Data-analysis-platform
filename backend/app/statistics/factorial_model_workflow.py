@@ -13,6 +13,7 @@ from scipy import stats  # type: ignore[import-untyped]
 from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
 from app.statistics.doe_matrix_rank import doe_least_squares
+from app.statistics.doe_residual_views import residual_view
 from app.statistics.term_block_model_selection import PRESS_LEVERAGE_TOLERANCE
 
 
@@ -253,48 +254,7 @@ def _anova_groups(
 def _residual_view(
     values: np.ndarray, fitted: np.ndarray, orders: Sequence[int], limit: int
 ) -> dict[str, Any]:
-    valid = [int(index) for index in np.flatnonzero(np.isfinite(values))]
-    finite = values[valid]
-    bins = []
-    qq = []
-    reference = None
-    if len(finite):
-        counts, edges = np.histogram(
-            finite, bins=min(30, max(5, int(np.ceil(np.sqrt(len(finite))))))
-        )
-        bins = [
-            {"lower": float(edges[i]), "upper": float(edges[i + 1]), "count": int(count)}
-            for i, count in enumerate(counts)
-        ]
-        sorted_indices = sorted(valid, key=lambda index: (values[index], orders[index]))
-        quantiles = stats.norm.ppf((np.arange(1, len(finite) + 1) - 0.375) / (len(finite) + 0.25))
-        ordered_values = values[sorted_indices]
-        slope, intercept = (
-            np.polyfit(quantiles, ordered_values, 1) if len(finite) > 1 else (0.0, finite[0])
-        )
-        reference = {"slope": float(slope), "intercept": float(intercept)}
-        qq = [
-            {
-                "run_order": orders[index],
-                "theoretical_quantile": float(quantiles[rank]),
-                "residual": float(values[index]),
-            }
-            for rank, index in enumerate(sorted_indices)
-        ][:limit]
-    return {
-        "n": len(finite),
-        "histogram": bins,
-        "qq_points": qq,
-        "reference_line": reference,
-        "points": [
-            {
-                "run_order": orders[index],
-                "fitted": float(fitted[index]),
-                "residual": float(values[index]),
-            }
-            for index in valid[:limit]
-        ],
-    }
+    return residual_view(values, fitted, orders, limit)
 
 
 def _cell_predictions(

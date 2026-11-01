@@ -33,7 +33,9 @@ import {
   type DoeFactorDomainDraft,
 } from "./doe/factorDomain";
 import { ResponseOptimizerPanel } from "./ResponseOptimizerPanel";
-import { parseRsmResponseDraft } from "./doe/rsmResponseDraft";
+import { parseRsmResponseDraft, validateRsmPasteApplication } from "./doe/rsmResponseDraft";
+import { DoeResponsePasteDialog } from "./doe/DoeResponsePasteDialog";
+import { formatMeasurement as formatNumber, formatProbability } from "./statisticalNumberFormat";
 import { createRsmRequestContext } from "./doe/rsmRequestContext";
 import { t } from "./i18n/translate";
 import { recommendedCenterPoints, strictRsmInteger, type CcdType } from "./doe/rsmDesignDraft";
@@ -44,6 +46,7 @@ import { RsmModelSelectionResults } from "./doe/RsmModelSelectionResults";
 import type { RsmTermPreset } from "./api/types/doe";
 import type { DoeModelSelectionOptions } from "./api/types/doeModelWorkflow";
 import { CcdBoundsPreview } from "./doe/CcdBoundsPreview";
+import { DoeResidualPlots } from "./doe/DoeResidualPlots";
 
 interface FactorDraft extends DoeFactorDomainDraft {
   id: number;
@@ -96,6 +99,7 @@ export function ResponseSurfacePanel() {
   const [isRestoring, setIsRestoring] = useState(false);
   const [historicalRevision, setHistoricalRevision] = useState(false);
   const nextFactorId = useRef(3);
+  const responseDraftRevision = useRef(0);
   const [savedRoute, setSavedRoute] = useState(() =>
     typeof window === "undefined" ? "" : window.location.search);
 
@@ -194,6 +198,7 @@ export function ResponseSurfacePanel() {
   );
 
   function invalidateSource(responseChanged = false) {
+    responseDraftRevision.current += 1;
     requests.invalidate();
     setIsCreating(false);
     setIsSaving(false);
@@ -305,7 +310,8 @@ export function ResponseSurfacePanel() {
   };
 
   const saveResponses = async () => {
-    if (design === null) return;
+    if (design === null || isSaving || isRestoring || isAnalyzing ||
+      ((responseRevisionId !== null || design.status === "analyzed" || historicalRevision) && !correctionMode)) return;
     const trimmedName = responseName.trim();
     if (trimmedName.length === 0) {
       setError("doe_rsm_response_name_required");
@@ -722,6 +728,17 @@ export function ResponseSurfacePanel() {
           responseName={responseName}
           responseUnit={responseUnit}
           responseValues={responseValues}
+          responseSourceKey={JSON.stringify([design.design_id, design.design_version_id, design.design_sha256,
+            responseRevisionId, responseRevisionSha256, correctionMode, responseDraftRevision.current])}
+          onApplyResponseValues={(values, sourceToken) => {
+            const token = JSON.stringify([design.design_id, design.design_version_id, design.design_sha256,
+              responseRevisionId, responseRevisionSha256, correctionMode, responseDraftRevision.current]);
+            const editable = !isSaving && !isRestoring && !isAnalyzing &&
+              (correctionMode || (responseRevisionId === null && design.status !== "analyzed" && !historicalRevision));
+            if (!validateRsmPasteApplication(sourceToken, token, editable, design.runs.map((run) => run.run_order), values)) return;
+            invalidateSource(true);
+            setResponseValues({ ...values });
+          }}
           responsesSaved={responsesSaved}
           responseRevisionNumber={responseRevisionNumber}
           responseRevisionSha256={responseRevisionSha256}
@@ -781,6 +798,8 @@ interface ResponseEntryProps {
   responseName: string;
   responseUnit: string;
   responseValues: Record<number, string>;
+  responseSourceKey?: string;
+  onApplyResponseValues?: (values: Record<number, string>, sourceToken: string) => void;
   responsesSaved: boolean;
   responseRevisionNumber: number | null;
   responseRevisionSha256: string | null;
@@ -809,6 +828,8 @@ export function ResponseSurfaceResponseEntry({
   responseName,
   responseUnit,
   responseValues,
+  responseSourceKey,
+  onApplyResponseValues,
   responsesSaved,
   responseRevisionNumber,
   responseRevisionSha256,
@@ -827,7 +848,8 @@ export function ResponseSurfaceResponseEntry({
   onAnalyze,
   modelSettings, canAnalyze = true, historicalRevision = false, isRestoring = false, onSelectRevision,
 }: ResponseEntryProps) {
-  const responsesLocked = (design.status === "analyzed" || historicalRevision) && !correctionMode;
+  const responsesLocked = (responseRevisionNumber !== null || design.status === "analyzed" || historicalRevision) && !correctionMode;
+  const editingDisabled = responsesLocked || isSaving || isRestoring || isAnalyzing;
   return (
     <section className="analysis-result-section" aria-labelledby="rsm-response-title" data-rsm-response-entry>
       <div className="panel-heading compact-heading">
@@ -837,6 +859,9 @@ export function ResponseSurfaceResponseEntry({
         </div>
         <span className="status-pill status-ready">{design.status}</span>
       </div>
+      {onApplyResponseValues ? <DoeResponsePasteDialog disabled={editingDisabled}
+        sourceKey={responseSourceKey}
+        runOrders={design.runs.map((run) => run.run_order)} onApply={onApplyResponseValues} /> : null}
       <div className="metadata-grid" aria-label="CCD 설계 요약">
         <span>Run</span>
         <strong>{design.run_count}</strong>
@@ -855,7 +880,7 @@ export function ResponseSurfaceResponseEntry({
         <label>
           <span>반응 이름</span>
           <input
-            disabled={responsesLocked || correctionMode}
+            disabled={editingDisabled || correctionMode}
             value={responseName}
             onChange={(event) => onResponseNameChange(event.currentTarget.value)}
           />
@@ -863,7 +888,7 @@ export function ResponseSurfaceResponseEntry({
         <label>
           <span>반응 단위</span>
           <input
-            disabled={responsesLocked}
+            disabled={editingDisabled}
             value={responseUnit}
             onChange={(event) => onResponseUnitChange(event.currentTarget.value)}
           />
@@ -897,7 +922,7 @@ export function ResponseSurfaceResponseEntry({
                 <td>
                   <input
                     aria-label={`Run ${run.run_order} 반응`}
-                    disabled={responsesLocked}
+                    disabled={editingDisabled}
                     inputMode="decimal"
                     value={responseValues[run.run_order] ?? ""}
                     onChange={(event) => onResponseValueChange(run.run_order, event.currentTarget.value)}
@@ -910,7 +935,7 @@ export function ResponseSurfaceResponseEntry({
       </div>
       {responsesLocked ? (
         <div className="notice-box notice-warning" role="status">
-          분석이 완료되어 현재 revision은 읽기 전용입니다. 수정은 새 revision으로만 저장되며 과거 분석은 유지됩니다.
+          {t("doe.rsm.savedReadOnly")}
         </div>
       ) : correctionMode ? (
         <div className="notice-box notice-warning" role="status">
@@ -926,13 +951,13 @@ export function ResponseSurfaceResponseEntry({
         <button
           type="button"
           className="secondary-button"
-          disabled={isSaving || responsesLocked}
+          disabled={editingDisabled}
           onClick={onSave}
         >
           {isSaving ? "저장 중" : correctionMode ? "새 revision 저장" : "반응 저장"}
         </button>
         {(responseRevisionNumber !== null || design.status === "analyzed" || historicalRevision) && !correctionMode ? (
-          <button type="button" className="secondary-button" onClick={onStartCorrection}>
+          <button type="button" className="secondary-button" disabled={isSaving || isRestoring || isAnalyzing} onClick={onStartCorrection}>
             새 revision으로 수정
           </button>
         ) : null}
@@ -956,6 +981,8 @@ export function ResponseSurfaceResponseEntry({
       ) : null}
       {revisionHistory !== null ? (
         <div className="table-wrap" aria-label="RSM response revision history">
+          {onRetryHistory ? <button type="button" className="secondary-button"
+            disabled={isLoadingHistory || isSaving || isRestoring} onClick={onRetryHistory}>{t("doe.rsm.refreshHistory")}</button> : null}
           <table className="result-table">
             <thead>
               <tr>
@@ -1052,7 +1079,7 @@ function ResponseSurfaceResult({ analysis, design }: {
                 <td>{term.kind}</td>
                 <td>{formatNumber(term.coefficient)}</td>
                 <td>{formatNullable(term.standard_error)}</td>
-                <td>{formatNullable(term.p_value)}</td>
+                <td>{formatProbability(term.p_value)}</td>
                 <td>{formatNullable(term.partial_sum_squares)}</td>
               </tr>
             ))}
@@ -1061,15 +1088,18 @@ function ResponseSurfaceResult({ analysis, design }: {
       </div>
       <div className="metadata-grid" aria-label="반응표면 진단 요약">
         <span>Lack-of-fit p</span>
-        <strong>{formatNullable(result.anova.lack_of_fit.lack_of_fit.p_value)}</strong>
+        <strong>{formatProbability(result.anova.lack_of_fit.lack_of_fit.p_value)}</strong>
         <span>Shapiro-Wilk p</span>
-        <strong>{formatNullable(result.diagnostics.shapiro_wilk.p_value)}</strong>
+        <strong>{formatProbability(result.diagnostics.shapiro_wilk.p_value)}</strong>
         <span>High leverage</span>
         <strong>{result.diagnostics.high_leverage_count}</strong>
         <span>High Cook's distance</span>
         <strong>{result.diagnostics.high_cooks_distance_count}</strong>
       </div>
       <DoeLackOfFitNotice lack={result.anova.lack_of_fit} />
+      {result.residual_plots ? <DoeResidualPlots plots={result.residual_plots}
+        sourceKey={`${analysis.analysis_id}:${analysis.response_revision_sha256}`}
+        responseUnit={result.response.unit} defaultOpen /> : <p className="notice-box">{t("doe.residual.legacy")}</p>}
       {result.warnings.map((warning) => (
         <div className="notice-box notice-warning rsm-result-warning" key={warning}>{warning === "doe_rsm_post_selection_inference_exploratory" ? t("doe.selection.exploratory") : warning}</div>
       ))}
@@ -1150,10 +1180,6 @@ function updateFactor(
 
 function errorCode(error: unknown): string {
   return error instanceof Error ? error.message : "doe_rsm_unknown_error";
-}
-
-function formatNumber(value: number): string {
-  return Number.isFinite(value) ? value.toPrecision(6).replace(/\.?0+$/, "") : "-";
 }
 
 function formatNullable(value: number | null): string {

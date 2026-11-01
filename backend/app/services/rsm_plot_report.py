@@ -42,6 +42,56 @@ def rsm_plot_report(bundle: RsmPlotBundle, locale: ReportLocale) -> str:
         [text("고정 요인", "Held factor"), text("실제값", "Actual value")],
         list(bundle.held_actual_values.items()),
     )
+    policy = bundle.settings.region_mode or "legacy_input_bounds_v1"
+    region = "<p>" + escape(text("범위 정책: ", "Region policy: ") + policy) + "</p>"
+    if bundle.resolved_region is not None:
+        region += report_table(
+            [
+                text("요인", "Factor"),
+                text("입력 하한", "Input lower"),
+                text("입력 상한", "Input upper"),
+                text("모서리 하한", "Cube lower"),
+                text("모서리 상한", "Cube upper"),
+                text("축점 하한", "Axial lower"),
+                text("축점 상한", "Axial upper"),
+                text("적용 하한", "Applied lower"),
+                text("적용 상한", "Applied upper"),
+                "Center",
+                "Scale",
+            ],
+            [
+                (
+                    item.factor_name,
+                    item.input_low,
+                    item.input_high,
+                    item.factorial_low,
+                    item.factorial_high,
+                    item.axial_low,
+                    item.axial_high,
+                    item.lower,
+                    item.upper,
+                    item.center,
+                    item.scale,
+                )
+                for item in bundle.resolved_region
+            ],
+        )
+    if any(item.domain_kind == "discrete_numeric" for item in bundle.resolved_region or []):
+        region += (
+            '<p data-rsm-discrete-interpolation="true">'
+            + escape(
+                text(
+                    "이산 요인의 곡선과 격자는 연속 모형의 보간값이며, 모든 표시 좌표가 "
+                    "실행 가능한 수준은 아닙니다. 실행값은 원래 입력 하한을 기준으로 한 "
+                    "간격 격자를 따라야 합니다.",
+                    "Curves and grids for discrete factors interpolate the continuous model; "
+                    "not every displayed coordinate is executable. Run settings must follow "
+                    "the step lattice anchored at the original input lower bound.",
+                )
+            )
+            + "</p>"
+        )
+    held = region + held
     note = (
         "<p>"
         + escape(

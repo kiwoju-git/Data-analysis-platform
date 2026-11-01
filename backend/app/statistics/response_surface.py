@@ -19,6 +19,7 @@ from app.statistics.doe_factor_domain import (
     factor_domain_payload,
     validate_factor_domain,
 )
+from app.statistics.doe_residual_views import residual_view, standardized_residuals
 from app.statistics.rsm_coding import (
     CcdType,
     RsmCodingError,
@@ -35,6 +36,7 @@ from app.statistics.rsm_model_basis import (
     rsm_basis_terms,
 )
 from app.statistics.rsm_model_workflow import select_rsm_terms
+from app.statistics.rsm_region import RsmRegionInput, resolve_rsm_region
 from app.statistics.term_block_model_selection import DoeSelectionOptions, TermBlockSelectionError
 
 RESPONSE_SURFACE_LEGACY_DESIGN_SCHEMA_VERSION: Final[Literal[1]] = 1
@@ -454,7 +456,7 @@ def calculate_response_surface_analysis(
         df_residual=df_residual,
         parameter_count=parameter_count,
     )
-    diagnostics = _diagnostics(
+    diagnostics, residual_plots = _diagnostics(
         ordered_runs,
         matrix,
         response,
@@ -472,6 +474,7 @@ def calculate_response_surface_analysis(
         alpha=alpha,
         grid_size=contour_grid_size,
         coding=coding_by_name,
+        runs=ordered_runs,
     )
     warnings = _analysis_warnings(
         df_residual=df_residual,
@@ -499,7 +502,7 @@ def calculate_response_surface_analysis(
         else None
     )
     return {
-        "schema_version": 2
+        "schema_version": 3
         if coding_by_name is not None
         else RESPONSE_SURFACE_RESULT_SCHEMA_VERSION,
         "summary_type": "response_surface_analysis",
@@ -572,6 +575,19 @@ def calculate_response_surface_analysis(
         "stationary_point": stationary,
         "contour": contour,
         "diagnostics": diagnostics,
+        **(
+            {
+                "residual_plots": residual_plots,
+                "observed_response_summary": {
+                    "n": n_observations,
+                    "minimum": float(np.min(response)),
+                    "maximum": float(np.max(response)),
+                    "source": "all_used_responses",
+                },
+            }
+            if coding_by_name is not None
+            else {}
+        ),
         "warnings": warnings,
         **(
             {
@@ -839,15 +855,20 @@ def _diagnostics(
     sse: float,
     df_residual: int,
     point_limit: int,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     parameter_count = matrix.shape[1]
-    leverage = np.diag(matrix @ np.linalg.inv(matrix.T @ matrix) @ matrix.T)
+    q, _ = np.linalg.qr(matrix, mode="reduced")
+    leverage = np.sum(q * q, axis=1)
     residual_ms = sse / df_residual if df_residual > 0 else None
-    standardized: list[float | None] = []
+    standardized_array, unavailable = standardized_residuals(
+        residuals,
+        leverage,
+        residual_ms,
+        df_residual,
+    )
+    standardized = [float(value) if np.isfinite(value) else None for value in standardized_array]
     cooks: list[float | None] = []
-    for residual, hat in zip(residuals, leverage, strict=True):
-        denominator = residual_ms * max(np.finfo(float).eps, 1.0 - float(hat)) if residual_ms else 0
-        standardized_value = float(residual / sqrt(denominator)) if denominator > 0 else None
+    for standardized_value, hat in zip(standardized, leverage, strict=True):
         cook = (
             standardized_value**2
             * float(hat)
@@ -855,8 +876,7 @@ def _diagnostics(
             if standardized_value is not None
             else None
         )
-        standardized.append(standardized_value)
-        cooks.append(cook)
+        cooks.append(cook if cook is not None and isfinite(cook) else None)
     theoretical, ordered = stats.probplot(residuals, dist="norm", fit=False)
     shapiro_statistic = None
     shapiro_p_value = None
@@ -864,7 +884,7 @@ def _diagnostics(
         shapiro = stats.shapiro(residuals)
         shapiro_statistic = float(shapiro.statistic)
         shapiro_p_value = float(shapiro.pvalue)
-    return {
+    diagnostics = {
         "residual_mean": float(np.mean(residuals)),
         "residual_min": float(np.min(residuals)),
         "residual_max": float(np.max(residuals)),
@@ -918,6 +938,22 @@ def _diagnostics(
             for x, y in zip(theoretical[:point_limit], ordered[:point_limit], strict=True)
         ],
     }
+    orders = [run.run_order for run in runs]
+    plots = {
+        "raw": residual_view(residuals, fitted, orders, point_limit, include_availability=True),
+        "standardized": residual_view(
+            standardized_array,
+            fitted,
+            orders,
+            point_limit,
+            include_availability=True,
+            unavailable_reason=unavailable or "standardization_denominator_unavailable",
+        ),
+        "n_total": len(runs),
+        "point_limit": point_limit,
+        "truncated": len(runs) > point_limit,
+    }
+    return diagnostics, plots
 
 
 def _stationary_point(
@@ -989,13 +1025,40 @@ def _contour_grid(
     alpha: float,
     grid_size: int,
     coding: dict[str, RsmFactorCoding] | None = None,
+    runs: Sequence[ResponseSurfaceAnalysisRun] = (),
 ) -> dict[str, Any]:
     x_factor, y_factor = factors[0], factors[1]
     held = {factor.name: 0.0 for factor in factors[2:]}
-    grid = np.linspace(-1.0, 1.0, grid_size)
+    extent = alpha if coding is not None else 1.0
+    x_grid = y_grid = np.linspace(-extent, extent, grid_size)
+    if coding is not None:
+        regions = resolve_rsm_region(
+            [RsmRegionInput(f.name, f.low, f.high, f.domain_kind, f.step) for f in factors],
+            alpha=alpha,
+            coding=coding,
+            actual_runs=[
+                {
+                    f.name: coding[f.name].center + coding[f.name].scale * run.coded_levels[f.name]
+                    for f in factors
+                }
+                for run in runs
+            ],
+            coded_runs=[run.coded_levels for run in runs],
+            mode="axial_bounds",
+        )
+        x_grid = np.linspace(
+            (regions[0].lower - regions[0].center) / regions[0].scale,
+            (regions[0].upper - regions[0].center) / regions[0].scale,
+            grid_size,
+        )
+        y_grid = np.linspace(
+            (regions[1].lower - regions[1].center) / regions[1].scale,
+            (regions[1].upper - regions[1].center) / regions[1].scale,
+            grid_size,
+        )
     points: list[dict[str, float]] = []
-    for y_coded in grid:
-        for x_coded in grid:
+    for y_coded in y_grid:
+        for x_coded in x_grid:
             coded = {factor.name: 0.0 for factor in factors}
             coded[x_factor.name] = float(x_coded)
             coded[y_factor.name] = float(y_coded)
@@ -1015,7 +1078,12 @@ def _contour_grid(
         "y_factor": y_factor.name,
         "held_coded_levels": held,
         "grid_size": grid_size,
-        "coded_range": [-1.0, 1.0],
+        "coded_range": [-extent, extent],
+        **(
+            {"region_mode": "axial_bounds", "region_policy_version": 1}
+            if coding is not None
+            else {}
+        ),
         "points": points,
     }
 

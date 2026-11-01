@@ -1451,9 +1451,9 @@ def test_response_surface_analysis_api_persists_quadratic_model_and_stationary_p
     DoeResponseSurfaceAnalysisResponse.model_validate(analysis)
     assert analysis["method_id"] == "doe.response_surface"
     assert analysis["method_version"] == METHOD_VERSIONS["doe.response_surface"]
-    assert analysis["method_version"] == "0.4.0"
-    assert analysis["analysis_schema_version"] == 3
-    assert analysis["result"]["schema_version"] == 2
+    assert analysis["method_version"] == "0.5.0"
+    assert analysis["analysis_schema_version"] == 4
+    assert analysis["result"]["schema_version"] == 3
     assert analysis["response_revision_number"] == 1
     assert analysis["response_revision_sha256"] == analysis["response_sha256"]
     assert analysis["build_commit"] == "test-rsm-build"
@@ -6381,7 +6381,7 @@ def test_analysis_run_executes_gage_rr_from_balanced_dataset_version(tmp_path) -
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.gage_rr",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["quality.gage_rr"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "measurement": version["columns"][0]["column_id"],
@@ -6536,7 +6536,7 @@ def test_analysis_run_rejects_unbalanced_gage_rr_without_result_payload(tmp_path
             "/api/v1/analysis-runs",
             json={
                 "method_id": "quality.gage_rr",
-                "method_version": "0.1.0",
+                "method_version": METHOD_VERSIONS["quality.gage_rr"],
                 "dataset_version_id": version["version_id"],
                 "roles": {
                     "measurement": version["columns"][0]["column_id"],

@@ -5,9 +5,10 @@ import type { DoeResponseSurfaceAnalysisResponse, ResponseSurfaceDesignResponse 
 import type { RsmPlotBundle, RsmPlotSource, RsmPlotView } from "../api/types/rsmPlots";
 import { RsmPlotOptions } from "./RsmPlotOptions";
 import { DoeModelSelectionSettings } from "./DoeModelSelectionSettings";
+import { useResponseOptimizerRun } from "./useResponseOptimizerRun";
 
 const reads = vi.hoisted(() => ({
-  design: vi.fn(), analysis: vi.fn(), revision: vi.fn(), history: vi.fn(),
+  design: vi.fn(), analysis: vi.fn(), revision: vi.fn(), history: vi.fn(), optimizer: vi.fn(),
 }));
 const plots = vi.hoisted(() => ({ source: vi.fn(), list: vi.fn(), restore: vi.fn() }));
 vi.mock("../api", async (original) => ({
@@ -16,6 +17,7 @@ vi.mock("../api", async (original) => ({
   fetchResponseSurfaceAnalysis: reads.analysis,
   fetchDoeResponseRevision: reads.revision,
   fetchDoeResponseRevisions: reads.history,
+  createResponseOptimizer: reads.optimizer,
 }));
 vi.mock("./RsmModelTerms", async (original) => ({
   ...await original<typeof import("./RsmModelTerms")>(),
@@ -51,6 +53,7 @@ class RestoreRunner {
     runners.push(this); this.render();
   }
   act(action: () => void) { action(); this.render(); }
+  rerender() { this.pending = true; this.render(); }
   async flush() {
     for (let index = 0; index < 12; index += 1) { await Promise.resolve(); this.render(); }
   }
@@ -127,6 +130,48 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+describe("optimizer source/draft request ownership", () => {
+  it("ignores stale success/error/finally after edits and source A-B-A", async () => {
+    let source = "A";
+    let hook!: ReturnType<typeof useResponseOptimizerRun>;
+    const runner = new RestoreRunner(() => { hook = useResponseOptimizerRun(source); return null; });
+    const old = deferred<import("../api").ResponseOptimizerResponse>();
+    const next = deferred<import("../api").ResponseOptimizerResponse>();
+    reads.optimizer.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const request = { objectives: [], factor_bounds: [], linear_constraints: [], search: {
+      random_seed: 1, random_candidate_count: 32, multi_start_count: 1, max_iterations: 10,
+      max_evaluations: 100, time_budget_ms: 1000,
+    }, acknowledged_source_warning_codes: [] };
+    const callback = vi.fn();
+    runner.act(() => { void hook.run("designA", request, callback); });
+    expect(hook.isOptimizing).toBe(true);
+    runner.act(() => hook.invalidate());
+    expect(hook.isOptimizing).toBe(false);
+    expect(hook.isStale).toBe(true);
+    source = "B"; runner.rerender(); source = "A"; runner.rerender();
+    runner.act(() => { void hook.run("designA", request, callback); });
+    old.reject(new Error("obsolete")); await runner.flush();
+    expect(hook.error).toBeNull(); expect(hook.isOptimizing).toBe(true);
+    const result = { optimization_id: "new" } as import("../api").ResponseOptimizerResponse;
+    next.resolve(result); await runner.flush();
+    expect(hook.optimization).toBe(result); expect(hook.isOptimizing).toBe(false);
+    expect(callback).toHaveBeenCalledExactlyOnceWith(result);
+    runner.act(() => hook.invalidate());
+    expect(hook.optimization).toBeNull();
+  });
+
+  it("ignores a successful server commit after unmount without a delete or retry", async () => {
+    let hook!: ReturnType<typeof useResponseOptimizerRun>;
+    const runner = new RestoreRunner(() => { hook = useResponseOptimizerRun("source"); return null; });
+    const pending = deferred<import("../api").ResponseOptimizerResponse>();
+    reads.optimizer.mockReturnValueOnce(pending.promise);
+    const callback = vi.fn();
+    runner.act(() => { void hook.run("design", {} as import("../api").ResponseOptimizerCreateRequest, callback); });
+    runner.unmount(); pending.resolve({ optimization_id: "committed" } as import("../api").ResponseOptimizerResponse);
+    await runner.flush(); expect(callback).not.toHaveBeenCalled(); expect(reads.optimizer).toHaveBeenCalledTimes(1);
+  });
+});
+
 const DESIGN_A = "11111111-1111-4111-8111-111111111111";
 const DESIGN_B = "22222222-2222-4222-8222-222222222222";
 const ANALYSIS_A = "33333333-3333-4333-8333-333333333333";
@@ -139,7 +184,7 @@ const sourceA = {
     { name: "A", low: -1, high: 1, unit: null },
     { name: "B", low: -1, high: 1, unit: null },
   ],
-  options: { ccd_type: "inscribed", center_points: 5, randomize: false, randomization_seed: 7 },
+  options: { ccd_type: "inscribed", alpha: Math.SQRT2, center_points: 5, randomize: false, randomization_seed: 7 },
   runs: [],
 };
 const analysisA = {
