@@ -17,13 +17,13 @@ Risks: numerical degeneracy and leverage; pooling changes the inferential model;
 
 | Item | Source-confirmed | Reproduced | Fixed | Unit | API | Browser | Release archive |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Optimizer deferred event access, coercion and draft reset | yes | parser/hook fixtures; original browser symptom unverified | implemented | strict draft/restore/stale success/error/finally tests | source/optimizer API tests pass | unverified | unverified |
-| RSM/optimizer trailing-zero formatter | yes | Node probe below | implemented | semantic numeric/interval tests pass | stored numeric values unchanged | unverified | unverified |
-| RSM full response paste | missing connection | 31-run/invalid/source-change fixtures | implemented | parser/atomic application tests pass | immutable revision paths tested | unverified | unverified |
-| Final-model RSM residual 4-in-1 | missing view connection | independent OLS/degenerate/point-limit fixtures | implemented | 26 backend and 9 SSR tests pass | new/legacy read/report tested | unverified | unverified |
-| CCC axial/cube/custom region and legacy semantics | yes | 4-factor 10..20 cube / 5..25 axial fixture | implemented | 9 domain tests pass | 35 plot/storage/security plus 14 existing optimizer API tests pass | unverified | unverified |
-| Gage three-column preparation/filter contract | yes | synthetic 10x3x2 and failure fixtures | implemented | included in 51 Gage tests | filtered preflight/run, restore, report tested | unverified | unverified |
-| Gage explicit interaction pooling | retain-only confirmed | weak/strong interaction independent reference | implemented | full/reduced SS/DF/components tests pass | legacy explicit/retain schema1 read unchanged | unverified | unverified |
+| Optimizer deferred event access, coercion and draft reset | yes | parser/hook fixtures; original browser symptom unverified | implemented | strict draft/restore/stale success/error/finally tests | source/optimizer API tests pass | Linux workflows, below | unverified |
+| RSM/optimizer trailing-zero formatter | yes | Node probe below | implemented | semantic numeric/interval tests pass | stored numeric values unchanged | Linux keyboard/result checks | unverified |
+| RSM full response paste | missing connection | 31-run/invalid/source-change fixtures | implemented | parser/atomic application tests pass | immutable revision paths tested | Linux 31-run form | unverified |
+| Final-model RSM residual 4-in-1 | missing view connection | independent OLS/degenerate/point-limit fixtures | implemented | 26 backend and 9 SSR tests pass | new/legacy read/report tested | Linux raw/standardized | unverified |
+| CCC axial/cube/custom region and legacy semantics | yes | 4-factor 10..20 cube / 5..25 axial fixture | implemented | 11 domain tests pass | 35 plot/storage/security plus 14 existing optimizer API tests pass | Linux custom hold/view/restore | unverified |
+| Gage three-column preparation/filter contract | yes | synthetic 10x3x2 and failure fixtures | implemented | included in 51 Gage tests | filtered preflight/run, restore, report tested | Linux CSV/form/filter/restore | unverified |
+| Gage explicit interaction pooling | retain-only confirmed | weak/strong interaction independent reference | implemented | full/reduced SS/DF/components tests pass | legacy explicit/retain schema1 read unchanged | Linux both policies and HTML | unverified |
 
 Source inspection is not browser reproduction. A past CI result is not evidence for this change. Native checks, new CI runs, remaining limitations and exact rollback commits will be recorded after execution.
 
@@ -107,6 +107,60 @@ before a genuine390px page-overflow failure. Captures also showed the long first
 factor name painting into the next optimizer cell. Scoped name/notice wrapping
 and painted-text assertions address these; their browser effect requires the
 next run. This diagnostic-only run is not a release-ready pass.
+
+## Combined Native Evidence
+
+[Run41291514419](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41291514419)
+uses committed source `cddc36af00a2fb90e9c13bfe828dc225761c1731`.
+The completed early workflows/context/prediction suites ran on Ubuntu24.04,
+Python3.12.15, Chromium149. They are browser evidence, not Windows or archive evidence.
+
+- RSM: invalid30/valid31-run paste, saved revision read-only state, backward final model,
+  raw/standardized4-in-1, hold outside cube but inside axial bounds, source-locked custom
+  view/report/restore and original stored-byte comparisons passed.
+- Optimizer: KO/EN1024/1280/1440px typing, intermediate drafts, caret/focus/mount retention,
+  no navigation, weights retained, stale response rejection and committed artifact preservation
+  passed. Long factor names now wrap within their own cell; no cross-cell painting is asserted.
+- Live widths1920/1440/1280/1024/900/768/390/1440 passed page-overflow and compact4/3/2/1
+  checks. Real Chromium tab zoom1/1.25/1.5/1 passed in KO/EN (inner widths1440/1152/960/1440),
+  with zero analysis POSTs and unchanged draft/plot coordinates/committed source.
+  This is browser zoom, not deviceScaleFactor.
+- Gage: synthetic60 rows,10 parts x3 operators x2 measurements, CSV ingestion and actual
+  three-select form execution passed. Auto-pool with alpha0.1 pooled interaction
+  (p=0.9999999999893081); retain with alpha0.05 kept it. KO/EN1024/1280/1440px,
+  filtered imbalance with no analysis POST, saved alpha/policy restoration, downloaded
+  HTML full/final ANOVA and offline HTML opening passed. Report/source hashes were compared.
+  Gage report coverage remains summary because the payload lacks interaction-means plots.
+- Python3.11.17 completed3,100 passed/13 skipped/116 warnings in464.44s.
+- Dependency-security passed all five Python inventories and npm runtime/development audits.
+  Setuptools84.1.0 was installed. No advisories were reported by this execution.
+
+An independent review of Gage preparation, ANOVA denominators, filtered snapshots,
+legacy defaults, redaction and frontend restore found no additional concrete defect.
+This is source-review evidence, not a separate execution of the tests above.
+Immediate narrow-window Gage screenshots could capture the existing drawer mid-transition;
+the harness now waits on actual animation completion and verifies drawer/main geometry
+before capturing. Its settled-state assertions require a subsequent browser run.
+
+The initial Windows GP resource run failed its existing1e-9 restored/fitted prediction
+comparison at the first2,000-row numeric/single/KFold case. The original log did not
+record the error magnitude;24 smaller cases had passed. Independent local investigation
+found identical kernel rows but query-batch-dependent floating-point mean accumulation.
+That finding is distinct from claiming the exact original hosted residual was reproduced.
+The tolerance is not increased. Full native checks, including this resource gate and
+the completed archive, remain required for the final source; these partial results
+alone do not authorize main promotion.
+
+The follow-up mean fix uses per-row compensated summation of the same kernel/dual products;
+normalization, fitted hyperparameters and noise policy are unchanged. Independent Decimal
+and query-batch invariance tests plus141 relevant GP/reference/API/worker tests passed locally.
+The existing1e-9 restore tolerance was not widened. See
+[the detailed numerical investigation](gp_resource_benchmark_contract.md#posterior-mean-follow-up-2026-11-01).
+
+Final acceptance is the `release-ready` job for the exact source being promoted,
+not this earlier run. Its JSON receipt and the exact-source archive validation report
+are CI artifacts. Keeping the evidence there avoids committing a source SHA into its
+own source after packaging. No tag or Release is published in this follow-up.
 
 ## Native Setuptools Maintenance
 
