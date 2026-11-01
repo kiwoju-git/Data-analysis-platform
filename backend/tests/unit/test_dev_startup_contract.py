@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from app.core.runtime_contract import API_CONTRACT_VERSION
+
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="PowerShell dev entrypoint is Windows-only")
 
 
@@ -80,7 +82,7 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "Get-DevRepositoryBuildId" in dev_text
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
-    assert "$script:ExpectedApiContractVersion = 26" in helper_text
+    assert f"$script:ExpectedApiContractVersion = {API_CONTRACT_VERSION}" in helper_text
     assert "$script:MinimumMetadataSchemaVersion = 24" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
@@ -121,13 +123,29 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
     "schema,expected", [(21, "False"), (22, "False"), (23, "False"), (24, "True")]
 )
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
+    assert _runtime_compatibility(API_CONTRACT_VERSION, schema) == expected
+
+
+@pytest.mark.parametrize(
+    "api_version,expected",
+    [
+        (API_CONTRACT_VERSION - 1, "False"),
+        (API_CONTRACT_VERSION, "True"),
+        (API_CONTRACT_VERSION + 1, "False"),
+    ],
+)
+def test_dev_runtime_helper_requires_exact_api_contract(api_version: int, expected: str) -> None:
+    assert _runtime_compatibility(api_version, 24) == expected
+
+
+def _runtime_compatibility(api_version: int, schema: int) -> str:
     repo_root = Path(__file__).resolve().parents[3]
     command = (
         f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
         "$capabilities = @{}; "
         "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
         "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
-        f"api_contract_version=27; metadata_schema_version={schema}; "
+        f"api_contract_version={api_version}; metadata_schema_version={schema}; "
         "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "
         "Test-DevRuntimeCompatibility -RuntimeInfo $runtime "
         "-ExpectedBuildId test -RequireExactCommit"
@@ -143,7 +161,7 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
         check=False,
     )
     assert result.returncode == 0
-    assert result.stdout.strip() == expected
+    return result.stdout.strip()
 
 
 def test_dev_runtime_helper_returns_the_repository_commit() -> None:

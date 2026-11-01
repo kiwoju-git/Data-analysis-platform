@@ -172,6 +172,32 @@ not this earlier run. Its JSON receipt and the exact-source archive validation r
 are CI artifacts. Keeping the evidence there avoids committing a source SHA into its
 own source after packaging. No tag or Release is published in this follow-up.
 
+### Windows Startup Contract Follow-up
+
+The cddc36a candidate's Windows check in
+[run41291514419](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41291514419/job/124803571441)
+completed with3,109 passed,3 skipped and1 failed backend test in3,039.67s.
+The failure exposed a production startup mismatch: `dev_runtime_helpers.ps1`
+still required API26, while the backend and frontend require27. A correct API27/
+metadata24 runtime was therefore rejected. This was not only a stale test assertion.
+The same metadata-boundary case was reproduced locally:1 failed,3 passed.
+
+The launcher now requires API27 without weakening exact API matching or the
+metadata24 minimum. Portable static checks compare backend/frontend/PowerShell
+declarations, so Linux CI can detect future divergence even though real PowerShell
+execution tests are Windows-only. Native PowerShell cases reject API26 and28,
+accept27, and preserve metadata21/22/23 rejection and24 acceptance.
+The focused local helper/static selection passed10 tests; Ruff and format checks passed.
+The broader local module run passed16 tests and failed2 launcher tests before reaching
+their intended assertions because this worktree has no own `.venv`; those two need the
+native bootstrap and are not claimed passed locally.
+
+The superseded f6f8929 [run41293369068](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41293369068)
+was cancelled while its Windows check was unfinished. Completed Linux, Python3.11,
+browser and archive evidence remains available, but this run is not an overall pass.
+A new full exact-source CI run is required after the startup fix; earlier source
+successes do not replace it.
+
 ## Native Setuptools Maintenance
 
 Candidate security CI reported
