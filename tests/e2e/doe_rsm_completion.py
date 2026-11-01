@@ -194,6 +194,14 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
                 viewport: innerWidth,
                 scrollWidth: document.documentElement.scrollWidth,
                 elements: [...document.querySelectorAll('.analysis-run-panel *')]
+                    .filter(element => {
+                        for (let parent = element.parentElement; parent;
+                            parent = parent.parentElement) {
+                            if (['auto', 'scroll', 'hidden', 'clip'].includes(
+                                getComputedStyle(parent).overflowX)) return false;
+                        }
+                        return true;
+                    })
                     .map(element => ({
                         tag: element.tagName, class: element.className,
                         right: element.getBoundingClientRect().right,
@@ -206,6 +214,27 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
                     .slice(0, 30)
             })""")
             assert overflow["scrollWidth"] <= overflow["viewport"] + 1, overflow
+            optimizer_notices = page.locator(
+                ".response-optimizer .notice-box, .response-optimizer .inline-option > span"
+            ).evaluate_all("""elements => elements.filter(element =>
+                element.getClientRects().length).map(element => {
+                const bounds = element.getBoundingClientRect();
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                return {
+                    left: bounds.left, right: bounds.right,
+                    textRects: [...range.getClientRects()].map(rect => ({
+                        left: rect.left, right: rect.right
+                    }))
+                };
+            })""")
+            assert optimizer_notices
+            for notice in optimizer_notices:
+                assert all(
+                    rect["left"] >= notice["left"] - 1
+                    and rect["right"] <= notice["right"] + 1
+                    for rect in notice["textRects"]
+                ), {"viewport": width, "notice": notice}
             cards = plots.locator(".doe-compact-plot")
             for card in cards.all():
                 svg = card.locator("svg.chart-frame-svg").bounding_box()

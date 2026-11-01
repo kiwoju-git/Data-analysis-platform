@@ -49,6 +49,26 @@ def verify_optimizer_input(page: Page, output: Path) -> None:
             assert page.evaluate("history.length") == history_length
             box = panel.bounding_box()
             assert box and box["x"] + box["width"] <= width + 1
+            factor_text = panel.locator(
+                ".response-optimizer-factor-table tbody td:first-child"
+            ).evaluate_all("""cells => cells.map(cell => {
+                const bounds = cell.getBoundingClientRect();
+                const range = document.createRange();
+                range.selectNodeContents(cell);
+                return {
+                    left: bounds.left, right: bounds.right,
+                    textRects: [...range.getClientRects()].map(rect => ({
+                        left: rect.left, right: rect.right
+                    }))
+                };
+            })""")
+            assert factor_text
+            for cell in factor_text:
+                assert all(
+                    rect["left"] >= cell["left"] - 1
+                    and rect["right"] <= cell["right"] + 1
+                    for rect in cell["textRects"]
+                ), {"locale": locale, "viewport": width, "cell": cell}
         page.screenshot(path=str(output / f"optimizer-input-{locale}.png"), full_page=True)
         panel.screenshot(path=str(output / f"optimizer-input-panel-{locale}.png"))
     page.locator(".language-switcher button").filter(has_text="KOR").click()

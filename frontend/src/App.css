@@ -4024,6 +4024,20 @@ table {
   white-space: nowrap;
 }
 
+.response-optimizer-factor-table th:first-child,
+.response-optimizer-factor-table td:first-child {
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.response-optimizer .notice-box,
+.response-optimizer .inline-option > span {
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .doe-advanced-settings {
   border: 1px solid var(--border-default);
   border-radius: 4px;

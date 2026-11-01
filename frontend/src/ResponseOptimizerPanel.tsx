@@ -168,7 +168,7 @@ export function ResponseOptimizerPanel({
   };
 
   return (
-    <section className="analysis-result-section" aria-labelledby="response-optimizer-title" onChangeCapture={invalidateDraft}>
+    <section className="analysis-result-section response-optimizer" aria-labelledby="response-optimizer-title" onChangeCapture={invalidateDraft}>
       <div className="panel-heading compact-heading">
         <div>
           <h4 id="response-optimizer-title">Response Optimizer</h4>
@@ -587,7 +587,7 @@ export function ResponseOptimizerPanel({
 function ResponseOptimizerResultView({ optimization }: { optimization: ResponseOptimizerResponse }) {
   const { result } = optimization;
   return (
-    <section className="analysis-result-section" aria-labelledby="response-optimizer-result-title">
+    <section className="analysis-result-section response-optimizer" aria-labelledby="response-optimizer-result-title">
       <div className="panel-heading compact-heading">
         <div>
           <h5 id="response-optimizer-result-title">권장 운전 조건</h5>
