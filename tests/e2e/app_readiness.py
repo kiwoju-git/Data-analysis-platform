@@ -7,14 +7,158 @@ import platform
 import subprocess
 import sys
 import traceback
-from collections import Counter
+from collections import Counter, deque
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterator
 from urllib.parse import parse_qs, urlsplit
 
-from playwright.sync_api import Browser, Page, expect
+from playwright.sync_api import Browser, ConsoleMessage, Page, Request, Response, expect
+
+
+class SyntheticPageDiagnostics:
+    """Observe an existing synthetic child page without changing its context."""
+
+    def __init__(self, page: Page, root: Path, name: str) -> None:
+        self.page = page
+        self.target = root / name
+        self.stage = name
+        self.events: deque[dict[str, object]] = deque(maxlen=100)
+        self.trace_started = False
+        self.listeners = {
+            "pageerror": self._page_error,
+            "console": self._console,
+            "requestfailed": self._request_failed,
+            "request": self._request,
+            "response": self._response,
+        }
+
+    def start(self) -> None:
+        self.target.mkdir(parents=True, exist_ok=True)
+        self.page.context.tracing.start(screenshots=True, snapshots=True, sources=False)
+        self.trace_started = True
+        for event, listener in self.listeners.items():
+            self.page.on(event, listener)
+
+    def _record(self, kind: str, **fields: object) -> None:
+        self.events.append({"kind": kind, "stage": self.stage, **fields})
+
+    def _page_error(self, error: object) -> None:
+        self._record("pageerror", message=str(error)[:1000])
+
+    def _console(self, message: ConsoleMessage) -> None:
+        if message.type in {"warning", "error"}:
+            self._record("console", level=message.type, message=message.text[:1000])
+
+    def _request_failed(self, request: Request) -> None:
+        self._record(
+            "requestfailed",
+            method=request.method,
+            path=urlsplit(request.url).path[:500],
+            resource_type=request.resource_type,
+            failure=str(request.failure)[:1000],
+        )
+
+    def _request(self, request: Request) -> None:
+        path = urlsplit(request.url).path
+        if path.startswith("/api/v1/regression-models/predictions/") and path.endswith(
+            "/exports/csv"
+        ):
+            self._record("csv_export_request", method=request.method, path=path[:500])
+
+    def _response(self, response: Response) -> None:
+        path = urlsplit(response.url).path
+        if path.startswith("/api/v1/regression-models/predictions/") and path.endswith(
+            "/exports/csv"
+        ):
+            self._record(
+                "csv_export_response",
+                method=response.request.method,
+                path=path[:500],
+                status=response.status,
+            )
+
+    def capture_failure(self, failure: BaseException) -> None:
+        failure.e2e_child_diagnostics = str(self.target)
+        evidence: dict[str, object] = {
+            "fixture": "synthetic",
+            "stage": self.stage,
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+            "failure_type": type(failure).__name__,
+            "events": list(self.events),
+            "event_limit": self.events.maxlen,
+        }
+        try:
+            evidence.update(source_identity())
+        except Exception as diagnostic_error:
+            evidence["source_capture_error"] = type(diagnostic_error).__name__
+        captures = {
+            "browser": lambda: self.page.context.browser.version,
+            "socket_snapshot": socket_failure_diagnostics,
+            "url": lambda: self.page.url,
+            "viewport": lambda: self.page.viewport_size,
+            "document": lambda: self.page.evaluate("""() => ({
+                lang: document.documentElement.lang,
+                appliedLocale: document.documentElement.dataset.appLocale ?? null,
+                rootMounted: !!document.querySelector('#root > *'),
+                runtime: document.querySelector('[data-runtime-state]')?.dataset.runtimeState ?? null,
+                route: document.querySelector('.workspace')?.dataset.page ?? null
+            })"""),
+            "screenshot": lambda: self.page.screenshot(
+                path=str(self.target / "failure.png"), full_page=True
+            )
+            and None,
+            "dom": lambda: (self.target / "failure.html").write_text(
+                self.page.content(), encoding="utf-8"
+            ),
+        }
+        for key, capture in captures.items():
+            try:
+                evidence[key] = capture()
+            except Exception as diagnostic_error:
+                evidence[key + "_capture_error"] = type(diagnostic_error).__name__
+        try:
+            (self.target / "failure.json").write_text(
+                json.dumps(evidence, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception as diagnostic_error:
+            print(
+                f"[diagnostics] Child capture failed: {type(diagnostic_error).__name__}",
+                file=sys.stderr,
+            )
+
+    def finish(self, *, failed: bool) -> None:
+        cleanup_errors: list[Exception] = []
+        for event, listener in self.listeners.items():
+            try:
+                self.page.remove_listener(event, listener)
+            except Exception as error:
+                cleanup_errors.append(error)
+        try:
+            (self.target / "events.json").write_text(
+                json.dumps(
+                    {"fixture": "synthetic", "events": list(self.events)},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        except Exception as error:
+            cleanup_errors.append(error)
+        try:
+            if self.trace_started:
+                self.page.context.tracing.stop(path=str(self.target / "trace.zip"))
+        except Exception as error:
+            cleanup_errors.append(error)
+        for error in cleanup_errors:
+            print(
+                f"[diagnostics] Child cleanup failed: {type(error).__name__}",
+                file=sys.stderr,
+            )
+        if cleanup_errors and not failed:
+            raise cleanup_errors[0]
 
 
 def tcp_state_counts(output: str) -> dict[str, int]:

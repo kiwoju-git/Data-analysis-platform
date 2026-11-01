@@ -303,6 +303,21 @@ def test_early_browser_diagnostics_do_not_replace_product_gates():
     assert "--diagnostics-root" in command
 
 
+def test_early_windows_diagnostics_preserve_required_native_gate():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
+    diagnostic = jobs["windows-browser-diagnostics"]
+    assert diagnostic["runs-on"] == "windows-latest"
+    assert "inputs.browser_diagnostics == true" in diagnostic["if"]
+    assert "needs" not in diagnostic
+    assert diagnostic["permissions"] == {"contents": "read"}
+    commands = [step.get("run", "") for step in diagnostic["steps"]]
+    assert any("e2e.ps1 -Suite workflows" in command for command in commands)
+    assert any("-DiagnosticsRoot" in command for command in commands)
+    assert jobs["windows-e2e"]["needs"] == "windows"
+    assert {"windows", "e2e"} <= set(jobs["release-ready"]["needs"])
+    assert "windows-browser-diagnostics" not in jobs["release-ready"]["needs"]
+
+
 def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
     workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     triggers = workflow.get("on", workflow.get(True))

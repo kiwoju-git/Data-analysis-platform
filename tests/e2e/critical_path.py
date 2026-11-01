@@ -41,7 +41,11 @@ from refined_ui import create_refined_ui_fixture, verify_refined_ui
 from startup_readiness import verify_startup_readiness
 from api_translation_boundary import verify_api_translation_boundary
 from dataset_context import verify_dataset_context
-from app_readiness import wait_for_app_ready, wait_for_layout_settled
+from app_readiness import (
+    SyntheticPageDiagnostics,
+    wait_for_app_ready,
+    wait_for_layout_settled,
+)
 from gp_prediction_context import verify_gp_prediction_context
 from gp_validation_extension import verify_gp_validation_extension
 from schema_concurrency import verify_schema_concurrency
@@ -2773,7 +2777,12 @@ def verify_linear_model_fit_and_prediction(
     frontend_base_url = page.url.split("/analysis", 1)[0]
     dedicated_page = page.context.new_page()
     dedicated_prediction_id: str | None = None
+    dedicated_diagnostics = SyntheticPageDiagnostics(
+        dedicated_page, diagnostics.root, "linear-model-dedicated-prediction"
+    )
+    dedicated_failed = False
     try:
+        dedicated_diagnostics.start()
         dedicated_page.goto(
             f"{frontend_base_url}/analysis/regression/regression.predict",
             wait_until="networkidle",
@@ -2815,10 +2824,28 @@ def verify_linear_model_fit_and_prediction(
             has_text="개별 예측구간"
         )
         expect(dedicated_table.locator("tbody tr")).to_have_count(4)
-        dedicated_page.get_by_role("button", name="전체 예측 CSV 생성").click()
+        dedicated_diagnostics.stage = "dedicated-prediction-csv-export"
+        export_path = (
+            "/api/v1/regression-models/predictions/"
+            f"{dedicated_prediction_id}/exports/csv"
+        )
+        export_deadline = time.monotonic() + 15
+        with dedicated_page.expect_response(
+            lambda response: response.request.method == "POST"
+            and urllib.parse.urlsplit(response.url).path == export_path,
+            timeout=15_000,
+        ) as dedicated_export_response_info:
+            dedicated_page.get_by_role("button", name="전체 예측 CSV 생성").click()
+        dedicated_export_response = dedicated_export_response_info.value
+        assert dedicated_export_response.status == 201, (
+            "Dedicated prediction CSV export returned HTTP "
+            f"{dedicated_export_response.status}"
+        )
         expect(
             dedicated_page.get_by_role("button", name="전체 예측 CSV 다운로드")
-        ).to_be_visible(timeout=15_000)
+        ).to_be_visible(
+            timeout=max(1, int((export_deadline - time.monotonic()) * 1000))
+        )
         expect(dedicated_page).to_have_url(re.compile(f"model_id={model_id}"))
         expect(dedicated_page).to_have_url(
             re.compile(f"target_version_id={target_active_version_id}")
@@ -2831,6 +2858,7 @@ def verify_linear_model_fit_and_prediction(
             dedicated_page.get_by_role("heading", name="결과 내보내기")
         ).to_have_count(0)
 
+        dedicated_diagnostics.stage = "dedicated-prediction-restoration"
         dedicated_page.reload(wait_until="networkidle")
         expect(dedicated_page.get_by_label("Source 회귀모형")).to_have_value(
             model_id,
@@ -2852,33 +2880,59 @@ def verify_linear_model_fit_and_prediction(
             "button", name="전체 예측 CSV 생성"
         )
         expect(restored_export_button).to_be_enabled(timeout=15_000)
+    except BaseException as failure:
+        dedicated_failed = True
+        dedicated_diagnostics.capture_failure(failure)
+        raise
     finally:
-        if dedicated_prediction_id is not None:
-            api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
-            dedicated_delete_preflight = dedicated_page.request.get(
-                f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion-preflight"
-            )
-            if not dedicated_delete_preflight.ok:
-                raise AssertionError(
-                    "dedicated prediction deletion preflight failed: "
-                    + dedicated_delete_preflight.text()
+        try:
+            dedicated_diagnostics.finish(failed=dedicated_failed)
+            if dedicated_prediction_id is not None:
+                api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
+                dedicated_delete_preflight = dedicated_page.request.get(
+                    f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion-preflight"
                 )
-            dedicated_delete_manifest = dedicated_delete_preflight.json()
-            dedicated_delete = dedicated_page.request.delete(
-                f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion",
-                headers={"Origin": api_v1.removesuffix("/api/v1")},
-                data={
-                    "confirmation_analysis_id": dedicated_prediction_id,
-                    "expected_deletion_manifest_sha256": dedicated_delete_manifest[
-                        "deletion_manifest_sha256"
-                    ],
-                },
-            )
-            if not dedicated_delete.ok:
-                raise AssertionError(
-                    f"dedicated prediction deletion failed: {dedicated_delete.text()}"
+                if not dedicated_delete_preflight.ok:
+                    raise AssertionError(
+                        "dedicated prediction deletion preflight failed: "
+                        + dedicated_delete_preflight.text()
+                    )
+                dedicated_delete_manifest = dedicated_delete_preflight.json()
+                dedicated_delete = dedicated_page.request.delete(
+                    f"{api_v1}/analysis-runs/{dedicated_prediction_id}/deletion",
+                    headers={"Origin": api_v1.removesuffix("/api/v1")},
+                    data={
+                        "confirmation_analysis_id": dedicated_prediction_id,
+                        "expected_deletion_manifest_sha256": dedicated_delete_manifest[
+                            "deletion_manifest_sha256"
+                        ],
+                    },
                 )
-        dedicated_page.close()
+                if not dedicated_delete.ok:
+                    raise AssertionError(
+                        "dedicated prediction deletion failed: "
+                        + dedicated_delete.text()
+                    )
+        except Exception as cleanup_error:
+            if not dedicated_failed:
+                dedicated_failed = True
+                dedicated_diagnostics.stage = "dedicated-prediction-cleanup"
+                dedicated_diagnostics.capture_failure(cleanup_error)
+                raise
+            diagnostics.record(
+                "Dedicated prediction cleanup failed after captured assertion: "
+                + type(cleanup_error).__name__
+            )
+        finally:
+            try:
+                dedicated_page.close()
+            except Exception as close_error:
+                if not dedicated_failed:
+                    raise
+                diagnostics.record(
+                    "Dedicated page close failed after captured assertion: "
+                    + type(close_error).__name__
+                )
 
     api_v1 = model_response.url.rsplit("/analysis-runs", 1)[0]
     for owned_analysis_id in (optimizer_id,):

@@ -198,6 +198,36 @@ browser and archive evidence remains available, but this run is not an overall p
 A new full exact-source CI run is required after the startup fix; earlier source
 successes do not replace it.
 
+### Native Windows CSV Export Diagnostic Follow-up
+
+Source `c18c38a9925b18451922b36146015cbc8dafbe10` in
+[run41295824477](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41295824477)
+passed the Windows product check and the context, data and prediction browser suites.
+The workflows suite passed the RSM/Gage journeys, then failed at a later dedicated
+linear-model prediction CSV export. Its actual child-page ARIA showed four predicted
+rows and `api_unreachable` after one export click. The backend log contained no CSV
+export POST/OPTIONS, while subsequent synthetic cleanup requests succeeded.
+The overall E2E and release-ready gates failed; this source is not a full CI pass.
+
+The outer failure screenshot belonged to the parent analysis page because the
+dedicated prediction page had already closed. Therefore the original transport
+cause remains **unconfirmed**: the available evidence does not establish a stale
+model, a selector error, a backend export failure, browser resource exhaustion,
+or a product fix. No timeout increase, retry, or product behavior change is used.
+
+The same child Page/context now records a bounded100-event log of failed requests,
+console warnings/errors, page errors and CSV export request/response paths/statuses.
+It captures its own URL, readiness, screenshot, DOM and trace before artifact cleanup
+or page closure. Event records exclude request/response bodies and headers and strip
+hosts/query strings from network paths; full DOM/trace capture is restricted to this
+synthetic fixture. The CSV step requires the exact POST path and HTTP201 response
+within the existing15-second timeout. Diagnostic failures cannot replace the original
+assertion. These are harness improvements; only a subsequent exact-source native run
+can supply the missing browser evidence.
+An optional early `windows-browser-diagnostics` workflows job shortens that feedback
+loop but does not replace the Windows product check, four native E2E suites or
+release-ready gate.
+
 ## Native Setuptools Maintenance
 
 Candidate security CI reported

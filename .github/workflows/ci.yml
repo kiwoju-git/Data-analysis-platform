@@ -73,6 +73,39 @@ jobs:
           path: .tmp/early-browser-${{ matrix.suite }}
           if-no-files-found: ignore
 
+  windows-browser-diagnostics:
+    if: github.event_name == 'workflow_dispatch' && inputs.browser_diagnostics == true && inputs.generate_linux_locks != true
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Locked Windows bootstrap
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
+      - name: Install Windows Chromium
+        shell: pwsh
+        run: .\.venv\Scripts\python.exe -m playwright install chromium
+      - name: Existing Windows workflows suite
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -Suite workflows -WorkspaceRoot "${{ runner.temp }}\early-windows-workspace" -DiagnosticsRoot "${{ runner.temp }}\early-windows-diagnostics" -KeepWorkspace
+      - name: Synthetic Windows child-page diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: early-windows-workflows-${{ github.sha }}
+          path: ${{ runner.temp }}\early-windows-diagnostics
+          if-no-files-found: ignore
+
   generate-linux-locks:
     if: github.event_name == 'workflow_dispatch' && inputs.generate_linux_locks == true
     runs-on: ubuntu-24.04

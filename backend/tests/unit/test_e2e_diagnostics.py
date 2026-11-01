@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -136,3 +137,125 @@ def test_other_platform_does_not_spawn_diagnostic(diagnostics, monkeypatch):
     monkeypatch.setattr(diagnostics.subprocess, "run", run)
     assert diagnostics.socket_failure_diagnostics()["status"] == "not_collected"
     run.assert_not_called()
+
+
+def test_existing_child_records_bounded_events_without_payloads(diagnostics, tmp_path):
+    _, _, page = browser_fixture()
+    page.context.browser.version = "test-browser"
+    recorder = diagnostics.SyntheticPageDiagnostics(page, tmp_path, "dedicated")
+    recorder.start()
+    listeners = {call.args[0]: call.args[1] for call in page.on.call_args_list}
+    request = MagicMock()
+    request.url = (
+        "http://synthetic.invalid/api/v1/regression-models/predictions/fixture/exports/csv"
+        "?private=do-not-record"
+    )
+    request.method = "POST"
+    request.resource_type = "fetch"
+    request.failure = "net::ERR_CONNECTION_RESET"
+    for _ in range(105):
+        listeners["request"](request)
+    listeners["requestfailed"](request)
+    response = MagicMock(url=request.url, status=503)
+    response.request = request
+    listeners["response"](response)
+    listeners["pageerror"](RuntimeError("synthetic " + "x" * 1500))
+    listeners["console"](MagicMock(type="error", text="synthetic console"))
+    recorder.stage = "dedicated-prediction-csv-export"
+    original = AssertionError("Synthetic export failure")
+    recorder.capture_failure(original)
+    recorder.finish(failed=True)
+
+    evidence = json.loads((tmp_path / "dedicated/failure.json").read_text(encoding="utf-8"))
+    assert evidence["fixture"] == "synthetic"
+    assert evidence["stage"] == "dedicated-prediction-csv-export"
+    assert evidence["url"] == page.url
+    assert len(evidence["events"]) == 100
+    assert evidence["event_limit"] == 100
+    serialized_events = json.dumps(evidence["events"])
+    assert "private" not in serialized_events
+    assert "synthetic.invalid" not in serialized_events
+    assert evidence["events"][-2]["message"] == ("synthetic " + "x" * 1500)[:1000]
+    assert evidence["events"][-3]["status"] == 503
+    assert evidence["events"][-4]["failure"] == "net::ERR_CONNECTION_RESET"
+    request.post_data_json.assert_not_called()
+    response.json.assert_not_called()
+    response.text.assert_not_called()
+    assert original.e2e_child_diagnostics == str(tmp_path / "dedicated")
+    assert page.remove_listener.call_count == 5
+    page.context.tracing.stop.assert_called_once_with(path=str(tmp_path / "dedicated/trace.zip"))
+    page.close.assert_not_called()
+    page.context.close.assert_not_called()
+
+
+def test_existing_child_capture_and_trace_failures_preserve_original(
+    diagnostics, tmp_path, monkeypatch
+):
+    _, _, page = browser_fixture()
+    page.context.browser.version = "test-browser"
+    recorder = diagnostics.SyntheticPageDiagnostics(page, tmp_path, "closed-child")
+    recorder.start()
+    page.evaluate.side_effect = RuntimeError("renderer closed")
+    page.screenshot.side_effect = RuntimeError("renderer closed")
+    page.content.side_effect = RuntimeError("renderer closed")
+    page.context.tracing.stop.side_effect = RuntimeError("context closed")
+    monkeypatch.setattr(Path, "write_text", MagicMock(side_effect=OSError("disk full")))
+    original = AssertionError("Original child assertion")
+    with pytest.raises(AssertionError) as caught:
+        try:
+            raise original
+        except BaseException as failure:
+            recorder.capture_failure(failure)
+            raise
+        finally:
+            recorder.finish(failed=True)
+    assert caught.value is original
+    page.context.tracing.stop.assert_called_once()
+
+
+def test_existing_child_trace_failure_is_not_success(diagnostics, tmp_path):
+    _, _, page = browser_fixture()
+    recorder = diagnostics.SyntheticPageDiagnostics(page, tmp_path, "trace")
+    recorder.start()
+    page.context.tracing.stop.side_effect = RuntimeError("trace failed")
+    with pytest.raises(RuntimeError, match="trace failed"):
+        recorder.finish(failed=False)
+
+
+def test_existing_child_metadata_failure_is_recorded_not_raised(diagnostics, tmp_path, monkeypatch):
+    _, _, page = browser_fixture()
+    page.context.browser = None
+    monkeypatch.setattr(diagnostics, "source_identity", MagicMock(side_effect=OSError("git")))
+    monkeypatch.setattr(
+        diagnostics, "socket_failure_diagnostics", MagicMock(side_effect=OSError("netstat"))
+    )
+    recorder = diagnostics.SyntheticPageDiagnostics(page, tmp_path, "metadata")
+    recorder.start()
+    recorder.capture_failure(AssertionError("original"))
+    recorder.finish(failed=True)
+    evidence = json.loads((tmp_path / "metadata/failure.json").read_text(encoding="utf-8"))
+    assert evidence["source_capture_error"] == "OSError"
+    assert evidence["browser_capture_error"] == "AttributeError"
+    assert evidence["socket_snapshot_capture_error"] == "OSError"
+    assert evidence["document"]["lang"] == "ko"
+
+
+def test_dedicated_prediction_export_checks_exact_post_and_captures_before_cleanup():
+    source = (Path(__file__).resolve().parents[3] / "tests/e2e/critical_path.py").read_text(
+        encoding="utf-8"
+    )
+    start = source.index("def verify_linear_model_fit_and_prediction(")
+    end = source.index("\ndef ", start + 1)
+    function = source[start:end]
+    assert "urllib.parse.urlsplit(response.url).path == export_path" in function
+    assert "dedicated_export_response.status == 201" in function
+    assert "export_deadline = time.monotonic() + 15" in function
+    assert "int((export_deadline - time.monotonic()) * 1000)" in function
+    assert "dedicated_diagnostics.capture_failure(failure)" in function
+    assert function.index("dedicated_diagnostics.capture_failure(failure)") < function.index(
+        "dedicated_delete_preflight ="
+    )
+    assert function.index("dedicated_diagnostics.finish(failed=dedicated_failed)") < function.index(
+        "dedicated_page.close()"
+    )
+    assert function.count('name="전체 예측 CSV 생성").click()') == 1
