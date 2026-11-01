@@ -2694,6 +2694,8 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "stationary_point",
                 "contour",
                 "diagnostics",
+                "residual_plots",
+                "observed_response_summary",
                 "warnings",
             }
         ),
@@ -2720,10 +2722,14 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("stationary_point", "DoeResponseSurfaceStationaryPointResponse"),
             ("contour", "DoeResponseSurfaceContourResponse"),
         ),
+        property_any_of_refs=(
+            ("residual_plots", frozenset({"RsmResidualPlots"})),
+            ("observed_response_summary", frozenset({"RsmObservedResponseSummary"})),
+        ),
         array_item_refs=(("terms", "DoeResponseSurfaceTermResponse"),),
         property_consts=(("summary_type", "response_surface_analysis"),),
         property_enums=(
-            ("schema_version", frozenset({1, 2})),
+            ("schema_version", frozenset({1, 2, 3})),
             (
                 "method",
                 frozenset(
@@ -2887,10 +2893,10 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         ),
         array_item_refs=(("objectives", "ResponseOptimizerObjectiveResponse"),),
         property_consts=(
-            ("schema_version", 2),
             ("summary_type", "response_optimizer"),
             ("method", "derringer_suich_bounded_multistart_slsqp"),
         ),
+        property_enums=(("schema_version", frozenset({2, 3})),),
     ),
     SchemaComponentContract(
         name="ResponseOptimizerSourceEligibilityResponse",

@@ -35,6 +35,7 @@ STAGE_CALLS = {
     "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
     "doe_browser_zoom": "verify_doe_browser_zoom",
+    "gage_followup": "verify_gage_followup",
     "fractional_completion": "verify_fractional_completion",
     "api_translation": "verify_api_translation_boundary",
     "dataset_context": "verify_dataset_context",
@@ -81,6 +82,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "fractional_completion",
         "doe_rsm_completion",
         "doe_browser_zoom",
+        "gage_followup",
         "bo_noise_extension",
         "desktop_resize",
         "localization_shell",
@@ -102,6 +104,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
+    assert "gage_followup" in driver.suite_stage_ids("workflows")
 
 
 @pytest.mark.parametrize("suite", ["full", "workflows", "context", "data", "prediction"])

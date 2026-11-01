@@ -227,14 +227,14 @@ SUITE_STAGES = {
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "pilot_groups", "fractional_completion", "doe_rsm_completion", "gage_followup", "doe_browser_zoom", "bo_noise_extension", "legacy_workflow",
+        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "fractional_completion", "doe_rsm_completion", "gage_followup", "doe_browser_zoom", "bo_noise_extension",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
 

@@ -842,6 +842,7 @@ browser critical path.
 - `verify visible fractional aliases, second-order selection and reports`
 - `verify visible CCD presets, selection and saved contours`
 - `Verify actual DOE browser zoom and preserved model source`
+- `verify Gage three-column repeat/pooling/filter/report workflow`
 - `verify noise-aware target/batch/replicate visible workflow`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`
