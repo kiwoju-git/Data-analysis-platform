@@ -50,6 +50,7 @@ def verify_optimizer_input(page: Page, output: Path) -> None:
             box = panel.bounding_box()
             assert box and box["x"] + box["width"] <= width + 1
         page.screenshot(path=str(output / f"optimizer-input-{locale}.png"), full_page=True)
+        panel.screenshot(path=str(output / f"optimizer-input-panel-{locale}.png"))
     page.locator(".language-switcher button").filter(has_text="KOR").click()
     # Restore valid preferences explicitly; editing/resize/locale must never run search.
     page.locator("#optimizer-lower").fill("-100")
