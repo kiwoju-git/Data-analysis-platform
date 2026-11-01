@@ -26,6 +26,7 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
         "fixture": "synthetic_10_parts_3_operators_2_repeats_not_user_data",
         "analyses": [],
         "reports": [],
+        "layout": [],
     }
     content = "part,operator,measurement\n" + "".join(
         f"P{part},O{operator},{100+2*part+operator+0.01*(part-4.5)*(operator-1)+error}\n"
@@ -81,6 +82,10 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
                 _locale(page, locale)
                 for width in (1024, 1280, 1440):
                     page.set_viewport_size({"width": width, "height": 900})
+                    geometry = _settled_shell(page)
+                    evidence["layout"].append(
+                        {"policy": policy, "locale": locale, **geometry}
+                    )
                     expect(panel.locator("[data-gage-policy]")).to_contain_text(policy)
                     assert page.evaluate(
                         "document.documentElement.scrollWidth <= innerWidth + 1"
@@ -163,6 +168,42 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
         json.dumps(evidence, indent=2), encoding="utf-8"
     )
     return evidence
+
+
+def _settled_shell(page: Page) -> dict:
+    # Observe the actual drawer transition; an immediate screenshot can catch it mid-slide.
+    page.wait_for_function("""() => {
+        const sidebar = document.querySelector('#application-sidebar');
+        const main = document.querySelector('.main');
+        if (!sidebar || !main || sidebar.getAnimations().some(
+            animation => animation.playState === 'running' || animation.pending)) return false;
+        const side = sidebar.getBoundingClientRect();
+        const content = main.getBoundingClientRect();
+        return innerWidth < 1100
+            ? sidebar.getAttribute('aria-hidden') === 'true' && side.right <= 1
+                && content.left <= 1
+            : sidebar.getAttribute('aria-hidden') === 'false' && side.left >= -1
+                && content.left >= side.right - 1;
+    }""")
+    geometry = page.evaluate("""() => {
+        const sidebar = document.querySelector('#application-sidebar');
+        const side = sidebar.getBoundingClientRect();
+        const main = document.querySelector('.main').getBoundingClientRect();
+        return {viewport: innerWidth, sidebarHidden: sidebar.getAttribute('aria-hidden'),
+            sidebarLeft: side.left, sidebarRight: side.right,
+            mainLeft: main.left, mainRight: main.right};
+    }""")
+    if geometry["viewport"] < 1100:
+        assert geometry["sidebarHidden"] == "true", geometry
+        assert geometry["sidebarRight"] <= 1 and geometry["mainLeft"] <= 1, geometry
+        expect(page.locator(".mobile-menu-toggle")).to_have_attribute(
+            "aria-expanded", "false"
+        )
+    else:
+        assert geometry["sidebarHidden"] == "false", geometry
+        assert geometry["mainLeft"] >= geometry["sidebarRight"] - 1, geometry
+    assert geometry["mainRight"] <= geometry["viewport"] + 1, geometry
+    return geometry
 
 
 def _restore_result(page: Page, base: str, version: dict, envelope: dict) -> None:
