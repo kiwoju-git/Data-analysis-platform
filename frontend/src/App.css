@@ -4038,6 +4038,14 @@ table {
   overflow-wrap: anywhere;
 }
 
+.gage-rr-panel .option-note {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 .doe-advanced-settings {
   border: 1px solid var(--border-default);
   border-radius: 4px;

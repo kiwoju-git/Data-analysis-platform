@@ -1,5 +1,6 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
 import { useI18n } from "./i18n/LocaleProvider";
+import { gageRrNoticeKeys } from "./i18n/gageRrMessages";
 import { formatMeasurement, formatProbability } from "./statisticalNumberFormat";
 
 import type {
@@ -90,7 +91,7 @@ export function GageRrPreflightPanel({
     preflight?.issues.filter((issue) => issue.severity === "warning").length ?? 0;
 
   return (
-    <section className="analysis-run-panel" data-analysis-execution={methodId}>
+    <section className="analysis-run-panel gage-rr-panel" data-analysis-execution={methodId}>
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 사전점검할 수 있습니다.</div>
       ) : (
@@ -115,11 +116,11 @@ export function GageRrPreflightPanel({
               onChange={onOperatorColumnChange}
             />
             <div className="option-note">
-              <strong>Scope</strong>
+              <strong>{t("gage.followup.scope")}</strong>
               <span>balanced crossed ANOVA</span>
             </div>
             <div className="option-note">
-              <strong>Data</strong>
+              <strong>{t("gage.followup.data")}</strong>
               <span>{t("gage.followup.currentData")}</span>
             </div>
           </div>
@@ -179,7 +180,7 @@ export function GageRrPreflightPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} messageKeys={gageRrNoticeKeys} showCode /></li>
               ))}
             </ul>
           ) : null}
@@ -235,7 +236,7 @@ export function GageRrPreflightPanel({
               <ul className="warning-list" aria-label="Gage R&R 사전점검 이슈">
                 {preflight.issues.map((issue) => (
                   <li key={issue.code}>
-                    <strong>{issue.severity}</strong> <ApiNoticeText notice={issue} />
+                    <strong>{issue.severity}</strong> <ApiNoticeText notice={issue} messageKeys={gageRrNoticeKeys} showCode />
                     {issue.count === null ? null : ` (${issue.count.toLocaleString()})`}
                   </li>
                 ))}

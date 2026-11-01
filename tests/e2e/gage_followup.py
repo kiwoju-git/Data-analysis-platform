@@ -80,12 +80,38 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
             ).to_be_visible()
             for locale in ("ko", "en"):
                 _locale(page, locale)
+                warnings = panel.locator(".warning-list")
+                expect(warnings.first).to_contain_text(
+                    "풀링했습니다"
+                    if locale == "ko" and policy == "auto_pool"
+                    else "별도 분산성분으로 유지했습니다"
+                    if locale == "ko"
+                    else "pooling interaction into repeatability error"
+                    if policy == "auto_pool"
+                    else "retained as a separate variance component"
+                )
+                expect(warnings.last).to_contain_text(
+                    "사전점검은 설계 조건만 확인"
+                    if locale == "ko"
+                    else "This preflight checks the study design only"
+                )
+                for warning in envelope["warnings"]:
+                    expect(warnings.first).to_contain_text(warning["code"])
                 for width in (1024, 1280, 1440):
                     page.set_viewport_size({"width": width, "height": 900})
                     geometry = _settled_shell(page)
                     evidence["layout"].append(
                         {"policy": policy, "locale": locale, **geometry}
                     )
+                    notes = panel.locator(".option-note").evaluate_all("""elements =>
+                        elements.map(element => ({
+                            labelBottom: element.querySelector('strong').getBoundingClientRect().bottom,
+                            valueTop: element.querySelector('span').getBoundingClientRect().top
+                        }))""")
+                    assert len(notes) == 2
+                    assert all(
+                        note["valueTop"] >= note["labelBottom"] + 3 for note in notes
+                    ), notes
                     expect(panel.locator("[data-gage-policy]")).to_contain_text(policy)
                     assert page.evaluate(
                         "document.documentElement.scrollWidth <= innerWidth + 1"
