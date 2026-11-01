@@ -81,6 +81,49 @@ during the update. npm 12.2.0 generated the lock; npm 10.9.8 subsequently passed
 `npm ci`. Node 22 remains supported. New ESLint identified redundant fixture
 assertions; only these and an unused type import were removed.
 
+## Setuptools Follow-up, 2026-11-01
+
+Mandatory candidate CI [41290140121](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41290140121)
+reported setuptools 83.0.0 under
+[GHSA-xmj3-9gf7-h52w](https://github.com/pypa/setuptools/security/advisories/GHSA-xmj3-9gf7-h52w).
+The upstream advisory covers a Windows legacy wheel-installation path escape
+through namespace metadata and identifies 84.1.0 as patched. This application
+does not install arbitrary user wheels; its runtime installer accepts trusted,
+hash-locked wheelhouse entries. That limits the exposure path but is not an audit
+exception. Both runtime and development locks now pin 84.1.0.
+
+[PyPI metadata](https://pypi.org/pypi/setuptools/84.1.0/json) declares Python
+`>=3.10`, MIT licensing, and a universal `py3-none-any` wheel with no unconditional
+runtime dependencies. The application build backend remains hatchling 1.26.3;
+there was no setuptools build-system pin to change. Numerical dependencies and
+all unrelated package versions and wheel hashes are unchanged.
+
+Native maintenance [run 41290641290](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41290641290)
+used source `cb4a117d3fc7f04126745c82863b6f7adaf64c00` and succeeded on all three
+native jobs. Each profile downloaded target-compatible wheels, computed their
+SHA-256 from the actual bytes, generated its lock, installed the complete lock in
+a fresh venv with `--no-index --only-binary=:all: --require-hashes`, and passed
+`pip check`. Network access was not blocked at OS level. This maintenance run
+does not constitute a product test, dependency-advisory audit, or Release gate.
+
+| Native target | Profile | Generated lock SHA-256 |
+|---|---|---|
+| Windows hosted runner / CPython 3.10.11 | combined dev/runtime | `3aaced313cc45e25996093a156bfad33bd9f60e780c1dd4ec6a1a38b9b949f5e` |
+| Ubuntu 24.04 x86_64 / CPython 3.11.17 | runtime | `ee6a645c1cb1d097395a992775e1a0e0c123f457d5512d369f20b9525211699f` |
+| Ubuntu 24.04 x86_64 / CPython 3.11.17 | dev | `bdba8477cb092621962fb8b0537ae0769ce24baf76a170dab8eb0a811c3f5673` |
+| Ubuntu 24.04 x86_64 / CPython 3.12.15 | runtime | `b165d1de0a09f91f2f96aa98711ff6de88867402efe210799f30bb0b75fd24da` |
+| Ubuntu 24.04 x86_64 / CPython 3.12.15 | dev | `cae5759050456b2eece7bed7031401f509d229b38079c8c3947aba383de6a42d` |
+
+Each target independently selected the same universal setuptools wheel, SHA-256
+`5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9`.
+No platform wheel was copied between operating systems. The downloaded Actions
+artifact ZIPs were checked against GitHub-reported digests and their per-profile
+receipts against source, baseline, and generated lock hashes. These are checksum
+checks, not a claim of signed attestations. Local receipts are retained outside
+Git under `.tmp/rsm-gage27-security-41290641290`. The final source still requires
+the existing complete security/product CI; no blanket vulnerability-free claim
+or new Linux Release publication follows from this maintenance run.
+
 ## Intake Policy
 
 `GET /api/v1/datasets/intake-limits` exposes actual settings. Registration shows
