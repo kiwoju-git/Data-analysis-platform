@@ -681,7 +681,10 @@ def _collect_generic_results(
 
 
 def _collect_doe_results(
-    client: TestClient, versions: dict[str, str]
+    client: TestClient,
+    versions: dict[str, str],
+    *,
+    evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     factorial_rows = _read_rows(TUTORIAL_ROOT / "studio_factorial_responses.csv")
     factorial_design = _require(
@@ -858,6 +861,8 @@ def _collect_doe_results(
         "Response Optimizer",
     )
     optimizer_result = optimizer["result"]
+    if evidence is not None:
+        evidence.update(design=rsm_design, analysis=rsm_analysis, optimizer=optimizer)
     return {
         "doe.factorial_design": {
             "method_id": "doe.factorial_design",

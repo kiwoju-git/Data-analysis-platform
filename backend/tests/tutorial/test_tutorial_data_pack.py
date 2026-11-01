@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from app.analyses.registry import METHOD_VERSIONS
@@ -205,20 +206,108 @@ def test_tutorial_doe_api_preserves_recorded_numeric_values(tmp_path: Path) -> N
     smoke = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(smoke)
     expected = json.loads(EXPECTED_RESULTS_PATH.read_text(encoding="utf-8"))["results"]
+    evidence = {}
 
     with smoke.TestClient(
         smoke.create_app(smoke.Settings(workspace_root=tmp_path, git_commit="tutorial-test"))
     ) as client:
-        actual = smoke._collect_doe_results(client, METHOD_VERSIONS)
+        actual = smoke._collect_doe_results(client, METHOD_VERSIONS, evidence=evidence)
+        optimizer = evidence["optimizer"]
+        restored = client.get(
+            f"/api/v1/doe-designs/response-surface/{optimizer['design_id']}/optimizations/"
+            f"{optimizer['optimization_id']}"
+        )
+        assert restored.status_code == 200
+        assert restored.json() == optimizer
 
     # Historical fixture numbers remain the oracle when method metadata advances.
-    for method_id in ("doe.factorial_design", "doe.response_surface", "doe.response_optimizer"):
+    for method_id in ("doe.factorial_design", "doe.response_surface"):
         saved, current = expected[method_id], actual[method_id]
         assert current["method_version"] == METHOD_VERSIONS[method_id]
         assert current["input_file_sha256"] == saved["input_file_sha256"]
         assert current["absolute_tolerance"] == saved["absolute_tolerance"] == 1e-8
         assert current["relative_tolerance"] == saved["relative_tolerance"] == 1e-8
         smoke._compare(saved["result"], current["result"], f"$.results.{method_id}.result")
+
+    method = "doe.response_optimizer"
+    saved, current = expected[method], actual[method]
+    assert current["method_version"] == METHOD_VERSIONS[method]
+    assert current["input_file_sha256"] == saved["input_file_sha256"]
+    assert current["absolute_tolerance"] == saved["absolute_tolerance"] == 1e-8
+    assert current["relative_tolerance"] == saved["relative_tolerance"] == 1e-8
+    for key in (
+        "source_analysis_count",
+        "goal",
+        "termination_reason",
+        "warnings",
+        "global_optimum_guaranteed",
+        "composite_desirability",
+    ):
+        smoke._compare(saved["result"][key], current["result"][key], f"$.results.{method}.{key}")
+    _assert_tutorial_optimizer_plateau(evidence, saved)
+
+
+def _assert_tutorial_optimizer_plateau(evidence: dict, saved: dict) -> None:
+    """Independent CCF quadratic checks, not a unique coordinate golden on a flat D=1 set."""
+    design, analysis, optimizer = (evidence[key] for key in ("design", "analysis", "optimizer"))
+    result = optimizer["result"]
+    objective = result["objectives"][0]
+    recommendation = result["recommendation"]
+    assert optimizer["design_sha256"] == design["design_sha256"] == analysis["design_sha256"]
+    assert optimizer["design_version_id"] == design["design_version_id"]
+    assert optimizer["source_analysis_ids"] == [analysis["analysis_id"]]
+    assert objective["source_analysis_id"] == analysis["analysis_id"]
+    assert recommendation["objectives"][0]["source_analysis_id"] == analysis["analysis_id"]
+    assert objective["goal"] == "maximize"
+    assert objective["lower_weight"] == objective["upper_weight"] == objective["importance"] == 1
+    assert result["factor_region"]["linear_constraints"] == recommendation["constraints"] == []
+    assert recommendation["all_constraints_satisfied"] is True
+    assert recommendation["within_requested_bounds"] is True
+    for factor in design["factors"]:
+        assert (
+            factor["low"] <= recommendation["actual_coordinates"][factor["name"]] <= factor["high"]
+        )
+
+    with (TUTORIAL_ROOT / "studio_rsm_responses.csv").open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    def basis(a: float, b: float) -> np.ndarray:
+        return np.array([1.0, a, b, a * a, b * b, a * b])
+
+    matrix = np.array(
+        [
+            basis((float(row["temperature_c"]) - 75) / 10, (float(row["pressure_bar"]) - 10) / 4)
+            for row in rows
+        ]
+    )
+    response = np.array([float(row["response_yield_pct"]) for row in rows])
+    coefficients = np.linalg.solve(matrix.T @ matrix, matrix.T @ response)
+    actual = recommendation["actual_coordinates"]
+    coordinate = np.array([(actual["temperature_c"] - 75) / 10, (actual["pressure_bar"] - 10) / 4])
+    predicted = float(basis(*coordinate) @ coefficients)
+    tolerance = {"abs": saved["absolute_tolerance"], "rel": saved["relative_tolerance"]}
+    assert recommendation["objectives"][0]["predicted_response"] == pytest.approx(
+        predicted, **tolerance
+    )
+    grid = [
+        float(basis(a, b) @ coefficients)
+        for a in np.linspace(-1, 1, 21)
+        for b in np.linspace(-1, 1, 21)
+    ]
+    assert objective["lower"] == pytest.approx(min(grid), **tolerance)
+    assert objective["target"] == pytest.approx(max(grid), **tolerance)
+    assert recommendation["objectives"][0]["predicted_response"] >= objective["target"]
+    assert recommendation["composite_desirability"] == 1
+
+    hessian = np.array(
+        [[2 * coefficients[3], coefficients[5]], [coefficients[5], 2 * coefficients[4]]]
+    )
+    assert np.linalg.eigvalsh(hessian).max() < 0
+    stationary = np.linalg.solve(hessian, -coefficients[1:3])
+    assert np.linalg.norm(stationary - coordinate) > 1e-4
+    for candidate in (stationary, (stationary + coordinate) / 2):
+        assert np.all(np.abs(candidate) <= 1)
+        assert float(basis(*candidate) @ coefficients) > objective["target"]
 
 
 def test_tutorial_gage_api_preserves_explicit_retain_numeric_values(tmp_path: Path) -> None:

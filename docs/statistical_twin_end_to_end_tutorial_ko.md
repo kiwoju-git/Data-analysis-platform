@@ -555,6 +555,13 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **먼저 읽을 값:** source model, goal/threshold, coordinates, predicted response, desirability,
   constraint slack, termination reason.
 - **해석 예시:** fitted model과 선언한 region/goal 아래의 확인 실험 후보다.
+- **좌표 검증 범위:** 이 예제의 target은 21×21 저장 contour grid의 최대값이다. 그 이상인
+  예측값은 desirability=1이므로 위 좌표는 유일한 해가 아니다. Linux CI에서 pressure가
+  기록값과 약 `1.75e-7` 달랐다. 기록 JSON과 기존 수치 허용오차를 바꾸지 않고, 동일한
+  합성 CSV의 독립 이차 OLS 식으로 실제 반환 좌표의 예측값과 목표 충족을 검증한다.
+  source/hash, goal, warning, 종료 상태, 실행 가능한 경계·제약, 저장 후 복원도 확인한다.
+  서로 다른 두 좌표에서 desirability=1임을 별도로 확인하며, 고유 최적점을 가진 CCC
+  수치 fixture의 좌표 검사는 그대로 유지한다.
 - **과해석 금지:** 전역 최적을 보장하지 않고 uncertainty-aware desirability가 아니며 실제 관측이 아니다.
 - **예상 warning:** global optimum not guaranteed, confirmation run required, point prediction,
   model adequacy review.
