@@ -132,6 +132,9 @@ Python3.12.15, Chromium149. They are browser evidence, not Windows or archive ev
   HTML full/final ANOVA and offline HTML opening passed. Report/source hashes were compared.
   Gage report coverage remains summary because the payload lacks interaction-means plots.
 - Python3.11.17 completed3,100 passed/13 skipped/116 warnings in464.44s.
+- Linux Python3.12.15 completed3,100 passed/13 skipped/116 warnings in379.56s;
+  Ruff/format, mypy239 files, lint/typecheck/build and default-worker Vitest118 files/
+  1,031 tests passed. Full Linux critical-path browser E2E also passed.
 - Dependency-security passed all five Python inventories and npm runtime/development audits.
   Setuptools84.1.0 was installed. No advisories were reported by this execution.
 
@@ -141,6 +144,13 @@ This is source-review evidence, not a separate execution of the tests above.
 Immediate narrow-window Gage screenshots could capture the existing drawer mid-transition;
 the harness now waits on actual animation completion and verifies drawer/main geometry
 before capturing. Its settled-state assertions require a subsequent browser run.
+
+Direct screenshot review also found Korean warning prose on the English Gage screen.
+The existing presenter did not map Gage warning codes. A Gage-scoped display dictionary
+now localizes known codes while keeping the code visible, preserving unknown escaped
+messages and leaving stored DTOs unchanged. Scope/data labels get separate rows with
+a scoped gap. KO/EN notice/payload-preservation tests and browser assertions cover this
+follow-up; actual settled captures belong to the subsequent exact-source run.
 
 The initial Windows GP resource run failed its existing1e-9 restored/fitted prediction
 comparison at the first2,000-row numeric/single/KFold case. The original log did not
