@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 jobs:
-  native-certifi:
+  native-security:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     permissions:
@@ -31,8 +31,8 @@ jobs:
       - name: Generator dependency
         run: |
           python -m pip install --only-binary=:all: packaging==25.0
-      - name: Refresh only certifi and verify offline target installation
-        run: python scripts/refresh_certifi_lock.py --target ${{ matrix.target }} --output-dir .tmp/security-lock-${{ matrix.target }}
+      - name: Refresh only setuptools and verify offline target installations
+        run: python scripts/refresh_certifi_lock.py --target ${{ matrix.target }} --distribution setuptools --profile all --output-dir .tmp/security-lock-${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
           name: security-lock-${{ matrix.target }}-${{ github.sha }}

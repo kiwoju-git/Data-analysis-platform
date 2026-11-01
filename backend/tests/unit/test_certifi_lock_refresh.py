@@ -44,7 +44,7 @@ def test_native_refresh_workflow_is_valid_and_not_a_release_gate():
     )
     triggers = workflow.get("on", workflow.get(True))
     assert "workflow_call" in triggers
-    job = workflow["jobs"]["native-certifi"]
+    job = workflow["jobs"]["native-security"]
     assert job["permissions"] == {"contents": "read"}
     assert {entry["target"] for entry in job["strategy"]["matrix"]["include"]} == {
         "py310-win",
@@ -53,4 +53,21 @@ def test_native_refresh_workflow_is_valid_and_not_a_release_gate():
     }
     commands = "\n".join(step.get("run", "") for step in job["steps"])
     assert "refresh_certifi_lock.py" in commands
+    assert "--distribution setuptools --profile all" in commands
     assert "release_readiness" not in commands
+
+
+def test_setuptools_refresh_cannot_change_numerical_packages_or_hashes(monkeypatch):
+    module = refresh_module(monkeypatch)
+    before = {
+        "setuptools": {"version": "83.0.0", "sha256": "a"},
+        "numpy": {"version": "2.2.6", "sha256": "b"},
+    }
+    after = {**before, "setuptools": {"version": "84.1.0", "sha256": "c"}}
+    module.validate_refresh(before, after, "setuptools")
+    with pytest.raises(ValueError, match="Unrelated version/hash changed: numpy"):
+        module.validate_refresh(
+            before, {**after, "numpy": {"version": "2.2.6", "sha256": "x"}}, "setuptools"
+        )
+    with pytest.raises(ValueError, match="Unexpected setuptools"):
+        module.validate_refresh(before, before, "setuptools")

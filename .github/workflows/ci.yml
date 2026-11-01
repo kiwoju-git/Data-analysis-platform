@@ -23,7 +23,7 @@ on:
         type: boolean
         default: false
       security_lock_refresh:
-        description: "Native certifi lock maintenance only; requires diagnostic-only mode"
+        description: "Native single-package security lock maintenance only; requires diagnostic-only mode"
         required: false
         type: boolean
         default: false

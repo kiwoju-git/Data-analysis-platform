@@ -19,7 +19,7 @@ REQUIRED_LOCK_PACKAGES = {
     "mypy": "1.13.0",
     "numpy": "2.2.6",
     "pip": "26.2.1",
-    "setuptools": "83.0.0",
+    "setuptools": "84.1.0",
     "playwright": "1.61.0",
     "pydantic-settings": "2.7.0",
     "pytest": "9.0.3",
