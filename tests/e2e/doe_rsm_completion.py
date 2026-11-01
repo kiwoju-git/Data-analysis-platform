@@ -142,7 +142,7 @@ def verify_doe_rsm_completion(browser: Browser, base: str, output: Path) -> dict
         assert result["residual_plots"]["n_total"] == 31
         assert sum(row["count"] for row in result["residual_plots"]["raw"]["histogram"]) == 31
         residuals.locator("select").select_option("standardized")
-        expect(residuals.locator("svg")).to_have_count(4)
+        expect(residuals.locator("svg.chart-frame-svg")).to_have_count(4)
         verify_optimizer_input(page, output / "rsm-completion")
         optimizer = verify_optimizer_request_context(page, base, design["design_id"])
         receipt["optimization_id"] = optimizer["optimization_id"]
