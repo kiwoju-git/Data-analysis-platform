@@ -36,6 +36,9 @@ STAGE_CALLS = {
     "doe_rsm_completion": "verify_doe_rsm_completion",
     "doe_browser_zoom": "verify_doe_browser_zoom",
     "gage_followup": "verify_gage_followup",
+    "gage_six_panel": "verify_gage_six_panel",
+    "english_system_text": "verify_english_system_text",
+    "result_metric_layout": "verify_result_metric_layout",
     "fractional_completion": "verify_fractional_completion",
     "api_translation": "verify_api_translation_boundary",
     "dataset_context": "verify_dataset_context",
@@ -83,6 +86,9 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "doe_rsm_completion",
         "doe_browser_zoom",
         "gage_followup",
+        "gage_six_panel",
+        "english_system_text",
+        "result_metric_layout",
         "bo_noise_extension",
         "desktop_resize",
         "localization_shell",
@@ -105,6 +111,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
     assert "gage_followup" in driver.suite_stage_ids("workflows")
+    assert "gage_six_panel" in driver.suite_stage_ids("workflows")
+    assert {"english_system_text", "result_metric_layout"} <= set(driver.suite_stage_ids("context"))
 
 
 @pytest.mark.parametrize("suite", ["full", "workflows", "context", "data", "prediction"])
@@ -128,6 +136,8 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
 ):
     calls = []
     closed = []
+    zoom_calls = []
+    gage_receipt = {"fixture": "synthetic_dispatch_receipt_not_browser_evidence"}
     browser = SimpleNamespace(close=lambda: closed.append(True))
 
     @contextmanager
@@ -143,8 +153,17 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
                 raise LegacyBoundary()
             if _stage == "doe_rsm_completion":
                 return {"design_id": "synthetic-design", "analysis_id": "synthetic-analysis"}
+            if _stage == "gage_six_panel":
+                return gage_receipt
 
         monkeypatch.setattr(driver, name, invoke)
+
+    def verify_gage_zoom(*args, **kwargs):
+        assert args[-1] is gage_receipt
+        assert calls[-1] == "gage_six_panel"
+        zoom_calls.append("gage_six_panel")
+
+    monkeypatch.setattr(driver, "verify_gage_six_panel_zoom", verify_gage_zoom)
     diagnostics = SimpleNamespace(root=tmp_path, step=lambda _label: None)
     kwargs = {} if suite is None else {"suite": suite}
     if suite in (None, "full", "workflows"):
@@ -156,6 +175,7 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
         stage for stage in driver.suite_stage_ids(suite or "full") if stage != "legacy_workflow"
     ]
     assert calls == expected
+    assert zoom_calls == (["gage_six_panel"] if "gage_six_panel" in expected else [])
     assert closed == [True]
 
 

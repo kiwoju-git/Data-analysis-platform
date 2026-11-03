@@ -117,7 +117,25 @@ at source `95d730b4f43b3e2fb786fc322985c6746688b084` exposed genuine display gap
 No timeout increase, retry, exception suppression or English-scan exclusion was
 used to pass these failures. The initial failure remains part of the evidence.
 Native Windows here means `windows-latest` hosted runner, not a separately tested
-physical Windows11 workstation. Browser fix verification is pending the next run.
+physical Windows11 workstation. Diagnostic run41663344331 at66b01a8 passed the
+Linux context and prediction jobs. This diagnostic-only run skips product/release
+gates and cannot authorize a release; Gage workflows and full native validation
+are tracked separately.
+
+The same initial run's Linux and Python3.11 checks found six E2E harness/document
+registration failures: the new stages were missing from the frozen dispatcher
+expectation, child-function stubs, and coverage-marker inventory. Linux recorded
+3193 passed and16 skipped alongside those six failures. The registration and
+declared order are corrected without removing a suite or changing calculations.
+The focused dispatcher/coverage regression passed74 tests with two existing
+Starlette warnings; Ruff check/format passed, and a second reviewer checked that
+no suite, assertion or native gate was removed.
+
+After the browser fixes, the local full frontend run recorded1067 passed and two
+lazy-module import timeouts (5s/10s). This is a failed run, not a full pass. The
+unchanged-timeout focused run with one worker passed both files/six tests. A fresh
+native full run is still required; neither this narrow rerun nor the earlier1059-test
+success validates all of this later source.
 
 ## Numerical Policy
 

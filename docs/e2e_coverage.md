@@ -198,6 +198,25 @@ its API and built UI; verify_linux_release.py adds two offline installations and
 external-workspace restart/restore. See running validation record for executed
 versus pending checks; fixtures are synthetic and diagnostics remain ignored.
 
+## Gage Graphs and Presentation (2026-11-03)
+
+The `workflows` partition adds `gage_six_panel`: real synthetic CSV ingestion and
+Gage forms, retain/pooled six-chart values and geometry, complete-cell filtering,
+explicit part/operator pagination, hover/pin/focus, immutable source checks and
+KO/EN stored HTML. The same stage passes its exact saved-source receipt into a
+separate real Chromium tab-zoom check at 125/150 percent. The schema-2 UI reader
+case is a labeled read-only HTTP projection, not historical file-migration evidence.
+The archive driver separately verifies exact saved sources and original report
+bytes after restart and opens all six report sections after actual server shutdown.
+
+The `context` partition adds `english_system_text` and `result_metric_layout`:
+dynamic system-text translation without modifying Korean user labels, strict
+numeric-input messages, result label/value layout and real tab zoom. The full
+ordered inventory follows actual dispatch; the existing four partitions, legacy
+journeys and aggregate gates remain unchanged. Fixture/registration unit tests
+do not replace executed browser or archive evidence; see
+`gage_charts_layout_i18n_audit.md` for current outcomes.
+
 ## RSM/Gage Follow-up (2026-11-01)
 
 The `workflows` suite adds `gage_followup`: synthetic three-column crossed
@@ -843,6 +862,9 @@ browser critical path.
 - `verify visible CCD presets, selection and saved contours`
 - `Verify actual DOE browser zoom and preserved model source`
 - `verify Gage three-column repeat/pooling/filter/report workflow`
+- `verify stored Gage six-panel graphs and actual browser zoom`
+- `verify dynamic English system text and preserved user data`
+- `verify result label/value layout and real browser zoom`
 - `verify noise-aware target/batch/replicate visible workflow`
 - `open Workbench`
   - `paste synthetic TSV and confirm schema`

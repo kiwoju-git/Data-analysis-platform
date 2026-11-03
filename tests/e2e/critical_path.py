@@ -240,8 +240,8 @@ SUITE_STAGES = {
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
-    "chart_formatting", "pilot_feedback", "english_system_text", "result_metric_layout", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension",
+    "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
