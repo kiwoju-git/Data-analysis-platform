@@ -1,6 +1,7 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
+import { runChartNoticeKeys } from "./i18n/runChartMessages";
 import type { AppLocale } from "./i18n/types";
 import { ResultMetricCard } from "./components/ResultMetricCard";
 import { formatMeasurement, formatProbability } from "./statisticalNumberFormat";
@@ -48,7 +49,7 @@ export function RunChartPanel({
   const canRun = version !== null && valueColumnId !== null && filterValidationError === null;
 
   return (
-    <section className="analysis-run-panel" data-analysis-execution={methodId}>
+    <section className="analysis-run-panel run-chart-panel" data-analysis-execution={methodId}>
       {version === null ? (
         <div className="notice-box">데이터셋 버전 생성 후 실행할 수 있습니다.</div>
       ) : (
@@ -116,7 +117,7 @@ export function RunChartPanel({
           {analysisResult?.warnings.length ? (
             <ul className="warning-list" aria-label="분석 경고">
               {analysisResult.warnings.map((warning, index) => (
-                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} /></li>
+                <li key={`${warning.code}-${index}`}><ApiNoticeText notice={warning} messageKeys={runChartNoticeKeys} showCode /></li>
               ))}
             </ul>
           ) : null}

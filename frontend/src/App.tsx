@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import "./dashboardNavigation.css";
 import { validStoredGroupIdentities } from "./groupIdentity";
-import { restoredGageRrOptions } from "./gageRrRestore";
+import { isGageRrResult, restoredGageRrOptions } from "./gageRrRestore";
 import {
   createAnalysisRun,
   createFactorialAnalysis,
@@ -32,7 +32,6 @@ import {
   type DoeFactorialAnalysisCreateRequest,
   type DoeFactorialAnalysisResponse,
   type GageRrPreflightResponse,
-  type GageRrResult,
   type GageRunChartResult,
   type GaussianProcessRegressionResult,
   type GraphicalSummaryResult,
@@ -5825,22 +5824,6 @@ function isCapabilityResult(
     candidate.capability !== null &&
     typeof candidate.histogram === "object" &&
     candidate.histogram !== null
-  );
-}
-
-function isGageRrResult(
-  value: AnalysisResultEnvelope["result"] | undefined,
-): value is GageRrResult {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-  const candidate = value as Record<string, unknown>;
-  return (
-    candidate.summary_type === "gage_rr" &&
-    (candidate.schema_version === 1 || candidate.schema_version === 2) &&
-    Array.isArray(candidate.anova_table) &&
-    typeof candidate.variance_components === "object" &&
-    candidate.variance_components !== null
   );
 }
 

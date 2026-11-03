@@ -76,7 +76,9 @@ Runs so far (2026-11-03/04, Windows CPython3.10.11 and Node22.23.2):
 | Frontend production build | passed; existing large-chunk/plugin-time warnings remain |
 | First full Vitest run | 1052 passed, 7 failed: old runtime fixture, intentionally localized Gage labels, SVG attribute-order-dependent assertions; fixes applied |
 | Failed-file and Gage adapter rerun | 5 files / 324 tests passed after fixes; not a replacement claim for a fresh full run |
-| First full ESLint | 2 new unknown-template errors plus warnings; new errors fixed, rerun required |
+| First full ESLint | 2 new unknown-template errors plus warnings; new errors fixed |
+| Fresh full frontend rerun | 123 files / 1059 tests passed; ESLint0 errors,12 pre-existing Fast Refresh warnings |
+| Full backend mypy | 242 source files passed |
 | Release receipt negative tests | 235 related release/driver tests plus 8 UI receipt tests passed; actual archive still unverified |
 | Root backend/source Ruff check | passed |
 
@@ -93,6 +95,29 @@ replaced. README installation commands target that candidate and explicitly
 require the published exact-source validation/checksum assets. Until gates and
 publication finish, main push and release are pending. No source self-SHA is
 committed after final archive creation; final evidence belongs in release assets.
+
+### First Native Browser Failure, Preserved
+
+[Run41660887417](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41660887417)
+at source `95d730b4f43b3e2fb786fc322985c6746688b084` exposed genuine display gaps:
+
+- Linux context job126003486081 found seven untranslated Run Chart warning DTO
+  messages in the visible English page. The source/API data was correct; its UI
+  warning boundary lacked a code-to-message mapping. An explicit Run-only mapping
+  fixes known warnings; unknown warning code/original text are preserved.
+- Linux workflows job126003485781 and Windows hosted workflows job126003485357
+  executed Gage successfully on the server but found no visible policy/result.
+  `App.tsx:isGageRrResult` still admitted only schemas1/2. The guard now lives in
+  the existing `gageRrRestore.ts` module and admits1/2/3, with unit checks for the
+  actual shared app/restore boundary. Unsupported schemas remain rejected.
+- The actual failing English PNG also showed concatenated Run option summaries
+  and an untranslated compact-history unloaded badge. These display boundaries
+  are now scoped layout/semantic-key fixes, with browser geometry/text checks.
+
+No timeout increase, retry, exception suppression or English-scan exclusion was
+used to pass these failures. The initial failure remains part of the evidence.
+Native Windows here means `windows-latest` hosted runner, not a separately tested
+physical Windows11 workstation. Browser fix verification is pending the next run.
 
 ## Numerical Policy
 

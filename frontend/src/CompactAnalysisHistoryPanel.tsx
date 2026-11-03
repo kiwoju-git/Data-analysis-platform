@@ -8,6 +8,7 @@ import {
 } from "./api";
 import { formatDateTime } from "./analysisWorkbenchUtils";
 import { createLatestRequestGuard } from "./latestRequest";
+import { useI18n } from "./i18n/LocaleProvider";
 
 const COMPACT_HISTORY_LIMIT = 3;
 
@@ -24,6 +25,7 @@ export function CompactAnalysisHistoryPanel({
   version: DatasetVersionResponse;
   onRestore: (analysisId: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<AnalysisRunListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,10 +68,12 @@ export function CompactAnalysisHistoryPanel({
 
   const countLabel =
     history === null
-      ? "확인 전"
+      ? t("history.compact.notLoaded")
       : history.has_more
-        ? `${history.returned_count.toLocaleString()}+`
-        : history.returned_count.toLocaleString();
+        ? `${history.returned_count.toLocaleString(locale)}+`
+        : history.returned_count.toLocaleString(locale);
+  const countDescription = history === null ? t("history.compact.notLoaded")
+    : t(history.has_more ? "history.compact.countMore" : "history.compact.count", { count: history.returned_count.toLocaleString(locale) });
   const fullHistoryUrl = `/reports?tab=history&dataset_version_id=${encodeURIComponent(version.version_id)}&method_id=${encodeURIComponent(method.method_id)}`;
 
   return (
@@ -79,7 +83,7 @@ export function CompactAnalysisHistoryPanel({
           <h4 id="compact-history-title">저장된 분석 이력</h4>
           <p>이 데이터셋에서 이전에 실행한 결과를 다시 열거나 비교할 수 있습니다.</p>
         </div>
-        <span className="status-pill" aria-label={`조회된 이력 ${countLabel}개`}>
+        <span className="status-pill" aria-label={countDescription}>
           {countLabel}
         </span>
         <button

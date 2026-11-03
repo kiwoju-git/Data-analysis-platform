@@ -35,14 +35,22 @@ def metric_geometry(page: Page) -> dict:
                 client:pair.clientWidth, scroll:pair.scrollWidth
             }))
         }));
+        const options = [...root.closest('.run-chart-panel').querySelectorAll('.option-note')].map(note => ({
+            label:rect(note.querySelector('strong')), value:rect(note.querySelector('span')),
+            client:note.clientWidth, scroll:note.scrollWidth
+        }));
         return {container:rect(root), columns:getComputedStyle(grid).gridTemplateColumns.split(' ').length,
-            viewport:{width:innerWidth,height:innerHeight}, pageScroll:document.documentElement.scrollWidth, cards};
+            viewport:{width:innerWidth,height:innerHeight}, pageScroll:document.documentElement.scrollWidth, cards, options};
     }""")
     width = evidence["container"]["width"]
     expected_columns = 4 if width >= 1028 else 2 if width >= 508 else 1
     assert evidence["columns"] == expected_columns, evidence
     assert len(evidence["cards"]) == 4, evidence
     assert evidence["pageScroll"] <= evidence["viewport"]["width"] + 1, evidence
+    assert len(evidence["options"]) == 4, evidence
+    for option in evidence["options"]:
+        assert option["value"]["top"] - option["label"]["bottom"] >= 6, option
+        assert option["scroll"] <= option["client"] + 1, option
     for card in evidence["cards"]:
         assert card["value"]["top"] - card["label"]["bottom"] >= 7, card
         assert card["scroll"] <= card["client"] + 1, card

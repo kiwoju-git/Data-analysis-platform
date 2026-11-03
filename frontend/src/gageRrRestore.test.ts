@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { restoredGageRrOptions } from "./gageRrRestore";
+import { readFileSync } from "node:fs";
+import { isGageRrResult, restoredGageRrOptions } from "./gageRrRestore";
 
 describe("stored Gage R&R input options", () => {
+  it.each([1, 2, 3])("admits schema %s at the actual app result/restore boundary", (schema) => {
+    const fixture = JSON.parse(readFileSync(new URL("../../tests/fixtures/gage_rr_six_panel.json", import.meta.url), "utf8")).auto_pool;
+    fixture.schema_version = schema;
+    if (schema < 3) delete fixture.plot_bundle;
+    const before = JSON.stringify(fixture);
+    expect(isGageRrResult(fixture)).toBe(true);
+    expect(JSON.stringify(fixture)).toBe(before);
+    expect(isGageRrResult({ ...fixture, schema_version: 4 })).toBe(false);
+    expect(isGageRrResult({ ...fixture, variance_components: null })).toBe(false);
+  });
+
   it("restores a nondefault interaction alpha without adopting the current UI default", () => {
     expect(restoredGageRrOptions({
       replicate_mode: "infer_from_rows",

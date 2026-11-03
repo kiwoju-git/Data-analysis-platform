@@ -3,6 +3,22 @@
   min-inline-size: 0;
 }
 
+.run-chart-panel .option-note {
+  display: grid;
+  align-content: start;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  min-inline-size: 0;
+  line-height: 1.45;
+}
+
+.run-chart-panel .option-note > strong,
+.run-chart-panel .option-note > span {
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .run-chart-randomness-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

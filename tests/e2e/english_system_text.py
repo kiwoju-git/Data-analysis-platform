@@ -177,6 +177,9 @@ def verify_english_system_text(browser: Browser, base: str, output: Path) -> dic
                             panel, () if label == "Measurement" else (label,)
                         )
                     )
+                    history = page.locator(".compact-analysis-history")
+                    expect(history.locator(".status-pill")).to_have_text("Not loaded")
+                    evidence["run_chart"].append(assert_english_system_text(history))
             point = panel.locator('svg [tabindex="0"]').first
             expect(point).to_be_visible()
             point.focus()
