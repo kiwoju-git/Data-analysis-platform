@@ -1827,6 +1827,14 @@ class AnalysisResultEnvelope(BaseModel):
     provenance: AnalysisProvenance | RegressionPredictionProvenance
     result: dict[str, Any] | None = None
 
+    @model_validator(mode="after")
+    def validate_gage_plot_contract(self) -> "AnalysisResultEnvelope":
+        if self.method_id == "quality.gage_rr" and self.result is not None:
+            from app.api.v1.schemas.gage_rr_plots import validate_gage_rr_plot_result
+
+            validate_gage_rr_plot_result(self.result)
+        return self
+
 
 class AnalysisResultJsonExportResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")

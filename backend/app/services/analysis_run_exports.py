@@ -1508,6 +1508,26 @@ class PreparedAnalysisReport:
     pls_components: int | None = None
 
     def render(self) -> str:
+        if self.definition is not None and self.definition.method_id == "quality.gage_rr":
+            from app.services.gage_rr_plot_report import GAGE_PLOT_SECTION_IDS
+
+            summary = ReportBody(
+                self.body.variant_id,
+                tuple(
+                    section
+                    for section in self.body.sections
+                    if section.section_id not in GAGE_PLOT_SECTION_IDS
+                ),
+            ).render()
+            plots = ReportBody(
+                self.body.variant_id,
+                tuple(
+                    section
+                    for section in self.body.sections
+                    if section.section_id in GAGE_PLOT_SECTION_IDS
+                ),
+            ).render()
+            return summary + '<div class="report-grid" data-gage-six-panel="1">' + plots + "</div>"
         markup = self.body.render()
         if self.pls_components is not None:
             return (

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "api_contract_version": 27,
+  "api_contract_version": 28,
   "metadata_schema_version": 24,
   "methods": [
     {
@@ -3558,7 +3558,7 @@
     },
     {
       "method_id": "quality.gage_rr",
-      "method_version": "0.2.0",
+      "method_version": "0.3.0",
       "module_id": "quality",
       "label_ko": "Gage R&R",
       "label_en": "Gage R&R Study",
@@ -3582,10 +3582,11 @@
           "summary_type": "gage_rr",
           "accepted_schemas": [
             1,
-            2
+            2,
+            3
           ],
           "renderer_id": "gage_rr",
-          "renderer_version": "2.2.0",
+          "renderer_version": "2.3.0",
           "variants": [
             {
               "variant_id": "default",
@@ -3609,6 +3610,26 @@
                 {
                   "section_id": "gage_variance_components",
                   "core": true
+                },
+                {
+                  "section_id": "gage_components_plot",
+                  "core": false
+                },
+                {
+                  "section_id": "gage_response_by_part",
+                  "core": false
+                },
+                {
+                  "section_id": "gage_dispersion",
+                  "core": false
+                },
+                {
+                  "section_id": "gage_response_by_operator",
+                  "core": false
+                },
+                {
+                  "section_id": "gage_xbar",
+                  "core": false
                 },
                 {
                   "section_id": "gage_interaction",

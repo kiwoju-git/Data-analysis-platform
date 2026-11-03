@@ -286,6 +286,10 @@ def test_gage_preserves_separate_series_and_does_not_invent_interaction() -> Non
     assert "replicate_index=" in body.render()
     rr = gage_result(GageRrColumn, calculate_gage_rr_anova)
     body = quality_report_body(rr)
+    assert section(body, "gage_interaction").status == "rendered"
+    rr["schema_version"] = 2
+    rr.pop("plot_bundle")
+    body = quality_report_body(rr)
     assert section(body, "gage_interaction").status == "missing"
     assert section(body, "gage_anova").status == "rendered"
     assert section(body, "gage_variance_components").status == "rendered"
@@ -430,6 +434,9 @@ def test_contract_sections_match_actual_normality_correlation_and_quality() -> N
     )
     rr = gage_result(GageRrColumn, calculate_gage_rr_anova)
     expected = definition("gage_rr", QUALITY_REPORT_VARIANTS["gage_rr"])
+    assert assess_report_body(expected, quality_report_body(rr)) == "full"
+    rr["schema_version"] = 2
+    rr.pop("plot_bundle")
     assert assess_report_body(expected, quality_report_body(rr)) == "summary"
     del rr["anova_table"]
     assert assess_report_body(expected, quality_report_body(rr)) == "unsupported"

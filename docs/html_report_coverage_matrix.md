@@ -7,7 +7,8 @@ or the executed [journey matrix](remediation_journey_matrix.md).
 
 ## Current RSM and Gage Follow-up
 
-The RSM/Gage follow-up uses API **27**, metadata **24** without a new SQL migration.
+The current Gage six-panel extension uses API **28**, metadata **24** without a SQL
+migration; the preceding RSM/Gage follow-up used API27.
 The following declarations are taken from `dedicated_report_renderers.DEFINITIONS`,
 `report_coverage.report_definitions()` and `quality_report.QUALITY_REPORT_VARIANTS`.
 They describe saved-payload coverage, not a claim that every option has passed a
@@ -17,7 +18,42 @@ browser or release-archive test.
 | --- | --- | --- |
 | `doe.response_surface` / `0.5.0` | `1, 2, 3` / dedicated `1.5.0` | Source, model/terms/ANOVA, selection/final basis, diagnostics, stationary-point status, saved contour/conditional curves and explicit region/bounds. Result 3 adds raw and standardized four-in-one views with units, full/available/displayed counts and unavailability reasons; no refit or source-row reload. Legacy result 1/2 lacking these views remains readable with the residual section unavailable and a source-specific summary level. |
 | `doe.response_optimizer` / `0.5.0` | `2, 3` / dedicated `1.5.0` | Source, exact objectives/weights, input and search bounds, constraints, saved recommendation/desirability, search budget/termination, source eligibility and warnings. Result 3 preserves region policy, cube/axial/effective bounds and separate requested-bounds/constraint/hull status. Legacy schema 2 keeps original input-bound semantics; absent newer evidence is not reconstructed. This renderer does not declare an RSM optimizer profile-curve section. |
-| `quality.gage_rr` / `0.2.0` | `1, 2` / generic `2.2.0` | Replicate mode, requested/effective interaction policy, alpha/pooling reason, full pre-pooling and selected final ANOVA, final variance components, design/sample and warnings. Schema 1 retains explicit-replicate/interaction-retain interpretation. Level remains **summary** because `gage_interaction` is unavailable with reason `interaction_means_not_stored`; this is not a missing-ANOVA claim. |
+| `quality.gage_rr` / `0.3.0` | `1, 2, 3` / generic `2.3.0` | Existing policy, full/final ANOVA and variance tables remain. Valid result3/plot1 adds six saved charts: components, response by part, R/S by operator, operator boxes, Xbar by operator, actual part/operator means. Full coverage requires all six available saved summaries. Schemas1/2 remain **summary**: saved variance components can produce the component chart; the other five have `gage_plot_bundle_not_stored_reanalysis_required`. No source-row reload or ANOVA/pooling recalculation. |
+
+### Saved Gage Plot Contract
+
+The report validates the typed plot bundle and its saved-result relationships before
+rendering. An invalid current bundle is unsupported, not a full report containing
+blank SVGs. A legitimately unavailable numeric summary is named as missing and gives
+a summary report. Existing files are not rewritten or upgraded while reading.
+
+The static order is components / response-by-part, R-or-S / operator boxplot,
+Xbar / interaction, using the existing two-column report layout and narrow-screen
+one-column behavior. R and Xbar print pages contain at most five parts per three
+operators to keep category labels readable; raw/interaction pages use ten parts
+per three operators, and boxplot pages use six operators. All saved summary pages
+and tables are included. Page counts never substitute for full observation counts.
+
+The shared adaptive numeric-axis policy covers stored limits including zero,
+whiskers and the full measurement range, even when display outliers are capped.
+Each plot family keeps a common Y range across its pages. The stored raw display
+count/total and displayed/total outlier counts remain visible. Index aliases P1/O1
+do not expose original identifiers. Measurement names/units are escaped text,
+and full axis text remains visible below abbreviated SVG labels.
+
+R/S uses the saved within-cell policy, not the selected ANOVA repeatability;
+Xbar uses the selected ANOVA repeatability and is explicitly a part-discrimination
+diagnostic, not proof of a process fault. Interaction lines remain actual cell
+means even after pooling. Type7 boxes use all individual measurements and observed
+1.5-IQR whiskers, not a distribution of cell means. Component percentages are
+copied unchanged and are not renormalized into an additive percentage series.
+
+Unit evidence: `test_gage_rr_plot_report.py` checks actual SVG geometry/limits,
+stored values, zero limits, KO/EN, escaping, source checksum, malformed summaries,
+legacy coverage and 5,580-observation pagination with a 5,000-raw-point display cap.
+Calculation and source-row access are patched to fail during export tests.
+These tests are not evidence of a browser or release-archive execution; those
+stages are tracked in [the current audit](gage_charts_layout_i18n_audit.md).
 
 Current RSM plot bundle/view JSON schemas are 2 (legacy 1); the plot asset storage
 envelope remains 1. Exact custom-view reports read the explicitly saved view/hash,
@@ -133,7 +169,7 @@ Versions and accepted stored schemas are declared in the live catalog and
 | quality.attribute_control_chart | quality_report: p/np/c/u summaries/charts/signals | Point-varying limits and frozen Phase II dependency |
 | quality.run_chart | quality_report: runs/randomness/signals | Median only, no invented LCL/UCL |
 | quality.capability | quality_report: capability/nonconformance/histogram/specifications | Stored bins, zero LSL/target retained |
-| quality.gage_rr | quality_report 2.2.0: replicate/interaction policy, full and final ANOVA, final variance components/design/sample | Method 0.2.0/result 2; schema 1 readable with explicit/retain semantics. Summary only because interaction means/plot are not stored, not because ANOVA or pooling policy is absent |
+| quality.gage_rr | quality_report 2.3.0: existing policy/ANOVA/components plus six saved charts from result3/plot1 | Method0.3.0/result3; schemas1/2 readable unchanged with only saved component chart and five explicit missing-chart reasons. New full coverage requires valid available plot summaries; report never refits or reloads rows |
 | quality.gage_run_chart | quality_report: part/operator/replicate and separate run series | No cross-operator joins or invented timestamps |
 | quality.two_variances | two_variances_report: settings/groups/ratio/test/conditional interval/plots | BF intentionally has no ratio CI; Bonett deferred |
 | eda.equal_variances | Basic EDA: groups/tests/multiple-comparison intervals/pairs | Distinct from Two Variances ratio CI |

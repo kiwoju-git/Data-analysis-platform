@@ -44,7 +44,7 @@ INLINE_REPORT_CONTRACTS: dict[str, tuple[str, frozenset[int]]] = {
     "quality.individuals_chart": ("individuals_chart", frozenset({1})),
     "quality.run_chart": ("run_chart", frozenset({1, 2})),
     "quality.capability": ("capability_analysis", frozenset({1})),
-    "quality.gage_rr": ("gage_rr", frozenset({1, 2})),
+    "quality.gage_rr": ("gage_rr", frozenset({1, 2, 3})),
     "quality.gage_run_chart": ("gage_run_chart", frozenset({1})),
 }
 
@@ -110,8 +110,10 @@ def report_definitions() -> dict[str, ReportDefinition]:
             accepted_schemas=tuple(sorted(schemas)),
             renderer_id=summary_type,
             renderer_version=(
-                "2.2.0"
-                if method_id in {"regression.gaussian_process", "quality.gage_rr"}
+                "2.3.0"
+                if method_id == "quality.gage_rr"
+                else "2.2.0"
+                if method_id == "regression.gaussian_process"
                 else "2.1.0"
             ),
             variants=method_variants.get(

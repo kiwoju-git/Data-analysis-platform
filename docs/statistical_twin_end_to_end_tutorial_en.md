@@ -72,3 +72,31 @@ Open **Manage** to find datasets, analysis results, models, designs, and studies
 - **Artifact mismatch**: do not modify workspace files manually; use the application retention and recovery workflows.
 
 The application is local-first and binds to `127.0.0.1`. It does not require uploading the dataset to an external service.
+
+## 10. Inspect Gage R&R Diagnostics
+
+Import `examples/tutorial/studio_gage_rr.csv` and select **Quality > Gage R&R**.
+Assign `measurement_mpa` as measurement, `part_id` as part and `operator_id` as
+operator. The default infers repeats from the existing rows and explicitly uses
+`auto_pool` with alpha 0.05. Advanced settings can instead select the `replicate`
+column and retain interaction. Those settings, not a fourth required column,
+determine the analysis policy.
+
+Current API 28 uses Gage method 0.3.0/result 3. Check the saved policy and full/final
+ANOVA first. The six panels show components / response by part, R or S / response
+by operator, and Xbar / interaction. R is used for 2 through 8 measurements per cell;
+S is used for 9 or more. Xbar uses the selected ANOVA repeatability estimate for
+part-discrimination diagnostics, not process-stability alarms. The interaction
+plot uses actual cell means even when interaction was pooled out of the model.
+
+Part/operator aliases such as P1/O1 protect original identifiers. Paging does not
+change full-data summaries or shared axis limits. A displayed raw-point cap is
+separate from analysis N and the full box/mean summaries. Export HTML, reopen the
+saved result and compare the saved policy, values and plot sections. An old
+schema 1/2 result can show its stored components but needs a new analysis for the
+other five panels; opening it does not rewrite or recompute the artifact.
+
+The Korean tutorial's retained-interaction numerical example remains a separate
+policy-specific reference. The new plots do not change those calculations and
+are not evidence of a same-data comparison with Minitab. Current platform/browser
+execution evidence is recorded in `docs/gage_charts_layout_i18n_audit.md`.

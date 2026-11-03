@@ -1,6 +1,20 @@
 # Runtime Compatibility Contract
 
-## Current RSM/Gage Follow-up (API27)
+## Current Gage Six-Panel Contract (API28)
+
+API 28 adds `quality.gage_rr` method 0.3.0/result 3 with the stored, typed
+`plot_bundle` schema 1. The six diagnostics use the selected ANOVA's saved values;
+this version does not change the existing retain/auto-pool calculations.
+Frontend and Windows startup require API 28/metadata 24; Linux reads the same
+backend constants. No SQL migration or existing artifact rewrite is required.
+Schema 1/2 Gage results remain readable with their original checksums and policies.
+Their stored variance components support the components panel; the other five
+panels require a new analysis, rather than silently reloading today's source rows.
+RSM/optimizer remain method 0.5.0. See the
+[Gage contract](gage_rr_method_contract.md) and
+[current validation ledger](gage_charts_layout_i18n_audit.md).
+
+## RSM/Gage Follow-up (API27)
 
 API27 adds optional Gage replicate-column/mode and interaction-policy contracts,
 RSM final residual views/observed response summary, and explicit plot/optimizer

@@ -5,6 +5,7 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.gage_rr_plot_report import GAGE_PLOT_SECTION_IDS, gage_rr_plot_sections
 from app.services.report_contract import (
     ReportBody,
     ReportSection,
@@ -29,7 +30,7 @@ _SECTIONS = {
         "gage_anova",
         "gage_full_anova",
         "gage_variance_components",
-        "gage_interaction",
+        *GAGE_PLOT_SECTION_IDS,
     ),
     "gage_run_chart": ("gage_run_plot", "gage_group_summaries"),
 }
@@ -506,13 +507,7 @@ def quality_report_body(payload: dict[str, Any], locale: ReportLocale = "en") ->
             if isinstance(components, dict) and components
             else None,
         )
-        add(
-            "gage_interaction",
-            "Part by Operator Interaction",
-            "부품과 작업자 교호작용",
-            None,
-            reason="interaction_means_not_stored",
-        )
+        sections.extend(gage_rr_plot_sections(payload, locale))
     elif kind == "gage_run_chart":
         chart = payload.get("chart") or {}
         points = chart.get("points")

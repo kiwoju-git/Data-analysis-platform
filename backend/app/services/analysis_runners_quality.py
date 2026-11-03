@@ -16,6 +16,7 @@ from app.api.v1.schemas.analyses import (
     RunChartOptions,
     SubgroupChartOptions,
 )
+from app.api.v1.schemas.gage_rr_plots import GageRrPlotBundle
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
@@ -1011,6 +1012,7 @@ def run_gage_rr_analysis(
             )
         except GageRrError as exc:
             raise gage_rr_api_error(exc.code) from exc
+        GageRrPlotBundle.model_validate(result["plot_bundle"])
         warnings = _gage_rr_warnings(result)
         return _store_succeeded_analysis_result(
             settings=settings,

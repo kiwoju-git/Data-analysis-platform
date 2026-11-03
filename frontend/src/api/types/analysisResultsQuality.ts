@@ -694,6 +694,119 @@ export interface GageRrVarianceComponent {
   percent_study_variation: number | null;
 }
 
+export interface GageRrPlotState {
+  status: "available" | "unavailable";
+  unavailable_reason: string | null;
+}
+
+export interface GageRrPlotRawPoint {
+  part_index: number;
+  operator_index: number;
+  source_row_number: number;
+  value: number;
+}
+
+export interface GageRrPlotCellSummary {
+  part_index: number;
+  operator_index: number;
+  n: number;
+  mean: number | null;
+  range: number | null;
+  sample_sd: number | null;
+}
+
+export interface GageRrPlotBundle {
+  schema_version: 1;
+  measurement: { column_id: string; display_name: string; unit: string | null };
+  measurement_range: { minimum: number; maximum: number };
+  counts: {
+    n_total: number;
+    n_used: number;
+    n_excluded: number;
+    part_count: number;
+    operator_count: number;
+    replicate_count: number;
+    cell_count: number;
+    raw_point_count: number;
+    displayed_raw_point_count: number;
+    raw_point_limit: number;
+    raw_point_policy: "deterministic_cell_stratified_source_row";
+    truncated: boolean;
+  };
+  parts: { part_index: number; n: number; mean: number | null }[];
+  operators: { operator_index: number; n: number; mean: number | null }[];
+  cells: GageRrPlotCellSummary[];
+  components: GageRrPlotState & {
+    items: {
+      component: "total_gage_rr" | "repeatability" | "reproducibility" | "part_to_part";
+      final_variance: number | null;
+      standard_deviation: number | null;
+      percent_contribution: number | null;
+      percent_study_variation: number | null;
+    }[];
+  };
+  dispersion: GageRrPlotState & {
+    statistic: "range" | "sample_sd";
+    policy: "within_cell_range_d3_d4_v1" | "within_cell_sample_sd_c4_b3_b4_v1";
+    constant_precision: "D3_D4_three_decimal_table" | "c4_lgamma_full_precision";
+    warning_codes: "within_cell_variation_zero"[];
+    center: number | null;
+    lower_limit: number | null;
+    upper_limit: number | null;
+    constants: { D3: number | null; D4: number | null; c4: number | null; B3: number | null; B4: number | null };
+    points: {
+      part_index: number; operator_index: number; n: number;
+      value: number | null; outside_limits: boolean | null;
+    }[];
+  };
+  xbar: GageRrPlotState & {
+    center: number | null;
+    lower_limit: number | null;
+    upper_limit: number | null;
+    repeatability_variance: number | null;
+    limit_source: "selected_anova_repeatability";
+    points: {
+      part_index: number; operator_index: number; n: number;
+      value: number | null; outside_repeatability_limits: boolean | null;
+    }[];
+  };
+  response_by_part: GageRrPlotState & { points: GageRrPlotRawPoint[] };
+  response_by_operator: GageRrPlotState & {
+    quantile_policy: "type7_linear";
+    whisker_policy: "observed_values_within_1_5_iqr_fences";
+    boxes: {
+      operator_index: number;
+      n: number;
+      mean: number | null;
+      q1: number | null;
+      median: number | null;
+      q3: number | null;
+      lower_fence: number | null;
+      upper_fence: number | null;
+      lower_whisker: number | null;
+      upper_whisker: number | null;
+      outlier_count: number;
+      displayed_outlier_count: number;
+      outliers: GageRrPlotRawPoint[];
+    }[];
+  };
+  interaction: GageRrPlotState & {
+    interaction_pooled: boolean;
+    points: { part_index: number; operator_index: number; n: number; mean: number | null }[];
+  };
+  calculation_metadata: {
+    policy_version: "gage_rr_six_panel_v1";
+    part_order: "sorted_full_stripped_identity";
+    operator_order: "sorted_full_stripped_identity";
+    identifier_policy: "zero_based_indices_original_labels_redacted";
+    summary_scope: "all_used_observations_before_display_cap";
+    selected_interaction_policy: "retain" | "pooled";
+    replicate_mode: "infer_from_rows" | "explicit_column";
+    xbar_interpretation: "part_discrimination_not_process_stability";
+    interaction_interpretation: "observed_cell_means_even_when_pooled";
+  };
+}
+
 export interface GageRrResult {
   schema_version: number;
   summary_type: "gage_rr";
@@ -714,6 +827,7 @@ export interface GageRrResult {
     pooled: boolean;
     reason: string;
   };
+  plot_bundle?: GageRrPlotBundle;
   variance_components: {
     repeatability: GageRrVarianceComponent;
     operator: GageRrVarianceComponent;

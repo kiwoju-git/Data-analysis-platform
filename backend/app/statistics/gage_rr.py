@@ -16,6 +16,7 @@ from app.statistics.gage_rr_data import (
 from app.statistics.gage_rr_data import (
     column_payload as _column_payload,
 )
+from app.statistics.gage_rr_plots import build_gage_rr_plot_bundle
 
 
 class GageRrError(ValueError):
@@ -96,7 +97,7 @@ def calculate_gage_rr_anova(
         "reason": reason,
     }
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "summary_type": "gage_rr",
         "method": "balanced_crossed_anova",
         "missing_policy": missing_policy,
@@ -114,6 +115,12 @@ def calculate_gage_rr_anova(
         "reduced_anova_table": None if reduced is None else reduced["table"],
         "interaction_selection": selection,
         "variance_components": components,
+        "plot_bundle": build_gage_rr_plot_bundle(
+            prepared,
+            measurement_column=measurement_column,
+            variance_components=components,
+            interaction_pooled=pooled,
+        ),
         "warnings": _warnings(sample, components, pooled=pooled),
         "notes": [
             "interaction_pooled" if pooled else "interaction_not_pooled",

@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.analyses.registry import METHOD_VERSIONS
+from app.api.v1.schemas.gage_rr_plots import GageRrPlotBundle
 from app.core.config import Settings
 from app.main import create_app
 from app.services.analysis_run_results import load_analysis_run_result
@@ -101,7 +102,8 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
         assert response.status_code == 201, response.text
         envelope = response.json()
         result = envelope["result"]
-        assert result["schema_version"] == 2
+        assert result["schema_version"] == 3
+        GageRrPlotBundle.model_validate(result["plot_bundle"])
         assert result["interaction_selection"]["pooled"]
         assert result["design"]["replicate_count"] == 2
         path = f"/api/v1/analysis-runs/{envelope['analysis_id']}"
@@ -144,6 +146,16 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
             assert downloaded.status_code == 200, downloaded.text
             assert 'data-report-section="gage_policy"' in downloaded.text
             assert 'data-report-section="gage_full_anova"' in downloaded.text
+            assert 'data-report-level="full"' in downloaded.text
+            for section in (
+                "gage_components_plot",
+                "gage_response_by_part",
+                "gage_dispersion",
+                "gage_response_by_operator",
+                "gage_xbar",
+                "gage_interaction",
+            ):
+                assert f'data-report-section="{section}"' in downloaded.text
             assert "auto_pool" in downloaded.text
             assert "infer_from_rows" in downloaded.text
         assert hashlib.sha256(client.get(path + "/result").content).hexdigest() == digest
@@ -159,6 +171,7 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
             "interaction_selection",
             "full_anova_table",
             "reduced_anova_table",
+            "plot_bundle",
         ):
             legacy["result"].pop(key, None)
         legacy_bytes = json.dumps(legacy, ensure_ascii=False).encode()
@@ -185,6 +198,92 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
             html = quality_report_body(restored.envelope.result, locale).render()
             assert "legacy_interaction_retained" in html
             assert 'data-report-section="gage_full_anova"' in html
+        assert legacy_path.read_bytes() == legacy_bytes
+
+
+@pytest.mark.parametrize("legacy_schema", [1, 2])
+def test_six_panel_filtered_storage_and_legacy_bytes_are_not_rebuilt(
+    tmp_path, monkeypatch, legacy_schema
+):
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = upload(client)
+        columns = {column["display_name"]: column["column_id"] for column in version["columns"]}
+        response = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                "method_id": "quality.gage_rr",
+                "method_version": METHOD_VERSIONS["quality.gage_rr"],
+                "dataset_version_id": version["version_id"],
+                "roles": {},
+                "options": {
+                    "measurement_column_id": columns["measurement"],
+                    "part_column_id": columns["part"],
+                    "operator_column_id": columns["operator"],
+                    "replicate_mode": "infer_from_rows",
+                    "interaction_policy": "retain" if legacy_schema == 1 else "auto_pool",
+                },
+                "filter_snapshot": {
+                    "expression_version": 1,
+                    "conditions": [{"column_id": columns["part"], "operator": "ne", "value": "P0"}],
+                },
+            },
+        )
+        assert response.status_code == 201, response.text
+        envelope = response.json()
+        bundle = envelope["result"]["plot_bundle"]
+        assert bundle["counts"]["n_used"] == 54
+        assert bundle["counts"]["part_count"] == 9
+        assert (
+            min(point["source_row_number"] for point in bundle["response_by_part"]["points"]) == 7
+        )
+        assert (
+            max(point["source_row_number"] for point in bundle["response_by_part"]["points"]) == 60
+        )
+        assert "P0" not in json.dumps(bundle)
+        GageRrPlotBundle.model_validate(bundle)
+        analysis_id = UUID(envelope["analysis_id"])
+        record = get_analysis_run_record(tmp_path, str(analysis_id))
+        assert record is not None and record.result_path is not None
+        stored_path = tmp_path / record.result_path
+        original_bytes = stored_path.read_bytes()
+
+        def forbidden(*args, **kwargs):
+            pytest.fail("Restoring a saved Gage result must not rebuild plots or read rows")
+
+        monkeypatch.setattr("app.statistics.gage_rr.build_gage_rr_plot_bundle", forbidden)
+        monkeypatch.setattr("app.services.dataset_rows.iter_dataset_rows", forbidden)
+        restored = load_analysis_run_result(settings, analysis_id)
+        assert restored.envelope.result["plot_bundle"] == bundle
+        assert stored_path.read_bytes() == original_bytes
+
+        legacy = json.loads(original_bytes)
+        legacy["method_version"] = "0.1.0" if legacy_schema == 1 else "0.2.0"
+        legacy["result"]["schema_version"] = legacy_schema
+        legacy["result"].pop("plot_bundle")
+        if legacy_schema == 1:
+            for key in (
+                "replicate_mode",
+                "interaction_selection",
+                "full_anova_table",
+                "reduced_anova_table",
+            ):
+                legacy["result"].pop(key)
+        legacy_bytes = json.dumps(legacy, ensure_ascii=False).encode()
+        legacy_path = tmp_path / f"synthetic-schema{legacy_schema}-plots-absent.json"
+        legacy_path.write_bytes(legacy_bytes)
+        legacy_record = replace(
+            record,
+            method_version=legacy["method_version"],
+            result_path=legacy_path.name,
+            result_sha256=hashlib.sha256(legacy_bytes).hexdigest(),
+        )
+        monkeypatch.setattr(
+            "app.services.analysis_run_results.get_analysis_run_record", lambda *args: legacy_record
+        )
+        old = load_analysis_run_result(settings, analysis_id)
+        assert old.envelope.result == legacy["result"]
+        assert "plot_bundle" not in old.envelope.result
         assert legacy_path.read_bytes() == legacy_bytes
 
 
