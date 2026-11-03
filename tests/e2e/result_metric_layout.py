@@ -16,6 +16,7 @@ from english_system_text import (
     run_chart_fixture,
 )
 from pilot_edge_cases import _locale
+from viewport_evidence import capture_viewport_evidence
 
 
 def metric_geometry(page: Page) -> dict:
@@ -73,6 +74,7 @@ def verify_result_metric_layout(
         "mechanism": "chrome.tabs.setZoom/getZoom",
         "deviceScaleFactor_override": False,
         "steps": [],
+        "screenshots": [],
     }
     with tempfile.TemporaryDirectory(prefix="datalab-metric-zoom-") as temporary:
         directory = Path(temporary)
@@ -184,12 +186,22 @@ def verify_result_metric_layout(
                         assert not posts, posts
                         assert not errors, errors
                         if width in (1024, 1440) and factor in (1.0, 1.5):
-                            page.locator(".run-chart-randomness-container").screenshot(
-                                path=str(
+                            for index in (0, 3):
+                                image = capture_viewport_evidence(
+                                    page,
+                                    panel.locator("[data-result-metric]").nth(index),
                                     diagnostics.target
-                                    / f"{locale}-{width}-{round(factor*100)}.png"
+                                    / f"{locale}-{width}-{round(factor*100)}-card-{index+1}.png",
                                 )
-                            )
+                                report["screenshots"].append(
+                                    {
+                                        **image,
+                                        "locale": locale,
+                                        "browserZoom": zoom,
+                                        "physicalViewportWidth": width,
+                                        "cardIndex": index,
+                                    }
+                                )
             assert {step["columns"] for step in report["steps"]} == {1, 2, 4}, report
             assert _source_digest(page, base, envelope["analysis_id"]) == before_hash
             report.update(

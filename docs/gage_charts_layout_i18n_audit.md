@@ -135,7 +135,34 @@ After the browser fixes, the local full frontend run recorded1067 passed and two
 lazy-module import timeouts (5s/10s). This is a failed run, not a full pass. The
 unchanged-timeout focused run with one worker passed both files/six tests. A fresh
 native full run is still required; neither this narrow rerun nor the earlier1059-test
-success validates all of this later source.
+success validates all of this later source. A second local full run repeated the
+same two import timeouts/1067 passes; no timeout was increased to conceal them.
+
+Diagnostic run41663344331 then reproduced the same Gage pointer interception on
+both Linux job126012021497 and Windows job126012021119: an observed raw marker
+was covered by a part-mean marker. Numeric/API checks preceding that click passed.
+The fix preserves coordinates, jitter and saved data while placing summaries
+behind raw marks and giving earlier source rows deterministic overlap priority.
+Every point remains keyboard-addressable; this does not claim that coincident
+points have separate mouse hit areas. The browser test retains the original
+raw:1 target and ordinary click, with no forced click or hidden assertion removal.
+
+The successful context diagnostic recorded51 live locale/width/zoom stages:
+100/125/150% real tab zoom,1024/1280/1440px plus390px at100%,1/2/4 columns,
+approximately8px metric gaps,6px detail gaps and7px setting-note gaps. Page
+overflow, analysis POSTs during transitions and page errors were zero; source
+hashes were preserved. Some element-only150% PNGs were blank although the trace's
+viewport frame and DOM measurements showed rendered cards. Those PNGs are not
+accepted visual evidence. Capture is being changed to actual visible viewport
+screenshots with intersection/pixel checks; final-source replay remains required.
+
+A final source review found an unbounded clamp around the S-chart c4 square-root.
+Injected invalid constants reproduced three unit failures (including division by
+zero); this is an isolated numerical-boundary test, not a claim of a real dataset
+failure. A64-machine-epsilon domain check now permits only boundary roundoff and
+marks that plot unavailable otherwise, preserving ANOVA. The focused plot/report
+suite passed51 tests after the change, including the unchanged hand-checkable
+R/S and selected-repeatability limits.
 
 ## Numerical Policy
 

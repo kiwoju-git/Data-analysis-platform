@@ -212,19 +212,29 @@ def _dispersion(cells: list[dict[str, Any]], repeats: int) -> dict[str, Any]:
     values = [cell[key] for cell in cells]
     center = _mean(values) if all(value is not None for value in values) else None
     constants: dict[str, float | None] = dict.fromkeys(("D3", "D4", "c4", "B3", "B4"))
+    low_factor: float | None = None
+    high_factor: float | None = None
+    invalid_constant = False
     if use_range:
         constants["D3"] = low_factor = XBAR_R_CONSTANTS[repeats]["d3"]
         constants["D4"] = high_factor = XBAR_R_CONSTANTS[repeats]["d4"]
     else:
         c4 = exp(0.5 * log(2 / (repeats - 1)) + lgamma(repeats / 2) - lgamma((repeats - 1) / 2))
-        correction = 3 * sqrt(max(0, 1 - c4 * c4)) / c4
-        constants["c4"] = c4
-        constants["B3"] = low_factor = max(0, 1 - correction)
-        constants["B4"] = high_factor = 1 + correction
-    lower = None if center is None else _finite(low_factor * center)
-    upper = None if center is None else _finite(high_factor * center)
+        # c4 is in (0, 1). Only a few ulps at that boundary are roundoff.
+        invalid_constant = not isfinite(c4) or c4 <= 0 or c4 > 1 + 64 * 2.220446049250313e-16
+        if not invalid_constant:
+            c4 = min(c4, 1.0)
+            correction = 3 * sqrt(1 - c4 * c4) / c4
+            constants["c4"] = c4
+            constants["B3"] = low_factor = max(0, 1 - correction)
+            constants["B4"] = high_factor = 1 + correction
+    lower = None if center is None or low_factor is None else _finite(low_factor * center)
+    upper = None if center is None or high_factor is None else _finite(high_factor * center)
+    state = _state(all(value is not None for value in (center, lower, upper)))
+    if invalid_constant:
+        state["unavailable_reason"] = "invalid_dispersion_constant"
     return {
-        **_state(all(value is not None for value in (center, lower, upper))),
+        **state,
         "statistic": key,
         "policy": "within_cell_range_d3_d4_v1"
         if use_range

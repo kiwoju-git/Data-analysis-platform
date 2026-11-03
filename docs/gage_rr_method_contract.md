@@ -92,8 +92,10 @@ The six panels are:
 - Within-cell dispersion: r2..8 uses each cell's max-minus-min, pooled mean range,
   and the existing three-decimal D3/D4 constants. Policy is
   `within_cell_range_d3_d4_v1`; r2 has D3=0 and D4=3.267. r>=9 uses ddof1 cell SD,
-  pooled mean SD and c4 computed with log-gamma. B3=max(0,1-3*sqrt(1-c4^2)/c4),
-  B4=1+3*sqrt(1-c4^2)/c4. Zero within-cell variation keeps real zero limits and
+  mean of all cell SDs and c4 computed with log-gamma. B3=max(0,1-3*sqrt(1-c4^2)/c4),
+  B4=1+3*sqrt(1-c4^2)/c4. The c4 domain is(0,1]; only an excess of up to64
+  machine epsilons above1 is treated as roundoff. Invalid constants make the
+  dispersion plot unavailable without hiding ANOVA. Zero within-cell variation keeps real zero limits and
   adds `within_cell_variation_zero`, not an invented positive range.
 - Xbar: actual cell means, overall grand mean and limits
   grand mean +/-3*selected final repeatability SD/sqrt(r). The source is

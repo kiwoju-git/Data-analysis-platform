@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -135,6 +136,7 @@ def verify_english_system_text(browser: Browser, base: str, output: Path) -> dic
         "run_chart": [],
         "capability_errors": [],
         "coverage": "active Run Chart and Capability only",
+        "locale_sequence": ["ko", "en", "ko", "en"],
     }
     with diagnosed_page(browser, output, "english-system-text", locale="en") as page:
         for label in ("Measurement", "측정값 사용자 이름"):
@@ -265,5 +267,8 @@ def verify_english_system_text(browser: Browser, base: str, output: Path) -> dic
         status="succeeded",
         analysis_posts_during_locale_changes=0,
         source_hashes_preserved=True,
+    )
+    (output / "english-system-text" / "receipt.json").write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     return evidence

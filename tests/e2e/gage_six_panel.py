@@ -37,6 +37,7 @@ from pilot_edge_cases import (
     digest,
     ingest,
 )
+from viewport_evidence import capture_viewport_evidence
 
 ROUTE = "/analysis/quality/quality.gage_rr"
 MEASUREMENT = "측정값 한국어 유지"
@@ -309,7 +310,8 @@ def _interaction(page: Page, charts: Locator) -> None:
     assert (
         items.evaluate_all("nodes => nodes.filter(n => n.tabIndex === 0).length") == 1
     )
-    first, second = items.nth(0), items.nth(1)
+    first = chart.locator('[data-point-id="raw:1"]')
+    second = chart.locator('[data-point-id="raw:2"]')
     first.hover()
     expect(page.get_by_role("tooltip")).to_be_visible()
     first.click()
@@ -327,6 +329,19 @@ def _interaction(page: Page, charts: Locator) -> None:
     assert (
         items.evaluate_all("nodes => nodes.filter(n => n.tabIndex === 0).length") == 1
     )
+    page.keyboard.press("Home")
+    mean = chart.locator('[data-point-id="part-mean:0"]')
+    expect(mean).to_be_focused()
+    page.keyboard.press("Enter")
+    expect(mean).to_have_attribute("data-selected", "true")
+    expect(page.get_by_role("tooltip")).to_be_visible()
+    page.keyboard.press("Escape")
+    expected_ids = set(items.evaluate_all("nodes => nodes.map(n => n.dataset.pointId)"))
+    visited = set()
+    for _ in range(len(expected_ids)):
+        visited.add(page.evaluate("document.activeElement.dataset.pointId"))
+        page.keyboard.press("ArrowRight")
+    assert visited == expected_ids, "Keyboard must reach every raw and mean marker"
     page.keyboard.press("Tab")
     assert not chart.locator("svg.chart-frame-svg [data-point-id]:focus").count()
 
@@ -543,8 +558,8 @@ def verify_gage_six_panel(browser: Browser, base: str, output: Path) -> dict:
             coordinates = _graph_coordinates(charts)
             post_count = len(analysis_posts)
             pinned = charts.locator(
-                '[data-gage-chart-kind="response_by_part"] [data-point-id]'
-            ).first
+                '[data-gage-chart-kind="response_by_part"] [data-point-id="raw:1"]'
+            )
             pinned.click()
             for locale in ("ko", "en", "ko"):
                 _locale(page, locale)
@@ -809,9 +824,23 @@ def verify_gage_six_panel_zoom(
                     )
                     assert _graph_coordinates(charts) == coordinates
                     expect(charts).to_contain_text(MEASUREMENT)
-                    charts.screenshot(
-                        path=str(target / f"{locale}-{round(factor*100)}.png")
-                    )
+                    result["steps"][-1]["viewport_evidence"] = [
+                        {
+                            "chart_kind": kind,
+                            **capture_viewport_evidence(
+                                page,
+                                charts.locator(
+                                    f'[data-gage-chart-kind="{kind}"] svg.chart-frame-svg'
+                                ),
+                                target
+                                / (
+                                    f"{len(result['steps']):02d}-{locale}-"
+                                    f"{round(factor*100)}-{kind}.png"
+                                ),
+                            ),
+                        }
+                        for kind in ("components", "interaction")
+                    ]
                     assert not posts and not errors and not assets
             assert _api(page, base, source_path) == original
             result["source_digest"] = digest(original)

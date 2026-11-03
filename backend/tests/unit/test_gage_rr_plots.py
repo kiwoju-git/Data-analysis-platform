@@ -155,6 +155,28 @@ def test_strong_interaction_unchanged_actual_cell_means_and_zero_within_notice()
     assert zero["xbar"]["points"][0]["outside_repeatability_limits"] is True
 
 
+@pytest.mark.parametrize("invalid_c4", [1.01, 0.0, float("inf")])
+def test_s_chart_rejects_invalid_constant_without_hiding_anova(monkeypatch, invalid_c4):
+    monkeypatch.setattr("app.statistics.gage_rr_plots.exp", lambda _: invalid_c4)
+    result = calculate(observations(repeats=9))
+    plot = result["plot_bundle"]["dispersion"]
+    assert plot["status"] == "unavailable"
+    assert plot["unavailable_reason"] == "invalid_dispersion_constant"
+    assert plot["lower_limit"] is None and plot["upper_limit"] is None
+    assert plot["constants"]["c4"] is None
+    assert result["anova_table"]
+    GageRrPlotBundle.model_validate(result["plot_bundle"])
+    json.dumps(result, allow_nan=False)
+
+
+def test_s_chart_only_accepts_roundoff_at_unit_constant_boundary(monkeypatch):
+    monkeypatch.setattr("app.statistics.gage_rr_plots.exp", lambda _: math.nextafter(1.0, 2.0))
+    plot = calculate(observations(repeats=9))["plot_bundle"]["dispersion"]
+    assert plot["status"] == "available"
+    assert plot["constants"]["c4"] == 1.0
+    assert plot["lower_limit"] == plot["center"] == plot["upper_limit"]
+
+
 def test_shuffle_explicit_inferred_and_long_private_identities_preserve_summaries():
     rows = observations()
     for row in rows:

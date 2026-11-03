@@ -122,7 +122,8 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
     details: [{ label: translate("gage.charts.partMean"), value: formatExactNumericValue(part.mean) }, { label: translate("gage.charts.count"), value: String(part.n) }],
     x: partPosition.get(part.part_index)!, y: part.mean, className: "gage-part-mean", marker: "diamond", seriesId: "part-means",
   }] : []);
-  const responsePart = { points: [...measurementPoints, ...meanPoints], series: [...seriesFor(measurementPoints, "none"),
+  // Keep raw markers above summaries; earlier source rows own overlapping raw hits.
+  const responsePart = { points: [...meanPoints, ...[...measurementPoints].reverse()], series: [...seriesFor(measurementPoints, "none"),
     { id: "part-means", label: translate("gage.charts.partMean"), className: "gage-part-mean", pointIds: meanPoints.map((item) => item.id), connect: "line" as const }] };
   const interactionPoints = bundle.interaction.points.filter(included).flatMap((item) => finite(item.mean)
     ? [point(`interaction:${item.operator_index}:${item.part_index}`, item.part_index, item.operator_index, partPosition.get(item.part_index)!, item.mean)] : []);

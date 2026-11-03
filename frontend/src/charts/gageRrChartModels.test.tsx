@@ -47,6 +47,34 @@ describe("Gage six-panel saved-value adapters", () => {
     expect(chart.bars.find((bar) => bar.id === "total_gage_rr:1")?.value).toBe(fixtures.auto_pool.variance_components.total_gage_rr.percent_study_variation);
   });
 
+  it("paints individual measurements above means without changing saved values or display coordinates", () => {
+    const bundle = fixtures.retain.plot_bundle!;
+    const before = JSON.stringify(bundle);
+    const model = gageChartModels(bundle, 0, 0, t);
+    const points = model.responsePart.points;
+    const means = points.filter((point) => point.id.startsWith("part-mean:"));
+    const raw = points.filter((point) => point.id.startsWith("raw:"));
+    expect(points.slice(0, means.length)).toEqual(means);
+    expect(points.slice(means.length)).toEqual(raw);
+    expect(raw.map((point) => point.id)).toEqual([...bundle.response_by_part.points].reverse().map((point) => `raw:${point.source_row_number}`));
+    expect(points.at(-1)?.id).toBe("raw:1");
+    for (const saved of bundle.response_by_part.points) {
+      const plotted = raw.find((point) => point.id === `raw:${saved.source_row_number}`)!;
+      expect(plotted.y).toBe(saved.value);
+      expect(plotted.x).toBe(saved.part_index + ((saved.source_row_number * 17 % 31) / 30 - 0.5) * 0.44);
+    }
+    for (const saved of bundle.parts) {
+      const plotted = means.find((point) => point.id === `part-mean:${saved.part_index}`)!;
+      expect(plotted.y).toBe(saved.mean);
+      expect(plotted.x).toBe(saved.part_index);
+      expect(plotted.marker).toBe("diamond");
+      expect(plotted.ariaLabel).toBeTruthy();
+      expect(plotted.details).not.toHaveLength(0);
+    }
+    expect(model.responsePart.series.at(-1)?.pointIds).toEqual(means.map((point) => point.id));
+    expect(JSON.stringify(bundle)).toBe(before);
+  });
+
   it("preserves global scales and full-part summaries on a later display page", () => {
     const bundle = fixtures.retain.plot_bundle!;
     const first = gageChartModels(bundle, 0, 0, t);
@@ -107,6 +135,8 @@ describe("Gage six-panel saved-value adapters", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain('data-series-id="operator:0"');
     expect(html).toContain('data-box-id="box:0"');
+    expect(html.indexOf('data-point-id="part-mean:0"')).toBeLessThan(html.indexOf('data-point-id="raw:60"'));
+    expect(html.indexOf('data-point-id="raw:3"')).toBeLessThan(html.indexOf('data-point-id="raw:1"'));
     expect(html).toContain(locale === "en" ? "Interaction is pooled" : "교호작용이 풀링");
     expect(JSON.stringify(result)).toBe(before);
   });

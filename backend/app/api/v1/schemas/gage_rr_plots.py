@@ -13,7 +13,7 @@ class GagePlotModel(BaseModel):
 
 class GagePlotState(GagePlotModel):
     status: Literal["available", "unavailable"]
-    unavailable_reason: Literal["non_finite_plot_summary"] | None
+    unavailable_reason: Literal["non_finite_plot_summary", "invalid_dispersion_constant"] | None
 
     @model_validator(mode="after")
     def validate_state(self) -> "GagePlotState":
@@ -92,7 +92,7 @@ class GageDispersionPoint(GagePlotModel):
 class GageDispersionConstants(GagePlotModel):
     D3: NonNegativeFinite | None
     D4: NonNegativeFinite | None
-    c4: NonNegativeFinite | None
+    c4: Annotated[FiniteFloat, Field(gt=0, le=1)] | None
     B3: NonNegativeFinite | None
     B4: NonNegativeFinite | None
 
