@@ -6,16 +6,17 @@ Baseline: `fb82be61a8af85b5e4cc5e787e50ad130dc82d67`. This is the Gage six-panel
 
 - **Source**: component, display helper and CSS inspected. This does not prove the built browser output is translated or non-overlapping.
 - **Unit**: the current focused Vitest run exercised a pure helper or `renderToStaticMarkup`. The test-mode Vite plugin is disabled; these tests intentionally cover explicit dynamic display boundaries, not every compiled JSX string.
-- **Browser pending**: a real-form Playwright assertion exists but has not yet been executed for this candidate. Final CI receipts, including source SHA, OS, viewport and trace, are required before changing this status.
+- **Source browser**: a real-form Playwright assertion ran through Vite's localization plugin. This does not establish packaged built-UI behavior.
+- **Browser pending**: a real-form assertion exists but the listed state has not been verified. Final CI receipts include source SHA, OS, viewport and trace.
 - **Unverified**: no new evidence for the listed state. Existing test files are identified as reusable coverage, not reported as current passes.
 
 ## Confirmed Changes
 
 | Boundary | Before | Change | Current evidence |
 | --- | --- | --- | --- |
-| Run Chart approximate randomness cards | `.metric-card` had no grid/flex display or internal gap; label and strong value remained inline. `compact-definition-list` had no scoped pair layout. | `ResultMetricCard` uses separate label/value rows, 8px gap, tabular numbers, wrapping and content-driven height. The Run-only container uses 1/2/4 columns at 508/1028 CSS-pixel content widths. Details use separate dt/dd rows with 6px gap. | Source confirmed; DOM geometry browser pending. |
+| Run Chart approximate randomness cards | `.metric-card` had no grid/flex display or internal gap; label and strong value remained inline. `compact-definition-list` had no scoped pair layout. | `ResultMetricCard` uses separate label/value rows, 8px gap, tabular numbers, wrapping and content-driven height. The Run-only container uses 1/2/4 columns at 508/1028 CSS-pixel content widths. Details use separate dt/dd rows with 6px gap. | Source and51 native source-browser geometry stages verified; exact archive pending. |
 | Run Chart small p-value | `maximumFractionDigits: 6` rendered a finite `1e-10` as `0` in both exact and approximate summaries. | `formatProbability` for p/alpha, `formatMeasurement` for expected runs/median, integer formatting for observed runs. No result or method calculation changed. | Reproduced in 2 KO/EN SSR red tests; fixed and unit verified. |
-| Capability specification validation | Helper returned Korean `message` outside the JSX compiler boundary; English notice remained Korean. | Pure `capabilitySpecValidation` returns code/messageKey. `CapabilityPanel` translates at render time, preserving drafts, empty/one-sided policies and request values. | Reproduced in 4 SSR red cases; numeric/order/both target-bound errors fixed and unit verified. Actual input-handler browser pending. |
+| Capability specification validation | Helper returned Korean `message` outside the JSX compiler boundary; English notice remained Korean. | Pure `capabilitySpecValidation` returns code/messageKey. `CapabilityPanel` translates at render time, preserving drafts, empty/one-sided policies and request values. | Reproduced in4 SSR red cases; actual source-browser input errors and KO/EN/KO passed in41668513163. Exact archive pending. |
 | Run Chart warning DTOs | The first Linux source-browser English scan found seven Korean backend warning messages in the active panel. Registered JSX strings alone did not cover DTO messages. | `runChartNoticeKeys` maps the 20 current Run Chart warning codes explicitly at `ApiNoticeText`; shared exclusion codes are scoped to this panel. Stored messages, unknown escaped messages, codes and result values remain unchanged. | Browser failure reproduced; matching seven-message SSR red test added. Focused fix verification and exact-candidate browser rerun are tracked below. |
 | Gage stored ANOVA/component display | Source/component names and stored enums/reasons were displayed as English/raw codes; full/final p paths differed and percent formatting could hide a small positive value. | Explicit semantic labels; stored enums remain visible as codes with translated explanations; full/final p use the same probability formatter; finite percentage values retain nonzero meaning. Locale-specific counts and translated control aria labels use stable `data-gage-control` test selectors. | Unit verifies KO/EN, `1e-10` final/full p and percent, unchanged JSON, legacy explicit/retain interpretation. Browser pending. |
 
@@ -62,8 +63,8 @@ The ui-ux-pro-max skill was read and its text-reflow/spacing and semantic-HTML g
 | `quality.individuals_chart` | result/signals | Existing translated signal summary + metadata grid | Source and existing SSR signal interpretation; no new browser complete-state scan. |
 | `quality.subgroup_chart` | Xbar-R / Xbar-S | Existing metadata grid and shared charts | Source only; all group/count/error variants unverified. |
 | `quality.attribute_control_chart` | p/np/c/u, Phase I/II | Existing explicit purpose/denominator display helpers | Source and SSR helpers; frozen-limit/current-result states not newly exercised. |
-| `quality.run_chart` | success, unavailable legacy tests, all four randomness cards | New semantic `runChart.randomness.*` and metric card | Red/green unit evidence. `english_system_text.py` and `result_metric_layout.py` browser pending. |
-| `quality.capability` | invalid numeric, reversed limits, target below/above, one-sided/empty | New semantic validation DTO + render `t` | Red/green unit evidence. Actual input + KO/EN/KO browser pending; full result/report states not newly exercised. |
+| `quality.run_chart` | success, unavailable legacy tests, all four randomness cards | New semantic `runChart.randomness.*` and metric card | Red/green unit evidence; focused English/geometry source-browser suites passed41668513163. Final archive pending; not all legacy/error variants exercised. |
+| `quality.capability` | invalid numeric, reversed limits, target below/above, one-sided/empty | New semantic validation DTO + render `t` | Red/green unit evidence; actual four invalid-input cases and KO/EN/KO passed41668513163. Full result/report states not newly exercised. |
 | `eda.equal_variances`, `quality.two_variances` | full group names / BF/F | Existing saved-group identity / interval labels | Equal-variance SSR helper regression; full browser/report scan unverified here. |
 | `quality.gage_rr` | retain/pooled, v1/v2 legacy, v3 six-panel | Semantic stored-policy/source/component labels; persisted chart bundle | New display unit evidence plus separate A/B numeric/report tests. Gage browser/archive evidence belongs to the orchestrator's exact-candidate receipts. |
 | `quality.gage_run_chart` | grouped saved runs | Existing group/title display helpers | Existing SSR helper regression; no new live full-route scan. |
@@ -80,7 +81,7 @@ The ui-ux-pro-max skill was read and its text-reflow/spacing and semantic-HTML g
 - English browser scanning visits visible text plus `aria-label`, `aria-description`, title and placeholder in the active panel/SVG/tooltip. The only user-owned exception is an exact, named synthetic column label, not an entire subtree or an arbitrary Hangul whitelist.
 - `english_system_text.py` performs real Run Chart execution, actual Capability input errors and KO/EN/KO changes; it asserts draft/selection/source-byte hash preservation and no locale-triggered analysis POST.
 - `result_metric_layout.py` uses actual `chrome.tabs.setZoom/getZoom`, not CSS scaling or `deviceScaleFactor`. It records content width, columns, label/value and dt/dd rectangles, overflow and unchanged inputs/source hash at 1024/1280/1440 with 100/125/150% zoom. 390px is a separate 100% breakage guard, not a mobile redesign.
-- Browser and release-archive assertions are **not yet marked verified in this ledger**. Attach the exact CI/archive evidence to `gage_charts_layout_i18n_audit.md`; unvisited methods/states above remain unverified even when focused gates pass.
+- Focused source-browser evidence is recorded above and in `gage_charts_layout_i18n_audit.md`. Exact release-archive assertions remain unverified until the final archive journey passes; unvisited methods/states remain unverified even when focused gates pass.
 
 Unknown backend warning codes retain escaped original meaning through the established notice boundary. User column/group names and numeric/state/request values are never sent through generic translation. No source/result checksum or statistical method version is changed by stages C/D.
 
@@ -93,3 +94,11 @@ The fix stays at the explicit warning-code display boundary; no warning text, re
 `RunChartMetricDisplay.test.tsx` reproduces the seven actual messages; `runChartMessages.test.tsx` checks KO/EN/KO, all 20 known codes, scope isolation, exact-versus-approximate semantics, unknown/prototype-like code safety and unchanged source JSON. Passing these unit tests does not by itself prove that the next built-browser candidate passes. The original English scan is not weakened or whitelisted; the next exact-source CI result remains the browser completion gate.
 
 Visual inspection of the same failure screenshot also confirmed inline label/value collisions in the four Run Chart setting notes (center line, trend, oscillation and exact runs). A Run-only `.run-chart-panel .option-note` grid now separates label/value rows with a 7px gap and wrapping. `result_metric_layout.py` additionally checks all four setting-note rectangles and overflow at every tested width/zoom; the surrounding global option grid is unchanged. The visible compact-history `확인 전` badge is a separate dynamic helper defect tracked by the orchestrator, not a Run warning exception.
+
+Native Linux context job126030253156 in run41668513163 passed after these fixes.
+Its receipt records914 Run Chart and104 Capability checks, exact Korean user-label
+preservation, no locale-triggered analysis POST and unchanged source hash. The51
+geometry steps covered real100/125/150% tab zoom,1024/1280/1440px, plus390px at100%,
+with1/2/4-column states and zero overflow. Nonblank150% viewport PNGs were inspected.
+The source-browser fixture uses the localization plugin but is not the packaged
+application; archive verification and all unvisited menu states remain separate.

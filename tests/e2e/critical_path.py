@@ -2436,9 +2436,11 @@ def verify_descriptive_quick_charts_and_run_chart(page: Page) -> None:
     randomness_section = page.get_by_role("region", name="근사 랜덤성 검정")
     expect(randomness_section).to_be_visible(timeout=20_000)
     for label in ("군집", "혼합", "추세", "진동"):
-        expect(
-            randomness_section.locator(".metric-card").filter(has_text=label)
-        ).to_be_visible()
+        card = randomness_section.get_by_role("article", name=label, exact=True)
+        expect(card).to_be_visible()
+        expect(card.locator(".result-metric-card-value")).to_have_text(
+            re.compile(r"^p=\d+(?:\.\d+)?(?:e[-+]?\d+)?$")
+        )
 
 
 def restore_and_compare_saved_results(page: Page) -> None:

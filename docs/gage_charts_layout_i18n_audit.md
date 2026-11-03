@@ -30,11 +30,11 @@ cards. These need explicit tests and unavailable states rather than fabricated v
 
 | Area | Source-confirmed | Reproduced | Fixed | Unit | API | Browser | Archive |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Saved six-panel summaries | confirmed missing plot payload | four red tests before implementation | fixed | numerical/strict payload tests pass | filtered54/schema3 restore and stored export pass | unverified | unverified |
-| Interactive and static plots | legacy missing interaction acknowledged | new feature; malformed display guard reproduced separately | implemented | adapter/SSR and static report tests pass | stored export/checksum pass | unverified | unverified |
-| Run Chart label/value and p precision | missing card layout; fixed-fraction p formatter | nonzero-to-zero SSR red test | fixed | semantic formatter/card tests pass | no calculation change | geometry unverified | unverified |
+| Saved six-panel summaries | confirmed missing plot payload | four red tests before implementation | fixed | numerical/strict payload tests pass | filtered54/schema3 restore and stored export pass | native source-browser Gage stages passed; full workflow pending | unverified |
+| Interactive and static plots | legacy missing interaction acknowledged | new feature; malformed display guard reproduced separately | implemented | adapter/SSR and static report tests pass | stored export/checksum pass | six-panel source-browser stages and100% PNGs inspected; final gate pending | unverified |
+| Run Chart label/value and p precision | missing card layout; fixed-fraction p formatter | nonzero-to-zero SSR red test | fixed | semantic formatter/card tests pass | no calculation change |51 native source-browser geometry stages passed; nonblank viewport captures inspected | unverified |
 | Similar result layouts | scoped inventory completed | no blanket failure assertion | only confirmed Run cards changed | existing layout source reviewed | not applicable | see coverage inventory | unverified |
-| Dynamic English system text | helper return bypassed display translation | Capability SSR red tests | fixed at UI boundary | semantic DTO/locale/user text tests pass | transport unchanged | built-English workflow unverified | unverified |
+| Dynamic English system text | helper return bypassed display translation | Capability SSR red tests | fixed at UI boundary | semantic DTO/locale/user text tests pass | transport unchanged | focused Run/Capability source-browser English path passed; other states remain unverified | unverified |
 
 Past task results are not evidence for this source. Each run records its source, OS/Python,
 fixture, actual stage and failure diagnostics. Synthetic60 observations are not user data.
@@ -196,6 +196,38 @@ documents this viewport capture boundary.83 helper/dispatcher tests passed;
 native capture replay is still required. Actual100% retain-KO/pooled-EN Gage
 PNGs were inspected: all six plots were nonblank, with localized system labels
 and the original Korean measurement label preserved.
+
+### Native Replay and Final-Candidate Boundary
+
+[Diagnostic run41668513163](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41668513163)
+at `c13300e4343b9939b1dc73ffc178251f132ed679` passed the Linux context and
+prediction jobs. Context evidence contains51 native-tab-zoom stages,8px metric
+gaps,6px detail gaps,7px option-note gaps, no overflow/page errors/analysis POSTs,
+and unchanged source bytes. The English receipt records914 Run Chart and104
+Capability visible-text/attribute checks, including exact Korean user-label
+preservation. Clip-free viewport PNGs at150% were inspected and are nonblank.
+Repeated screenshot names in that diagnostic overwrote earlier frames; filenames
+now include the unique step index, and1024/1280/1440px captures include125% too.
+These additional capture files require the final-source replay; the completed
+diagnostic does not prove files that were not retained.
+
+Both Linux and Windows hosted workflows continued beyond the new Gage checks,
+then failed an older Run Chart assertion selecting `.metric-card`. Actual ARIA/DOM
+showed the correctly rendered semantic cards. The selector is changed to the
+accessible article name while retaining the p-value assertion; no timeout or
+product calculation is changed. The failed workflow is not a successful release
+gate. Windows job126030252140 confirms the same selector failure; Linux Gage and
+zoom receipts completed successfully, and150% Gage viewport PNGs were inspected.
+Final-source workflow/archive results still belong in the final validation receipt.
+The semantic-selector fix passed308 partition/OpenAPI tests; the capture/receipt
+helper regression passed91 tests. Counts overlap earlier runs and are not additive.
+
+Full run41667358511 at `cb1564c6d43b7c8fda4480d30ebdf8e40227feb4`
+passed the Linux full-check step (including the unchanged default frontend test
+command) and Python3.11 compatibility:3210 passed,16 skipped. The later source
+contains test-harness/capture fixes and must pass a fresh complete run. Final
+source, native jobs and exact archive must match; intermediate passes cannot
+authorize publication.
 
 ## Numerical Policy
 

@@ -185,13 +185,14 @@ def verify_result_metric_layout(
                         report["steps"].append(state)
                         assert not posts, posts
                         assert not errors, errors
-                        if width in (1024, 1440) and factor in (1.0, 1.5):
+                        if width in (1024, 1280, 1440) and factor in (1.0, 1.25, 1.5):
+                            step_index = len(report["steps"])
                             for index in (0, 3):
                                 image = capture_viewport_evidence(
                                     page,
                                     panel.locator("[data-result-metric]").nth(index),
                                     diagnostics.target
-                                    / f"{locale}-{width}-{round(factor*100)}-card-{index+1}.png",
+                                    / f"step-{step_index:02d}-{locale}-{width}-{round(factor*100)}-card-{index+1}.png",
                                 )
                                 report["screenshots"].append(
                                     {
@@ -200,9 +201,14 @@ def verify_result_metric_layout(
                                         "browserZoom": zoom,
                                         "physicalViewportWidth": width,
                                         "cardIndex": index,
+                                        "stepIndex": step_index,
                                     }
                                 )
             assert {step["columns"] for step in report["steps"]} == {1, 2, 4}, report
+            assert len(report["screenshots"]) <= 2 * len(report["steps"]), report
+            assert len({shot["file"] for shot in report["screenshots"]}) == len(
+                report["screenshots"]
+            ), "Each screenshot must retain its own step evidence"
             assert _source_digest(page, base, envelope["analysis_id"]) == before_hash
             report.update(
                 analysis_id=envelope["analysis_id"],
