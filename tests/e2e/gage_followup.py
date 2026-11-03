@@ -48,13 +48,15 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
             selects.nth(0).select_option(columns["measurement"])
             selects.nth(1).select_option(columns["part"])
             selects.nth(2).select_option(columns["operator"])
-            expect(panel.get_by_label("Gage replicate mode")).to_have_value(
+            expect(panel.locator('[data-gage-control="replicate-mode"]')).to_have_value(
                 "infer_from_rows"
             )
-            panel.get_by_label("Gage interaction policy").select_option(policy)
+            panel.locator('[data-gage-control="interaction-policy"]').select_option(
+                policy
+            )
             alpha = "0.1" if policy == "auto_pool" else "0.05"
             panel.locator("details").first.locator("summary").click()
-            panel.get_by_label("Gage interaction alpha").fill(alpha)
+            panel.locator('[data-gage-control="interaction-alpha"]').fill(alpha)
             run = panel.get_by_role("button", name="Gage R&R 계산", exact=True)
             expect(run).to_be_enabled()
             with page.expect_response(
@@ -140,8 +142,12 @@ def verify_gage_followup(browser: Browser, base: str, output: Path) -> dict:
             _open(page, base, "/analysis/quality/quality.gage_rr", version)
             _restore_result(page, base, version, envelope)
             panel = page.locator('[data-analysis-execution="quality.gage_rr"]')
-            expect(panel.get_by_label("Gage interaction policy")).to_have_value(policy)
-            expect(panel.get_by_label("Gage interaction alpha")).to_have_value(alpha)
+            expect(
+                panel.locator('[data-gage-control="interaction-policy"]')
+            ).to_have_value(policy)
+            expect(
+                panel.locator('[data-gage-control="interaction-alpha"]')
+            ).to_have_value(alpha)
             expect(panel.locator("[data-gage-policy]")).to_contain_text(policy)
         _open(page, base, "/analysis/quality/quality.gage_rr", version)
         panel = page.locator('[data-analysis-execution="quality.gage_rr"]')

@@ -50,8 +50,20 @@ explicitly requests auto-pooling of a nonsignificant interaction, while legacy
 retain-policy results remain readable. Metadata24 is unchanged. See
 [implementation and validation scope](docs/rsm_gage_followup.md).
 
-This update does not publish a new Linux Release. The existing archive below
-is the earlier BO/GPR release, not the API27 source build.
+The API27 follow-up did not publish a separate Linux Release. Its changes are
+preserved in the subsequent API28 source and release candidate below.
+
+### Gage Graphs and Result Presentation
+
+API28 / Gage0.3.0 result3 adds six saved diagnostic plots without changing the
+selected full/pooled ANOVA. Original part/operator identifiers remain redacted;
+all summaries use the complete valid sample before the individual-point display
+cap. Historical results1/2 remain readable, with only their stored component
+chart and explicit missing-plot notices. Metadata24 is unchanged.
+Run Chart metrics separate labels and values and preserve small p-values.
+Dynamic Capability/Gage system messages are localized at display boundaries;
+user text and request data are not translated. See the
+[scoped audit and verification record](docs/gage_charts_layout_i18n_audit.md).
 
 ### Linux Prerelease
 
@@ -69,7 +81,7 @@ not an archive validation pass.
 #### Install and Run the Linux Release
 
 Download the Linux `.tar.gz` and `SHA256SUMS` from the
-[2026.10.6 BO/GPR prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-bo-gpr-2026.10.6).
+[2026.10.7 Gage/UI prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-ui-2026.10.7).
 This version is publishable only after the exact-source product/security/resource
 and archive gates pass; an absent Release page means publication is not complete.
 The supported target is Ubuntu 24.04, x86_64, CPython 3.12 with `venv` and `pip`
@@ -78,7 +90,7 @@ Verify the archive against the published checksum before extraction:
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.6-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.7-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 bash install.sh
 bash run.sh

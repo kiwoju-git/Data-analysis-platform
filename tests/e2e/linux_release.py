@@ -191,6 +191,9 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
     from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
     from gp_validation_extension import verify_gp_validation_extension
     from gage_followup import verify_gage_followup
+    from gage_six_panel import verify_gage_six_panel, verify_gage_six_panel_zoom
+    from english_system_text import verify_english_system_text
+    from result_metric_layout import verify_result_metric_layout
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -213,6 +216,12 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
             result["gage_followup_receipt"] = verify_gage_followup(
                 browser, base, output / "gage-followup"
             )
+            result["gage_six_panel_receipt"] = verify_gage_six_panel(
+                browser, base, output / "gage-six-panel"
+            )
+            result["english_system_text_receipt"] = verify_english_system_text(
+                browser, base, output / "english-system-text"
+            )
         finally:
             browser.close()
         result["doe_zoom_receipt"] = verify_doe_browser_zoom(
@@ -221,6 +230,12 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
             output,
             result["doe_rsm_receipt"]["design_id"],
             result["doe_rsm_receipt"]["analysis_id"],
+        )
+        result["gage_six_panel_zoom_receipt"] = verify_gage_six_panel_zoom(
+            playwright, base, output / "gage-six-panel-zoom", result["gage_six_panel_receipt"]
+        )
+        result["result_metric_layout_receipt"] = verify_result_metric_layout(
+            playwright, base, output / "result-metric-layout"
         )
     result["checks"] = [
         "visible paste and parsing confirmation",

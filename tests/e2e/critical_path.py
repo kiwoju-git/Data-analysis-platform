@@ -58,6 +58,9 @@ from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from doe_rsm_completion import verify_doe_rsm_completion
 from gage_followup import verify_gage_followup
+from gage_six_panel import verify_gage_six_panel, verify_gage_six_panel_zoom
+from english_system_text import verify_english_system_text
+from result_metric_layout import verify_result_metric_layout
 from doe_browser_zoom import verify_doe_browser_zoom
 from fractional_completion import verify_fractional_completion
 from desktop_resize import verify_desktop_resize
@@ -225,20 +228,20 @@ C\t96.0\t89\t19.5
 SUITE_STAGES = {
     "context": (
         "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "chart_formatting",
-        "pilot_feedback",
+        "pilot_feedback", "english_system_text", "result_metric_layout",
     ),
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
         "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell",
-        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "bo_noise_extension", "legacy_workflow",
+        "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
     "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
-    "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
-    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "bo_noise_extension",
+    "chart_formatting", "pilot_feedback", "english_system_text", "result_metric_layout", "pilot_ingestion", "pilot_prediction",
+    "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
 
@@ -825,6 +828,16 @@ def run_browser_flow(
             if "gage_followup" in stages and not factorial_only and not gpr_report_only:
                 diagnostics.step("verify Gage three-column repeat/pooling/filter/report workflow")
                 verify_gage_followup(browser, frontend_base_url, diagnostics.root / "gage-followup")
+            if "gage_six_panel" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify stored Gage six-panel graphs and actual browser zoom")
+                gage_receipt = verify_gage_six_panel(browser, frontend_base_url, diagnostics.root / "gage-six-panel")
+                verify_gage_six_panel_zoom(playwright, frontend_base_url, diagnostics.root / "gage-six-panel-zoom", gage_receipt)
+            if "english_system_text" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify dynamic English system text and preserved user data")
+                verify_english_system_text(browser, frontend_base_url, diagnostics.root / "english-system-text")
+            if "result_metric_layout" in stages and not factorial_only and not gpr_report_only:
+                diagnostics.step("verify result label/value layout and real browser zoom")
+                verify_result_metric_layout(playwright, frontend_base_url, diagnostics.root / "result-metric-layout")
             if "bo_noise_extension" in stages:
                 diagnostics.step("verify noise-aware target/batch/replicate visible workflow")
                 verify_bo_noise_extension(browser, frontend_base_url, diagnostics.root / "bo-noise-extension")

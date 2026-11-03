@@ -926,6 +926,14 @@ def run_resume(base: str, output: Path, original: dict, request: RequestJson) ->
             evidence.data["bo_gp_receipt"] = verify_extension_resume(
                 page, base, output / "bo-gp", original
             )
+            from gage_six_panel import verify_gage_six_panel_resume
+
+            evidence.data["gage_six_panel_receipt"] = verify_gage_six_panel_resume(
+                page,
+                base,
+                output / "gage-six-panel",
+                original["gage_six_panel_receipt"],
+            )
             assert not fit_calls, fit_calls
             evidence.data["analysis_post_count"] = 0
             evidence.data["status"] = "succeeded"
@@ -1003,6 +1011,12 @@ def run_offline(output: Path, original: dict) -> dict:
             from bo_gp_release_resume import verify_extension_offline
 
             extension_receipt = verify_extension_offline(page, output, original)
+            from gage_six_panel import verify_gage_report_html
+
+            gage_reports = [
+                verify_gage_report_html(page, artifact, output / "gage-six-panel")
+                for artifact in original["gage_six_panel_receipt"]["reports"]
+            ]
             assert not network_requests, network_requests
             return {
                 "schema_version": 2,
@@ -1019,6 +1033,12 @@ def run_offline(output: Path, original: dict) -> dict:
                 "pilot_receipt": pilot_receipt,
                 "doe_rsm_receipt": rsm_receipt,
                 "bo_gp_receipt": extension_receipt,
+                "gage_six_panel_receipt": {
+                    "status": "succeeded",
+                    "phase": "offline",
+                    "reports": gage_reports,
+                    "server_stopped_by_release_verifier": True,
+                },
                 "http_request_count": 0,
                 "browser_network_offline": True,
             }

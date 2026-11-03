@@ -30,6 +30,7 @@ from pathlib import Path, PurePosixPath
 from uuid import UUID
 
 from network_isolated_install import run_network_blocked_install
+from ui_release_validation import require_ui_release_evidence
 from validate_python_lock import validate_lock_text
 
 HTTP = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -860,6 +861,242 @@ def require_rsm_roundtrip(smoke: dict, restarts: list[dict], offline: dict) -> d
     }
 
 
+def require_gage_six_panel_receipts(
+    smoke: dict, restarts: list[dict], offline: dict
+) -> dict:
+    """Require current, cross-linked Gage UI/zoom/restart/stopped-server evidence."""
+    initial = smoke.get("gage_six_panel_receipt")
+    zoom = smoke.get("gage_six_panel_zoom_receipt")
+    if (
+        not isinstance(initial, dict)
+        or initial.get("status") != "succeeded"
+        or type(initial.get("schema_version")) is not int
+        or initial["schema_version"] != 1
+        or type(initial.get("view_only_analysis_post_count")) is not int
+        or initial["view_only_analysis_post_count"] != 0
+        or initial.get("legacy_ui")
+        != "synthetic_read_only_schema2_transport_projection"
+        or set(initial.get("interaction_checks", []))
+        != {
+            "hover",
+            "pin_preserved_while_hovering",
+            "escape_keeps_focus",
+            "single_roving_item",
+            "tab_exit",
+            "locale_preserves_pin",
+        }
+    ):
+        raise ValueError("Gage six-panel initial browser evidence is incomplete")
+
+    def rows(value: object, count: int, purpose: str) -> list[dict]:
+        if (
+            not isinstance(value, list)
+            or len(value) != count
+            or any(not isinstance(item, dict) for item in value)
+        ):
+            raise ValueError(f"Gage {purpose} evidence is incomplete")
+        return value
+
+    def close(value: object, expected: float) -> bool:
+        return _receipt_number(value) and math.isclose(
+            value, expected, rel_tol=1e-10, abs_tol=1e-10
+        )
+
+    def numeric(item: dict, policy: str) -> None:
+        width = 0.3 if policy == "retain" else 3 * math.sqrt(0.0125 / 2)
+        integers = {
+            "raw_points": 70,
+            "raw_measurement_points": 60,
+            "box_n": 20,
+            "component_bars": 8,
+            "operator_paths_per_chart": 3,
+        }
+        if (
+            item.get("numeric_svg_checked") is not True
+            or any(
+                type(item.get(key)) is not int or item[key] != value
+                for key, value in integers.items()
+            )
+            or not close(item.get("dispersion_center"), 0.2)
+            or not close(item.get("dispersion_ucl"), 0.6534)
+            or not close(item.get("xbar_center"), 59)
+            or not close(item.get("xbar_half_width"), width)
+        ):
+            raise ValueError("Gage hand fixture visible numeric evidence is incomplete")
+
+    analyses = rows(initial.get("analyses"), 2, "analysis")
+    if {item.get("policy") for item in analyses} != {"retain", "auto_pool"}:
+        raise ValueError("Gage retain and pooled model evidence are both required")
+    identities = {}
+    for item in analyses:
+        if not _receipt_uuid(item.get("analysis_id")) or not all(
+            _receipt_sha256(item.get(key))
+            for key in ("envelope_sha256", "source_result_sha256")
+        ):
+            raise ValueError("Gage analysis identity or source checksum is invalid")
+        numeric(item, item["policy"])
+        identities[item["analysis_id"]] = item
+    if len(identities) != 2 or initial.get("zoom_analysis_id") not in identities:
+        raise ValueError("Gage source identities must be distinct and exact")
+    reports = rows(initial.get("reports"), 2, "initial report")
+    expected_reports = {}
+    for artifact in reports:
+        descriptor = artifact.get("descriptor")
+        if (
+            not isinstance(descriptor, dict)
+            or not _receipt_uuid(descriptor.get("export_id"))
+            or not _receipt_sha256(descriptor.get("sha256"))
+            or descriptor.get("analysis_id") not in identities
+            or descriptor.get("source_result_sha256")
+            != identities[descriptor["analysis_id"]]["source_result_sha256"]
+            or artifact.get("locale") not in {"ko", "en"}
+        ):
+            raise ValueError("Gage report owner/source/checksum evidence is invalid")
+        expected_reports[descriptor["export_id"]] = (
+            descriptor["sha256"],
+            artifact["locale"],
+        )
+    if len(expected_reports) != 2 or {
+        locale for _, locale in expected_reports.values()
+    } != {"ko", "en"}:
+        raise ValueError("Gage reports require distinct KO and EN saved exports")
+    layout = initial.get("layout")
+    if (
+        not isinstance(layout, list)
+        or not layout
+        or any(not isinstance(item, dict) for item in layout)
+        or {item.get("locale") for item in layout} != {"ko", "en"}
+        or {item.get("columns") for item in layout} != {1, 2}
+        or any(
+            not _receipt_number(item.get("scrollWidth"))
+            or not _receipt_number(item.get("viewport"))
+            or item["scrollWidth"] > item["viewport"] + 1
+            for item in layout
+        )
+    ):
+        raise ValueError("Gage one/two-column and locale layout evidence is incomplete")
+    filtered, paged = initial.get("filter"), initial.get("pagination")
+    if (
+        not isinstance(filtered, dict)
+        or filtered.get("n_used") != 54
+        or filtered.get("cells") != 27
+        or not _receipt_sha256(filtered.get("source_digest"))
+        or not isinstance(paged, dict)
+        or paged.get("parts") != 11
+        or paged.get("operators") != 4
+        or paged.get("selected_cells") != 1
+        or not _receipt_sha256(paged.get("source_digest"))
+    ):
+        raise ValueError("Gage filtered and paged source evidence is incomplete")
+    if (
+        not isinstance(zoom, dict)
+        or zoom.get("status") != "succeeded"
+        or zoom.get("schema_version") != 1
+        or zoom.get("mechanism") != "chrome.tabs.setZoom/getZoom"
+        or zoom.get("deviceScaleFactor_override") is not False
+        or zoom.get("source_digest")
+        != identities[initial["zoom_analysis_id"]]["envelope_sha256"]
+    ):
+        raise ValueError("Gage real browser zoom source evidence is invalid")
+    steps = zoom.get("steps")
+    if not isinstance(steps, list) or any(not isinstance(step, dict) for step in steps):
+        raise ValueError("Gage real browser zoom steps are missing")
+    if not {(locale, factor) for locale in ("ko", "en") for factor in (1.25, 1.5)} <= {
+        (step.get("locale"), step.get("browser_zoom")) for step in steps
+    }:
+        raise ValueError(
+            "Gage 125/150 percent browser zoom was not exercised in both locales"
+        )
+    if len(restarts) != 2:
+        raise ValueError(
+            "Gage requires same-install and second-install restart evidence"
+        )
+    for restart in restarts:
+        restored = restart.get("gage_six_panel_receipt")
+        if (
+            not isinstance(restored, dict)
+            or restored.get("status") != "succeeded"
+            or restored.get("phase") != "resume"
+            or type(restored.get("analysis_post_count")) is not int
+            or restored["analysis_post_count"] != 0
+            or type(restored.get("report_creation_post_count")) is not int
+            or restored["report_creation_post_count"] != 0
+        ):
+            raise ValueError(
+                "Gage restart must restore rather than recalculate or re-export"
+            )
+        restored_analyses = rows(restored.get("analyses"), 2, "restored analysis")
+        if {item.get("analysis_id") for item in restored_analyses} != set(identities):
+            raise ValueError("Gage restart changed its exact analysis owners")
+        for item in restored_analyses:
+            original = identities[item["analysis_id"]]
+            if any(
+                item.get(key) != original[key]
+                for key in ("envelope_sha256", "source_result_sha256")
+            ):
+                raise ValueError("Gage restart changed its saved source or checksum")
+            numeric(item, original["policy"])
+        restored_reports = rows(restored.get("reports"), 2, "restored report")
+        if {item.get("export_id") for item in restored_reports} != set(
+            expected_reports
+        ) or any(
+            item.get("bytes_identical") is not True
+            or item.get("sha256") != expected_reports[item["export_id"]][0]
+            for item in restored_reports
+        ):
+            raise ValueError("Gage restart report bytes differ from the initial export")
+    stopped = offline.get("gage_six_panel_receipt")
+    if (
+        offline.get("original_server_unreachable") is not True
+        or offline.get("browser_network_offline") is not True
+        or type(offline.get("http_request_count")) is not int
+        or offline["http_request_count"] != 0
+        or not isinstance(stopped, dict)
+        or stopped.get("status") != "succeeded"
+        or stopped.get("phase") != "offline"
+        or stopped.get("server_stopped_by_release_verifier") is not True
+    ):
+        raise ValueError("Gage stopped-server HTML evidence is incomplete")
+    sections = {
+        "gage_components_plot",
+        "gage_response_by_part",
+        "gage_dispersion",
+        "gage_response_by_operator",
+        "gage_xbar",
+        "gage_interaction",
+    }
+    stopped_reports = rows(stopped.get("reports"), 2, "stopped-server report")
+    if {item.get("export_id") for item in stopped_reports} != set(expected_reports):
+        raise ValueError("Gage offline export owners differ from original reports")
+    for item in stopped_reports:
+        if (
+            (item.get("sha256"), item.get("locale"))
+            != expected_reports[item["export_id"]]
+            or item.get("raw_point_count") != 60
+            or not close(item.get("dispersion_ucl"), 0.6534)
+        ):
+            raise ValueError("Gage offline report bytes or numeric values changed")
+        rendered = rows(item.get("sections"), 6, "offline visible section")
+        if {section.get("section") for section in rendered} != sections or any(
+            type(section.get("svg_count")) is not int or section["svg_count"] < 1
+            for section in rendered
+        ):
+            raise ValueError(
+                "Gage offline report requires all six actual visible chart sections"
+            )
+    return {
+        "analysis_count": 2,
+        "report_count": 2,
+        "restart_count": 2,
+        "source_checksums": {
+            key: item["source_result_sha256"] for key, item in identities.items()
+        },
+        "real_zoom_factors": [1.25, 1.5],
+        "report_bytes_unchanged": True,
+        "server_stopped_six_sections_visible": True,
+    }
+
+
 def verify_installed_refusal_probes(
     root: Path, env: dict[str, str], output: Path
 ) -> list[str]:
@@ -1441,6 +1678,11 @@ def main() -> int:
             raise ValueError("Archive bytes changed during validation")
         pilot_checks = require_pilot_receipts(smoke, restarts, offline)
         rsm_checks = require_rsm_roundtrip(smoke, restarts, offline)
+        gage_checks = require_gage_six_panel_receipts(smoke, restarts, offline)
+        ui_checks = require_ui_release_evidence(
+            smoke.get("english_system_text_receipt"),
+            smoke.get("result_metric_layout_receipt"),
+        )
         bo_gp_checks = extension_contract().require_roundtrip(smoke, restarts, offline)
         report = {
             "schema_version": 2,
@@ -1475,6 +1717,8 @@ def main() -> int:
             "application": smoke,
             "pilot_checks": pilot_checks,
             "doe_rsm_checks": rsm_checks,
+            "gage_six_panel_checks": gage_checks,
+            "ui_presentation_checks": ui_checks,
             "bo_gp_checks": bo_gp_checks,
             "pilot_legacy_provisioning": legacy_seed,
         }
