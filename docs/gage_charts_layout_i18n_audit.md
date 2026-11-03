@@ -164,6 +164,12 @@ marks that plot unavailable otherwise, preserving ANOVA. The focused plot/report
 suite passed51 tests after the change, including the unchanged hand-checkable
 R/S and selected-repeatability limits.
 
+Full run41664240356 at3895d4e passed Python3.11. Linux recorded3199 passed/16
+skipped backend tests, then failed ESLint on four unsafe accesses in the new
+`gageRrRestore.test.ts` JSON fixture. Frontend tests/browser/archive were not
+reached in that Linux job. The fixture now has an explicit typed wrapper; the
+production result guard is unchanged. No failed gate is treated as a pass.
+
 ## Numerical Policy
 
 The existing selected ANOVA remains authoritative. Components use saved percentages without

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import type { GageRrResult } from "./api/types/analysisResultsQuality";
 import { isGageRrResult, restoredGageRrOptions } from "./gageRrRestore";
 
 describe("stored Gage R&R input options", () => {
   it.each([1, 2, 3])("admits schema %s at the actual app result/restore boundary", (schema) => {
-    const fixture = JSON.parse(readFileSync(new URL("../../tests/fixtures/gage_rr_six_panel.json", import.meta.url), "utf8")).auto_pool;
+    const fixture = (JSON.parse(readFileSync(new URL("../../tests/fixtures/gage_rr_six_panel.json", import.meta.url), "utf8")) as { auto_pool: GageRrResult }).auto_pool;
     fixture.schema_version = schema;
     if (schema < 3) delete fixture.plot_bundle;
     const before = JSON.stringify(fixture);
