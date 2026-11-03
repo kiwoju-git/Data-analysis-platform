@@ -26,8 +26,19 @@ def capture_viewport_evidence(page: Page, anchor: Locator, path: Path) -> dict:
     assert geometry["bottom"] > geometry["top"], geometry
     assert geometry["centerVisible"], geometry
 
-    # Locator screenshots can clip the wrong physical pixels after native tab zoom.
-    png = page.screenshot(path=str(path), full_page=False)
+    # Playwright's generated document clip can mix scroll units under native tab zoom.
+    # Omit clip so Chromium captures its real compositor viewport without changing zoom.
+    session = page.context.new_cdp_session(page)
+    try:
+        captured = session.send(
+            "Page.captureScreenshot",
+            {"format": "png", "fromSurface": True, "captureBeyondViewport": False},
+        )
+    finally:
+        session.detach()
+    png = base64.b64decode(captured["data"], validate=True)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n"), "Screenshot must be a PNG"
+    path.write_bytes(png)
     pixels = page.evaluate(
         """async ({encoded, region}) => {
         const bytes = Uint8Array.from(atob(encoded), value => value.charCodeAt(0));
@@ -56,6 +67,7 @@ def capture_viewport_evidence(page: Page, anchor: Locator, path: Path) -> dict:
     return {
         "file": path.name,
         "capture": "viewport",
+        "provider": "CDP Page.captureScreenshot (clip omitted)",
         "geometry": geometry,
         "pixels": pixels,
     }

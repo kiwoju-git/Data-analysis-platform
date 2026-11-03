@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import importlib
 from pathlib import Path
 from unittest.mock import Mock
@@ -17,7 +19,9 @@ def capture(monkeypatch: pytest.MonkeyPatch):
 
 def fixtures() -> tuple[Mock, Mock]:
     page = Mock()
-    page.screenshot.return_value = b"synthetic-png-fixture"
+    page.context.new_cdp_session.return_value.send.return_value = {
+        "data": base64.b64encode(b"\x89PNG\r\n\x1a\nsynthetic-fixture").decode("ascii")
+    }
     page.evaluate.side_effect = [None, {"distinctColors": 64}]
     anchor = Mock()
     anchor.evaluate.side_effect = [
@@ -40,9 +44,18 @@ def test_captures_visible_viewport_not_zoomed_element_clip(capture, tmp_path: Pa
     path = tmp_path / "zoom-150.png"
     result = capture(page, anchor, path)
     anchor.scroll_into_view_if_needed.assert_called_once_with()
-    page.screenshot.assert_called_once_with(path=str(path), full_page=False)
+    page.context.new_cdp_session.assert_called_once_with(page)
+    session = page.context.new_cdp_session.return_value
+    session.send.assert_called_once_with(
+        "Page.captureScreenshot",
+        {"format": "png", "fromSurface": True, "captureBeyondViewport": False},
+    )
+    session.detach.assert_called_once_with()
+    page.screenshot.assert_not_called()
     anchor.screenshot.assert_not_called()
     assert result["capture"] == "viewport"
+    assert result["provider"] == "CDP Page.captureScreenshot (clip omitted)"
+    assert path.read_bytes() == b"\x89PNG\r\n\x1a\nsynthetic-fixture"
     assert result["pixels"]["distinctColors"] == 64
     assert result["geometry"]["viewportWidth"] == 683
 
@@ -71,3 +84,25 @@ def test_hidden_or_occluded_anchor_is_rejected(capture, tmp_path: Path, change: 
     with pytest.raises(AssertionError):
         capture(page, anchor, tmp_path / "hidden.png")
     page.screenshot.assert_not_called()
+    page.context.new_cdp_session.assert_not_called()
+
+
+def test_cdp_session_detaches_on_capture_failure(capture, tmp_path: Path):
+    page, anchor = fixtures()
+    session = page.context.new_cdp_session.return_value
+    session.send.side_effect = RuntimeError("synthetic capture failure")
+    with pytest.raises(RuntimeError, match="synthetic capture failure"):
+        capture(page, anchor, tmp_path / "failed.png")
+    session.detach.assert_called_once_with()
+    assert not (tmp_path / "failed.png").exists()
+
+
+@pytest.mark.parametrize("data", ["not-base64", base64.b64encode(b"not-png").decode("ascii")])
+def test_invalid_capture_bytes_are_rejected(capture, tmp_path: Path, data: str):
+    page, anchor = fixtures()
+    session = page.context.new_cdp_session.return_value
+    session.send.return_value = {"data": data}
+    with pytest.raises((AssertionError, binascii.Error)):
+        capture(page, anchor, tmp_path / "invalid.png")
+    session.detach.assert_called_once_with()
+    assert not (tmp_path / "invalid.png").exists()

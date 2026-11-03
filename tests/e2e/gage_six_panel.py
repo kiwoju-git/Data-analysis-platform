@@ -631,11 +631,9 @@ def verify_gage_six_panel(browser: Browser, base: str, output: Path) -> dict:
                 status=200, content_type="application/json", body=json.dumps(legacy)
             ),
         )
-        page.goto(
-            base + "/reports?analysis_id=" + envelope["analysis_id"],
-            wait_until="domcontentloaded",
-        )
-        wait_for_app_ready(page, "ko", "/reports")
+        post_count = len(analysis_posts)
+        _open(page, base, ROUTE, version)
+        _restore_result(page, base, version, legacy)
         legacy_charts = page.locator("[data-gage-six-panel]")
         expect(legacy_charts).to_be_visible()
         expect(legacy_charts.locator("svg.chart-frame-svg")).to_have_count(1)
@@ -647,6 +645,7 @@ def verify_gage_six_panel(browser: Browser, base: str, output: Path) -> dict:
             assert slot.inner_text().strip()
         page.unroute("**" + legacy_path)
         assert _api(page, base, legacy_path) == envelope
+        assert len(analysis_posts) == post_count
         # A complete-cell filter changes all plotted Ns, not merely the visible raw points.
         panel = _configure(page, base, version, "retain")
         measurement_id = next(
@@ -788,15 +787,19 @@ def verify_gage_six_panel_zoom(
                 else context.wait_for_event("serviceworker")
             )
             analysis_id = receipt["zoom_analysis_id"]
-            page.goto(
-                base + "/reports?analysis_id=" + analysis_id,
-                wait_until="domcontentloaded",
-            )
-            wait_for_app_ready(page, "ko", "/reports")
-            charts = page.locator("[data-gage-six-panel]")
-            expect(charts).to_be_visible()
             source_path = f"/api/v1/analysis-runs/{analysis_id}/result"
             original = _api(page, base, source_path)
+            assert original["analysis_id"] == analysis_id
+            assert original["dataset_version_id"] == receipt["version"]["version_id"]
+            saved = next(
+                entry for entry in receipt["analyses"] if entry["analysis_id"] == analysis_id
+            )
+            assert digest(original) == saved["envelope_sha256"]
+            _open(page, base, ROUTE, receipt["version"])
+            _restore_result(page, base, receipt["version"], original)
+            charts = page.locator("[data-gage-six-panel]")
+            expect(charts).to_be_visible()
+            _assert_six_values(charts, original["result"])
             coordinates = _graph_coordinates(charts)
             for locale in ("ko", "en", "ko"):
                 _locale(page, locale)

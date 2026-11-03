@@ -137,6 +137,9 @@ unchanged-timeout focused run with one worker passed both files/six tests. A fre
 native full run is still required; neither this narrow rerun nor the earlier1059-test
 success validates all of this later source. A second local full run repeated the
 same two import timeouts/1067 passes; no timeout was increased to conceal them.
+A subsequent one-worker full run recorded1069 passes and the remaining10s lazy
+analysis-panel import timeout. This local failure is retained; it is not a
+completed full frontend validation. All timeout values and assertions are unchanged.
 
 Diagnostic run41663344331 then reproduced the same Gage pointer interception on
 both Linux job126012021497 and Windows job126012021119: an observed raw marker
@@ -169,6 +172,30 @@ skipped backend tests, then failed ESLint on four unsafe accesses in the new
 `gageRrRestore.test.ts` JSON fixture. Frontend tests/browser/archive were not
 reached in that Linux job. The fixture now has an explicit typed wrapper; the
 production result guard is unchanged. No failed gate is treated as a pass.
+
+Diagnostic run41666703257 at7943f57 passed the raw click, all70 keyboard targets,
+retain/pooled chart checks and stored-report stages, then exposed a test route
+mistake: Report Center presents export actions, not embedded analysis charts.
+Legacy/zoom restoration is being corrected to use the existing Gage saved-result
+route and explicit history selection, retaining exact source/no-POST assertions.
+The new viewport pixel assertion also caught a blank crop in the context suite;
+that capture remains unverified, not silently accepted as a successful image.
+These source diagnostics use Vite's localization plugin on its development server.
+Only the separate exact-archive journey can establish packaged built-UI evidence.
+
+The legacy/zoom harness now opens the exact saved result through Gage's existing
+compact-history controls; Report Center artifact listing/download checks remain.
+The zoom failure PNG placed the fixed header near the bottom while DOM geometry
+and trace frames showed the current viewport. Inspection narrowed this to the
+installed Playwright screenshot clip path under native tab zoom/scroll. Capture
+now uses clip-free Chromium `Page.captureScreenshot` through Playwright's CDP
+session, retaining real zoom, viewport hit-testing and the same nonblank-pixel
+assertion. The session closes in `finally`; base64/PNG signatures are checked.
+The [official CDP declaration](https://github.com/ChromeDevTools/devtools-protocol/blob/master/pdl/domains/Page.pdl)
+documents this viewport capture boundary.83 helper/dispatcher tests passed;
+native capture replay is still required. Actual100% retain-KO/pooled-EN Gage
+PNGs were inspected: all six plots were nonblank, with localized system labels
+and the original Korean measurement label preserved.
 
 ## Numerical Policy
 
