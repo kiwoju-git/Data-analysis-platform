@@ -2,6 +2,8 @@ import { ApiNoticeText } from "./i18n/ApiNoticeText";
 import { useI18n } from "./i18n/LocaleProvider";
 import { gageRrNoticeKeys } from "./i18n/gageRrMessages";
 import { formatMeasurement, formatProbability } from "./statisticalNumberFormat";
+import { GageRrResultCharts } from "./GageRrResultCharts";
+import type { TranslationKey } from "./i18n/translate";
 
 import type {
   AnalysisResultEnvelope,
@@ -72,7 +74,10 @@ export function GageRrPreflightPanel({
   onRunAnalysis,
   onRunPreflight,
 }: GageRrPreflightPanelProps) {
-  const { t } = useI18n();
+  const { t, locale, formatNumber: localeNumber } = useI18n();
+  const count = (value: number) => localeNumber(value, { maximumFractionDigits: 0 });
+  const formatNumber = (value: number | null) => formatMeasurement(value, locale);
+  const formatPercent = (value: number | null) => value === null ? t("gage.followup.unavailable") : `${formatMeasurement(value, locale)}%`;
   const distinctColumns = new Set(
     [measurementColumnId, partColumnId, operatorColumnId, ...(replicateMode === "explicit_column" ? [replicateColumnId] : [])].filter(
       (columnId): columnId is string => columnId !== null,
@@ -99,19 +104,19 @@ export function GageRrPreflightPanel({
           <div className="option-grid">
             <ColumnSelect
               columns={measurementColumns}
-              label="측정값"
+              label={t("gage.charts.measurement")}
               value={measurementColumnId}
               onChange={onMeasurementColumnChange}
             />
             <ColumnSelect
               columns={partColumns}
-              label="부품"
+              label={t("gage.charts.partAxis")}
               value={partColumnId}
               onChange={onPartColumnChange}
             />
             <ColumnSelect
               columns={operatorColumns}
-              label="측정자"
+              label={t("gage.charts.operatorAxis")}
               value={operatorColumnId}
               onChange={onOperatorColumnChange}
             />
@@ -127,13 +132,13 @@ export function GageRrPreflightPanel({
           <p>{t("gage.followup.repeatedMeasurements")}</p>
           <div className="option-grid">
             <label><span>{t("gage.followup.replicateMode")}</span>
-              <select aria-label="Gage replicate mode" value={replicateMode} onChange={(event) => onReplicateModeChange(event.currentTarget.value as "infer_from_rows" | "explicit_column")}>
+              <select aria-label={t("gage.followup.replicateMode")} data-gage-control="replicate-mode" value={replicateMode} onChange={(event) => onReplicateModeChange(event.currentTarget.value as "infer_from_rows" | "explicit_column")}>
                 <option value="infer_from_rows">{t("gage.followup.inferReplicates")}</option>
                 <option value="explicit_column">{t("gage.followup.explicitReplicates")}</option>
               </select>
             </label>
             <label><span>{t("gage.followup.interactionPolicy")}</span>
-              <select aria-label="Gage interaction policy" value={interactionPolicy} onChange={(event) => onInteractionPolicyChange(event.currentTarget.value as "retain" | "auto_pool")}>
+              <select aria-label={t("gage.followup.interactionPolicy")} data-gage-control="interaction-policy" value={interactionPolicy} onChange={(event) => onInteractionPolicyChange(event.currentTarget.value as "retain" | "auto_pool")}>
                 <option value="auto_pool">{t("gage.followup.autoPool")}</option>
                 <option value="retain">{t("gage.followup.retain")}</option>
               </select>
@@ -143,7 +148,7 @@ export function GageRrPreflightPanel({
             <summary>{t("gage.followup.advanced")}</summary>
             {replicateMode === "explicit_column" ? <ColumnSelect columns={replicateColumns} label={t("gage.followup.replicateId")} value={replicateColumnId} onChange={onReplicateColumnChange} /> : null}
             <label><span>{t("gage.followup.interactionAlpha")}</span>
-              <input aria-label="Gage interaction alpha" inputMode="decimal" value={interactionAlpha} onChange={(event) => onInteractionAlphaChange(event.currentTarget.value)} />
+              <input aria-label={t("gage.followup.interactionAlpha")} data-gage-control="interaction-alpha" inputMode="decimal" value={interactionAlpha} onChange={(event) => onInteractionAlphaChange(event.currentTarget.value)} />
             </label>
           </details>
           {hasDuplicateRoleColumn ? (
@@ -191,28 +196,28 @@ export function GageRrPreflightPanel({
                 <strong>{preflight.design.ready_for_anova ? "준비됨" : "수정 필요"}</strong>
                 <span>사용 N</span>
                 <strong>
-                  {preflight.sample.n_used.toLocaleString()} /{" "}
-                  {preflight.sample.n_total.toLocaleString()}
+                  {count(preflight.sample.n_used)} /{" "}
+                  {count(preflight.sample.n_total)}
                 </strong>
                 <span>부품</span>
-                <strong>{preflight.design.part_count.toLocaleString()}</strong>
+                <strong>{count(preflight.design.part_count)}</strong>
                 <span>측정자</span>
-                <strong>{preflight.design.operator_count.toLocaleString()}</strong>
+                <strong>{count(preflight.design.operator_count)}</strong>
                 <span>반복 level</span>
-                <strong>{preflight.design.replicate_level_count.toLocaleString()}</strong>
+                <strong>{count(preflight.design.replicate_level_count)}</strong>
                 <span>Cell</span>
                 <strong>
-                  {preflight.design.observed_cell_count.toLocaleString()} /{" "}
-                  {preflight.design.expected_cell_count.toLocaleString()}
+                  {count(preflight.design.observed_cell_count)} /{" "}
+                  {count(preflight.design.expected_cell_count)}
                 </strong>
                 <span>Cell별 반복</span>
                 <strong>
-                  {preflight.design.min_replicates_per_cell.toLocaleString()}-
-                  {preflight.design.max_replicates_per_cell.toLocaleString()}
+                  {count(preflight.design.min_replicates_per_cell)}-
+                  {count(preflight.design.max_replicates_per_cell)}
                 </strong>
                 <span>오류/경고</span>
                 <strong>
-                  {errorCount.toLocaleString()} / {warningCount.toLocaleString()}
+                  {count(errorCount)} / {count(warningCount)}
                 </strong>
               </div>
               <div className="table-wrap">
@@ -226,8 +231,8 @@ export function GageRrPreflightPanel({
                   <tbody>
                     {preflight.design.cell_replicate_count_distribution.map((entry) => (
                       <tr key={entry.replicate_count}>
-                        <td>{entry.replicate_count.toLocaleString()}</td>
-                        <td>{entry.cell_count.toLocaleString()}</td>
+                        <td>{count(entry.replicate_count)}</td>
+                        <td>{count(entry.cell_count)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -236,8 +241,8 @@ export function GageRrPreflightPanel({
               <ul className="warning-list" aria-label="Gage R&R 사전점검 이슈">
                 {preflight.issues.map((issue) => (
                   <li key={issue.code}>
-                    <strong>{issue.severity}</strong> <ApiNoticeText notice={issue} messageKeys={gageRrNoticeKeys} showCode />
-                    {issue.count === null ? null : ` (${issue.count.toLocaleString()})`}
+                    <strong>{t(`gage.followup.severity.${issue.severity}`)}</strong> <ApiNoticeText notice={issue} messageKeys={gageRrNoticeKeys} showCode />
+                    {issue.count === null ? null : ` (${count(issue.count)})`}
                   </li>
                 ))}
               </ul>
@@ -246,35 +251,35 @@ export function GageRrPreflightPanel({
           {result !== null ? (
             <>
               <div className="notice-box" data-gage-policy>
-                {t("gage.followup.storedPolicy")}: {result.replicate_mode ?? "explicit_column"} / {result.interaction_selection?.requested_policy ?? "retain"}
-                {result.interaction_selection ? <> · alpha {formatMeasurement(result.interaction_selection.alpha_to_remove_interaction)} · p {formatProbability(result.interaction_selection.interaction_p_value)} · {result.interaction_selection.reason}</> : null}
+                {t("gage.followup.storedPolicy")}: {t(result.replicate_mode === "infer_from_rows" ? "gage.followup.inferReplicates" : "gage.followup.explicitReplicates")} ({result.replicate_mode ?? "explicit_column"}) / {t(result.interaction_selection?.requested_policy === "auto_pool" ? "gage.followup.autoPool" : "gage.followup.retain")} ({result.interaction_selection?.requested_policy ?? "retain"})
+                {result.interaction_selection ? <> · alpha {formatProbability(result.interaction_selection.alpha_to_remove_interaction, locale)} · p {formatProbability(result.interaction_selection.interaction_p_value, locale)} · {selectionReason(result.interaction_selection.reason, t)}</> : null}
               </div>
               <div className="metadata-grid" aria-label="Gage R&R 결과 요약">
                 <span>사용 N</span>
                 <strong>
-                  {result.sample.n_used.toLocaleString()} /{" "}
-                  {result.sample.n_total.toLocaleString()}
+                  {count(result.sample.n_used)} /{" "}
+                  {count(result.sample.n_total)}
                 </strong>
                 <span>부품</span>
-                <strong>{result.design.part_count.toLocaleString()}</strong>
+                <strong>{count(result.design.part_count)}</strong>
                 <span>측정자</span>
-                <strong>{result.design.operator_count.toLocaleString()}</strong>
+                <strong>{count(result.design.operator_count)}</strong>
                 <span>반복</span>
-                <strong>{result.design.replicate_count.toLocaleString()}</strong>
-                <span>Total Gage R&R</span>
+                <strong>{count(result.design.replicate_count)}</strong>
+                <span>{t("gage.charts.total_gage_rr")}</span>
                 <strong>
                   {formatPercent(
                     result.variance_components.total_gage_rr.percent_study_variation,
                   )}
                 </strong>
-                <span>Part-to-Part</span>
+                <span>{t("gage.charts.part_to_part")}</span>
                 <strong>
                   {formatPercent(
                     result.variance_components.part_to_part.percent_study_variation,
                   )}
                 </strong>
                 <span>NDC</span>
-                <strong>{result.variance_components.ndc ?? "계산 불가"}</strong>
+                <strong>{result.variance_components.ndc === null ? t("gage.followup.unavailable") : count(result.variance_components.ndc)}</strong>
               </div>
               <div className="table-wrap">
                 <table className="result-table">
@@ -292,12 +297,12 @@ export function GageRrPreflightPanel({
                   <tbody>
                     {result.anova_table.map((row) => (
                       <tr key={row.source}>
-                        <td>{sourceLabel(row.source)}</td>
-                        <td>{row.degrees_of_freedom.toLocaleString()}</td>
+                        <td>{componentLabel(row.source, t)}</td>
+                        <td>{count(row.degrees_of_freedom)}</td>
                         <td>{formatNumber(row.sum_of_squares)}</td>
-                        <td>{formatOptionalNumber(row.mean_square)}</td>
-                        <td>{formatOptionalNumber(row.f_statistic)}</td>
-                        <td>{formatOptionalNumber(row.p_value)}</td>
+                        <td>{formatNumber(row.mean_square)}</td>
+                        <td>{formatNumber(row.f_statistic)}</td>
+                        <td>{formatProbability(row.p_value, locale)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -305,7 +310,7 @@ export function GageRrPreflightPanel({
               </div>
               {result.full_anova_table ? <details><summary>{t("gage.followup.fullAnova")}</summary>
                 <div className="table-wrap"><table className="result-table"><thead><tr><th>Source</th><th>DF</th><th>SS</th><th>MS</th><th>F</th><th>p</th></tr></thead>
-                  <tbody>{result.full_anova_table.map((row) => <tr key={row.source}><td>{sourceLabel(row.source)}</td><td>{row.degrees_of_freedom}</td><td>{formatMeasurement(row.sum_of_squares)}</td><td>{formatMeasurement(row.mean_square)}</td><td>{formatMeasurement(row.f_statistic)}</td><td>{formatProbability(row.p_value)}</td></tr>)}</tbody>
+                  <tbody>{result.full_anova_table.map((row) => <tr key={row.source}><td>{componentLabel(row.source, t)}</td><td>{count(row.degrees_of_freedom)}</td><td>{formatNumber(row.sum_of_squares)}</td><td>{formatNumber(row.mean_square)}</td><td>{formatNumber(row.f_statistic)}</td><td>{formatProbability(row.p_value, locale)}</td></tr>)}</tbody>
                 </table></div>
               </details> : null}
               <div className="table-wrap">
@@ -324,7 +329,7 @@ export function GageRrPreflightPanel({
                   <tbody>
                     {varianceComponentRows(result).map((component) => (
                       <tr key={component.component}>
-                        <td>{componentLabel(component.component)}</td>
+                        <td>{componentLabel(component.component, t)}</td>
                         <td>{formatNumber(component.raw_variance)}</td>
                         <td>{formatNumber(component.final_variance)}</td>
                         <td>{formatNumber(component.standard_deviation)}</td>
@@ -336,6 +341,7 @@ export function GageRrPreflightPanel({
                   </tbody>
                 </table>
               </div>
+              <GageRrResultCharts result={result} sourceKey={`${analysisResult?.analysis_id ?? "unsaved"}:${analysisResult?.provenance.row_snapshot_sha256 ?? "unknown"}:${result.schema_version}`} />
             </>
           ) : null}
         </>
@@ -387,41 +393,27 @@ function varianceComponentRows(result: GageRrResult) {
   ];
 }
 
-function sourceLabel(source: string): string {
-  const labels: Record<string, string> = {
-    part: "Part",
-    operator: "Operator",
-    part_operator: "Part x Operator",
-    repeatability: "Repeatability",
-    total: "Total",
+function componentLabel(component: string, t: ReturnType<typeof useI18n>["t"]): string {
+  const labels: Record<string, TranslationKey> = {
+    part: "gage.charts.partAxis",
+    operator: "gage.charts.operatorAxis",
+    part_operator: "gage.charts.part_operator",
+    repeatability: "gage.charts.repeatability",
+    reproducibility: "gage.charts.reproducibility",
+    total_gage_rr: "gage.charts.total_gage_rr",
+    part_to_part: "gage.charts.part_to_part",
+    total_variation: "gage.charts.total_variation",
+    total: "gage.charts.total",
   };
-  return labels[source] ?? source;
+  return Object.prototype.hasOwnProperty.call(labels, component) ? t(labels[component]) : component;
 }
 
-function componentLabel(component: string): string {
-  const labels: Record<string, string> = {
-    repeatability: "Repeatability",
-    operator: "Operator",
-    part_operator: "Part x Operator",
-    reproducibility: "Reproducibility",
-    total_gage_rr: "Total Gage R&R",
-    part_to_part: "Part-to-Part",
-    total_variation: "Total Variation",
+function selectionReason(reason: string, t: ReturnType<typeof useI18n>["t"]): string {
+  const keys: Record<string, TranslationKey> = {
+    interaction_not_significant: "gage.followup.reason.interaction_not_significant",
+    retained_by_request: "gage.followup.reason.retained_by_request",
+    interaction_test_unavailable: "gage.followup.reason.interaction_test_unavailable",
+    interaction_significant: "gage.followup.reason.interaction_significant",
   };
-  return labels[component] ?? component;
-}
-
-function formatNumber(value: number): string {
-  return formatMeasurement(value);
-}
-
-function formatOptionalNumber(value: number | null): string {
-  return value === null ? "NA" : formatNumber(value);
-}
-
-function formatPercent(value: number | null): string {
-  if (value === null) {
-    return "NA";
-  }
-  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+  return Object.prototype.hasOwnProperty.call(keys, reason) ? t(keys[reason]) : reason;
 }

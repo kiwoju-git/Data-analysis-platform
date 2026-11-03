@@ -2,6 +2,8 @@ import { ApiNoticeText } from "./i18n/ApiNoticeText";
 import { useI18n } from "./i18n/LocaleProvider";
 import { translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
+import { ResultMetricCard } from "./components/ResultMetricCard";
+import { formatMeasurement, formatProbability } from "./statisticalNumberFormat";
 
 import { RunResultChart } from "./charts/QualityResultCharts";
 import type {
@@ -128,7 +130,7 @@ export function RunChartPanel({
                   {result.n_used.toLocaleString()} / {result.n_total.toLocaleString()}
                 </strong>
                 <span>중심선</span>
-                <strong>{formatRunChartNumber(result.center_line)}</strong>
+                <strong>{formatMeasurement(result.center_line, locale)}</strong>
                 <span>순서</span>
                 <strong>{formatRunChartOrder(result)}</strong>
                 <span>Run count</span>
@@ -238,7 +240,7 @@ export function RunChartPanel({
 }
 
 function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
-  const { locale } = useI18n();
+  const { locale, t, formatNumber } = useI18n();
   const tests = result.approximate_randomness_tests;
   if (tests === undefined) {
     return (
@@ -253,45 +255,45 @@ function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
   const cards = [
     {
       key: "clustering",
-      label: "군집",
+      label: "runChart.randomness.clustering",
       pValue: about.p_value_clustering,
       available: about.available,
       skippedReason: about.skipped_reason,
       observed: about.observed_runs,
       expected: about.expected_runs,
-      policy: "중앙값과 같은 값은 아래쪽에 포함",
+      policy: "runChart.randomness.medianTiePolicy",
     },
     {
       key: "mixture",
-      label: "혼합",
+      label: "runChart.randomness.mixture",
       pValue: about.p_value_mixture,
       available: about.available,
       skippedReason: about.skipped_reason,
       observed: about.observed_runs,
       expected: about.expected_runs,
-      policy: "중앙값과 같은 값은 아래쪽에 포함",
+      policy: "runChart.randomness.medianTiePolicy",
     },
     {
       key: "trend",
-      label: "추세",
+      label: "runChart.randomness.trend",
       pValue: upDown.p_value_trend,
       available: upDown.available,
       skippedReason: upDown.skipped_reason,
       observed: upDown.observed_runs,
       expected: upDown.expected_runs,
-      policy: "같은 값은 하강 방향에 포함",
+      policy: "runChart.randomness.flatPolicy",
     },
     {
       key: "oscillation",
-      label: "진동",
+      label: "runChart.randomness.oscillation",
       pValue: upDown.p_value_oscillation,
       available: upDown.available,
       skippedReason: upDown.skipped_reason,
       observed: upDown.observed_runs,
       expected: upDown.expected_runs,
-      policy: "같은 값은 하강 방향에 포함",
+      policy: "runChart.randomness.flatPolicy",
     },
-  ];
+  ] as const;
   return (
     <section className="result-section" aria-labelledby="run-chart-randomness-title">
       <div className="panel-heading">
@@ -303,46 +305,43 @@ function ApproximateRandomnessTests({ result }: { result: RunChartResult }) {
           </p>
         </div>
       </div>
+      <div className="run-chart-randomness-container">
       <div className="run-chart-randomness-grid">
         {cards.map((card) => {
           const significant =
             card.available && card.pValue !== null && card.pValue <= tests.alpha;
           return (
-            <article className="metric-card" key={card.key}>
-              <span>{translateSystemText(card.label, locale)}</span>
-              <strong>
-                {card.available
-                  ? `p=${formatRunChartNumber(card.pValue)}`
-                  : "계산할 수 없음"}
-              </strong>
-              <span>α={formatRunChartNumber(tests.alpha)}</span>
+            <ResultMetricCard key={card.key} metricId={card.key} label={t(card.label)}
+              value={card.available ? `p=${formatProbability(card.pValue, locale)}` : t("runChart.randomness.unavailable")}>
+              <span>α={formatProbability(tests.alpha, locale)}</span>
               <p>
                 {card.available
                   ? significant
-                    ? "비랜덤 패턴의 통계적 증거가 있어 원인 검토가 필요합니다."
-                    : "이 패턴에 대한 유의한 증거가 부족합니다."
-                  : `계산 조건 부족: ${card.skippedReason ?? "unknown"}`}
+                    ? t("runChart.randomness.evidence")
+                    : t("runChart.randomness.noEvidence")
+                  : t("runChart.randomness.skipped", { reason: card.skippedReason ?? "unknown" })}
               </p>
               <details>
-                <summary>상세정보</summary>
+                <summary>{t("runChart.randomness.details")}</summary>
                 <dl className="compact-definition-list">
                   <div>
-                    <dt>관측 run</dt>
-                    <dd>{card.observed.toLocaleString()}</dd>
+                    <dt>{t("runChart.randomness.observedRuns")}</dt>
+                    <dd>{formatNumber(card.observed, { maximumFractionDigits: 0 })}</dd>
                   </div>
                   <div>
-                    <dt>기대 run</dt>
-                    <dd>{formatRunChartNumber(card.expected)}</dd>
+                    <dt>{t("runChart.randomness.expectedRuns")}</dt>
+                    <dd>{formatMeasurement(card.expected, locale)}</dd>
                   </div>
                   <div>
-                    <dt>tie/flat 정책</dt>
-                    <dd>{translateSystemText(card.policy, locale)}</dd>
+                    <dt>{t("runChart.randomness.tiePolicy")}</dt>
+                    <dd>{t(card.policy)}</dd>
                   </div>
                 </dl>
               </details>
-            </article>
+            </ResultMetricCard>
           );
         })}
+      </div>
       </div>
     </section>
   );
@@ -369,16 +368,7 @@ function formatRunChartRunsTest(result: RunChartResult, locale: AppLocale): stri
       ? translateSystemText("계산 안 함", locale)
       : `${translateSystemText("계산 안 함", locale)} · ${result.runs_test.skipped_reason}`;
   }
-  return `low p=${formatRunChartNumber(result.runs_test.p_value_low)} · high p=${formatRunChartNumber(
-    result.runs_test.p_value_high,
+  return `low p=${formatProbability(result.runs_test.p_value_low, locale)} · high p=${formatProbability(
+    result.runs_test.p_value_high, locale,
   )}`;
-}
-
-function formatRunChartNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "NA";
-  }
-  return new Intl.NumberFormat("ko-KR", {
-    maximumFractionDigits: 6,
-  }).format(value);
 }

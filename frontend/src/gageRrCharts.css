@@ -1,0 +1,44 @@
+.gage-six-panel { container-type: inline-size; min-inline-size: 0; margin-block-start: 24px; }
+.gage-six-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px 18px; }
+@container (min-width: 840px) { .gage-six-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.gage-chart-panel { min-inline-size: 0; max-inline-size: 680px; inline-size: 100%; margin-inline: auto; }
+.gage-chart-panel .chart-frame { margin: 0; }
+.gage-chart-panel .chart-frame-svg { max-block-size: 380px; }
+.gage-chart-panel .chart-series-legend { flex-wrap: wrap; gap: 8px 12px; }
+.gage-chart-explanation, .gage-box-counts { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.gage-chart-unavailable { min-block-size: 150px; padding: 12px 0; }
+.gage-chart-controls { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-block: 16px; }
+.gage-chart-pager { display: flex; align-items: center; gap: 8px; }
+.gage-chart-pager output { min-inline-size: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+.gage-chart-pager button { display: grid; place-items: center; inline-size: 32px; block-size: 32px; }
+.gage-six-panel .chart-section-label { font-size: 12px; fill: var(--text-primary, #202b35); }
+.gage-six-panel .chart-section-separator { stroke: #9ba6ae; stroke-dasharray: 2 4; }
+.gage-six-panel .gage-operator-0 { --gage-color: #2563a6; }
+.gage-six-panel .gage-operator-1 { --gage-color: #22816c; }
+.gage-six-panel .gage-operator-2 { --gage-color: #a63f72; }
+.gage-six-panel .gage-operator-3 { --gage-color: #936b19; }
+.gage-six-panel .gage-operator-4 { --gage-color: #6a56a1; }
+.gage-six-panel .gage-operator-5 { --gage-color: #4f6775; }
+.gage-six-panel [class*="gage-operator-"] { fill: var(--gage-color); stroke: var(--gage-color); }
+.gage-six-panel .interactive-data-line { fill: none; stroke-width: 1.6; }
+.gage-six-panel .interactive-data-line.gage-operator-1, .gage-six-panel .interactive-data-line.gage-operator-4 { stroke-dasharray: 6 3; }
+.gage-six-panel .interactive-data-line.gage-operator-2, .gage-six-panel .interactive-data-line.gage-operator-5 { stroke-dasharray: 2 3; }
+.gage-six-panel .gage-part-mean { fill: #242c32; stroke: #242c32; }
+.gage-six-panel path.gage-part-mean { fill: none; stroke-width: 2; }
+.gage-six-panel .gage-center-line { stroke: #56636c; stroke-dasharray: 6 3; }
+.gage-six-panel .gage-limit-line { stroke: #b33c3c; stroke-dasharray: 3 3; }
+.gage-component-series-0 { fill: #2563a6; background-color: #2563a6; }
+.gage-component-series-1 { fill: #22816c; background-color: #22816c; }
+.gage-six-panel .chart-series-legend i { display: inline-block; inline-size: 12px; block-size: 12px; margin-inline-end: 6px; }
+.gage-six-panel .chart-summary-hit { fill: transparent; stroke: transparent; stroke-width: 2; cursor: pointer; }
+.gage-six-panel .chart-summary-box { stroke-width: 1.5; }
+.gage-six-panel .chart-summary-box > rect:not(.chart-summary-hit) { fill-opacity: 0.15; }
+.gage-six-panel .chart-box-median { stroke-width: 2.5; }
+.gage-six-panel .chart-box-mean { fill: white; stroke-width: 2; }
+.gage-six-panel .chart-summary-dot { stroke: white; stroke-width: 0.5; }
+.gage-six-panel .chart-point-selected { stroke: #111820; stroke-width: 3; }
+.gage-six-panel .chart-point-hovered, .gage-six-panel .chart-point-focused { stroke: #111820; stroke-width: 2; }
+.gage-six-panel .chart-summary-hit:focus-visible { outline: none; stroke: #111820; stroke-dasharray: 3 2; }
+.gage-policy-details dl > div { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 3fr); gap: 8px 16px; padding-block: 6px; }
+.gage-policy-details dd { margin: 0; overflow-wrap: anywhere; }
+@container (max-width: 519px) { .gage-policy-details dl > div { grid-template-columns: minmax(0, 1fr); } }

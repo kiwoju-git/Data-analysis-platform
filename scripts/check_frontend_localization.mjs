@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import ts from "../frontend/node_modules/typescript/lib/typescript.js";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(?:[A-Za-z]:)/, (value) => value.slice(1))), "..");
@@ -89,11 +90,40 @@ function sameItems(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+// Inventory coverage alone cannot prove that text returned by a validator is translated.
+export function assertSemanticValidationBoundary(sourceText, catalog) {
+  const source = ts.createSourceFile("capabilitySpecValidation.ts", sourceText, ts.ScriptTarget.Latest, true);
+  let errors = 0;
+  function visit(node) {
+    if (ts.isReturnStatement(node) && node.expression && ts.isObjectLiteralExpression(node.expression)) {
+      const fields = new Map(node.expression.properties.filter(ts.isPropertyAssignment).map((property) => [property.name.getText(source), property.initializer]));
+      const kind = fields.get("kind");
+      if (kind && ts.isStringLiteral(kind) && kind.text === "error") {
+        // parseOptionalNumber's private parse sentinel is not a user-visible error DTO.
+        if (fields.size === 1) return;
+        errors += 1;
+        const key = fields.get("messageKey");
+        const code = fields.get("code");
+        if (fields.has("message") || !key || !ts.isStringLiteral(key) || !code || !ts.isStringLiteral(code)) {
+          throw new Error("Capability validation must return code/messageKey, not pretranslated message text.");
+        }
+        if (!catalog.en[key.text] || !catalog.ko[key.text]) {
+          throw new Error(`Capability validation references an unregistered semantic key: ${key.text}`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  if (errors !== 3) throw new Error("Capability validation must retain all three semantic error branches.");
+}
+
 function runCheck() {
   if (!fs.existsSync(catalogPath)) {
     throw new Error(`Localization catalog is missing: ${catalogPath}`);
   }
   const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf8"));
+  assertSemanticValidationBoundary(fs.readFileSync(path.join(frontendRoot, "capabilitySpecValidation.ts"), "utf8"), catalog);
   const statisticalRegressions = [
     ["차", /^tea$/iu], ["검정", /^black$/iu], ["기타 검정", /guitar/iu],
     ["열", /^heat$/iu], ["항", /^port$/iu], ["센터점", /branch/iu],
@@ -177,11 +207,13 @@ function writeInventory(target) {
   console.log(`Wrote ${inventory.length} localization inventory entries to ${target}`);
 }
 
-const inventoryIndex = process.argv.indexOf("--write-inventory");
-if (inventoryIndex >= 0) {
-  const requested = process.argv[inventoryIndex + 1];
-  if (!requested) throw new Error("--write-inventory requires a path");
-  writeInventory(path.resolve(repoRoot, requested));
-} else {
-  runCheck();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const inventoryIndex = process.argv.indexOf("--write-inventory");
+  if (inventoryIndex >= 0) {
+    const requested = process.argv[inventoryIndex + 1];
+    if (!requested) throw new Error("--write-inventory requires a path");
+    writeInventory(path.resolve(repoRoot, requested));
+  } else {
+    runCheck();
+  }
 }

@@ -1,4 +1,6 @@
 import { ApiNoticeText } from "./i18n/ApiNoticeText";
+import { useI18n } from "./i18n/LocaleProvider";
+import { capabilitySpecValidation } from "./capabilitySpecValidation";
 
 import { InteractiveHistogramChart } from "./charts/InteractiveHistogramChart";
 import type {
@@ -45,6 +47,7 @@ export function CapabilityPanel({
   onUslChange,
   onValueColumnChange,
 }: CapabilityPanelProps) {
+  const { t } = useI18n();
   const specValidation = capabilitySpecValidation(lsl, usl, target);
   const canRun =
     version !== null &&
@@ -118,7 +121,9 @@ export function CapabilityPanel({
             </div>
           </div>
           {specValidation.kind === "error" ? (
-            <div className="notice-box notice-warning">{specValidation.message}</div>
+            <div className="notice-box notice-warning" data-validation-code={specValidation.code}>
+              {t(specValidation.messageKey)}
+            </div>
           ) : null}
           <button
             className="primary-button"
@@ -233,46 +238,6 @@ export function CapabilityPanel({
       )}
     </section>
   );
-}
-
-function capabilitySpecValidation(
-  lsl: string,
-  usl: string,
-  target: string,
-): { kind: "ready" | "empty" } | { kind: "error"; message: string } {
-  const parsedLsl = parseOptionalNumber(lsl);
-  const parsedUsl = parseOptionalNumber(usl);
-  const parsedTarget = parseOptionalNumber(target);
-  if (parsedLsl.kind === "error" || parsedUsl.kind === "error" || parsedTarget.kind === "error") {
-    return { kind: "error", message: "Spec limit과 target은 숫자여야 합니다." };
-  }
-  if (parsedLsl.value === null && parsedUsl.value === null) {
-    return { kind: "empty" };
-  }
-  if (parsedLsl.value !== null && parsedUsl.value !== null && parsedLsl.value >= parsedUsl.value) {
-    return { kind: "error", message: "LSL은 USL보다 작아야 합니다." };
-  }
-  if (parsedTarget.value !== null) {
-    if (parsedLsl.value !== null && parsedTarget.value < parsedLsl.value) {
-      return { kind: "error", message: "Target은 지정된 spec 안에 있어야 합니다." };
-    }
-    if (parsedUsl.value !== null && parsedTarget.value > parsedUsl.value) {
-      return { kind: "error", message: "Target은 지정된 spec 안에 있어야 합니다." };
-    }
-  }
-  return { kind: "ready" };
-}
-
-function parseOptionalNumber(value: string): { kind: "ok"; value: number | null } | { kind: "error" } {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return { kind: "ok", value: null };
-  }
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed)) {
-    return { kind: "error" };
-  }
-  return { kind: "ok", value: parsed };
 }
 
 function renderCapabilityHistogram(result: CapabilityResult) {

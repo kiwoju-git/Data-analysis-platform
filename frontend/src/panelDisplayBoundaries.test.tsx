@@ -19,7 +19,7 @@ import { RunChartPanel } from "./RunChartPanel";
 import { XyCorrelationPanel } from "./XyCorrelationPanel";
 import { LocaleProvider } from "./i18n/LocaleProvider";
 import { setCurrentLocale } from "./i18n/store";
-import { translateSystemText } from "./i18n/translate";
+import { t, translateSystemText } from "./i18n/translate";
 import type { AppLocale } from "./i18n/types";
 
 // Chart rendering is covered separately; these fixtures exercise display boundaries.
@@ -59,7 +59,7 @@ describe("analysis panel static display boundaries", () => {
     for (const source of [
       "독립 2-표본 평균 차이", "대응표본 평균 차이", "1-표본 평균", "시험군", "기준군",
       "시험 측정", "기준 측정", " 평균 - 기준 평균", "쌍 / ", "행",
-      "군집", "혼합", "추세", "진동", "중앙값과 같은 값은 아래쪽에 포함", "같은 값은 하강 방향에 포함", "계산 안 함",
+      "계산 안 함",
       "가변 표본 크기 불량률", "고정 표본 크기 불량품 수", "동일 검사 기회의 결점 수", "가변 검사 기회의 단위당 결점",
       "불량품 수", "결점 수", "검사 기회", "표본 크기", "Levene (평균 중심, legacy)", "계산 불가", "등분산 기각", "기각하지 않음",
       "실행됨", "overall 비유의로 생략", "요청 안 함", "생략", "없음", "선택", "범주형", "숫자형", "역할",
@@ -70,6 +70,9 @@ describe("analysis panel static display boundaries", () => {
       "그룹 수준이 20개를 초과하여 Dunnett 비교를 실행할 수 없습니다.",
     ]) {
       expect(translateSystemText(source, "en"), source).not.toMatch(/[\uAC00-\uD7A3]/u);
+    }
+    for (const key of ["runChart.randomness.clustering", "runChart.randomness.mixture", "runChart.randomness.trend", "runChart.randomness.oscillation", "runChart.randomness.medianTiePolicy", "runChart.randomness.flatPolicy"] as const) {
+      expect(t(key, undefined, "en"), key).not.toMatch(/[\uAC00-\uD7A3]/u);
     }
   });
 
@@ -164,8 +167,8 @@ describe("analysis panel static display boundaries", () => {
     const snapshot = JSON.stringify(result);
     for (const locale of ["en", "ko"] as const) {
       const html = panel(RunChartPanel, { result }, locale);
-      for (const text of ["군집", "혼합", "추세", "진동", "중앙값과 같은 값은 아래쪽에 포함", "같은 값은 하강 방향에 포함"]) {
-        expect(html).toContain(translateSystemText(text, locale));
+      for (const key of ["runChart.randomness.clustering", "runChart.randomness.mixture", "runChart.randomness.trend", "runChart.randomness.oscillation", "runChart.randomness.medianTiePolicy", "runChart.randomness.flatPolicy"] as const) {
+        expect(html).toContain(t(key, undefined, locale));
       }
       expect(html).toContain(`${translateSystemText("계산 안 함", locale)} · ${rawName}`);
     }

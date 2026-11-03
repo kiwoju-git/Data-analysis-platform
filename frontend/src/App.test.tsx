@@ -3613,8 +3613,8 @@ describe("App", () => {
     expect(html).toContain("Gage R&amp;R 계산");
     expect(html).toContain("준비됨");
     expect(html).toContain("Replicates per cell");
-    expect(html).toContain("Total Gage R&amp;R");
-    expect(html).toContain("Part-to-Part");
+    expect(html).toContain("총 Gage R&amp;R");
+    expect(html).toContain("부품 간 변동");
     expect(html).toContain("%Contribution");
     expect(html).toContain("NDC");
   });

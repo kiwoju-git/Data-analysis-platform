@@ -1,0 +1,86 @@
+.run-chart-randomness-container {
+  container-type: inline-size;
+  min-inline-size: 0;
+}
+
+.run-chart-randomness-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.result-metric-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-inline-size: 0;
+  padding: 12px;
+  border: 1px solid #dce4ee;
+  border-radius: 6px;
+  background: #fff;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.result-metric-card-label,
+.result-metric-card-value,
+.result-metric-card p {
+  margin: 0;
+  min-inline-size: 0;
+  white-space: normal;
+}
+
+.result-metric-card-label {
+  color: #465369;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.result-metric-card-value {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-metric-card p,
+.result-metric-card details,
+.result-metric-card > span {
+  color: #465369;
+  font-size: 0.82rem;
+}
+
+.result-metric-card .compact-definition-list {
+  display: grid;
+  gap: 8px;
+  margin-block: 8px 0;
+}
+
+.result-metric-card .compact-definition-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.result-metric-card .compact-definition-list dt,
+.result-metric-card .compact-definition-list dd {
+  margin: 0;
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.result-metric-card .compact-definition-list dd {
+  font-variant-numeric: tabular-nums;
+}
+
+@container (min-width: 508px) {
+  .run-chart-randomness-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 1028px) {
+  .run-chart-randomness-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

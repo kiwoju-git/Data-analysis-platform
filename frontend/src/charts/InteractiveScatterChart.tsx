@@ -40,6 +40,7 @@ export interface ChartBand {
   points: ReadonlyArray<{ x: number; lower: number; upper: number }>;
 }
 export interface InteractiveScatterChartProps {
+  xSections?: readonly { id: string; label: string; start: number; end: number }[];
   layout?: import("./chartLayout").ChartLayout;
   axisTickCount?: number;
   collapsibleDetails?: boolean;
@@ -61,6 +62,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
   xLabel, xRange, yLabel, yRange, xUnit, yUnit, xTicks, yTicks, xFormatValue, yFormatValue, series = [], intervals = [], bands = [],
   selectedPointId, onPointSelect, onPointActivate, onSelectionClear, sourceKey,
   layout: requestedLayout, axisTickCount, collapsibleDetails,
+  xSections = [],
 }: InteractiveScatterChartProps) {
   const arrowId = `chart-arrow-${useId().replace(/:/g, "")}`;
   const counts = new Map<string, number>();
@@ -101,8 +103,10 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
     description={`${description}; ${axisTitle(xLabel, xUnit)}; ${axisTitle(yLabel, yUnit)}`}
     layout={layout} className={compact ? "chart-frame-compact" : ""}
     axes={<ChartAxes layout={layout} x={{ label: xLabel, unit: xUnit, range: xDomain, ticks: xTicks, formatTick: xFormatValue ?? formatValue, tickCount: axisTickCount }} y={{ label: yLabel, unit: yUnit, range: yDomain, ticks: yTicks, formatTick: yFormatValue ?? formatValue, tickCount: axisTickCount }} />}
-    overlay={labels.map(({ point, text, left, top }) => <text key={point.id} className="chart-vector-label" x={left} y={top + 12}
-      textAnchor="start"><title>{point.label}</title>{text}</text>)}
+    overlay={<>{xSections.map((section) => <text key={section.id} className="chart-section-label"
+      x={x(section.start + (section.end - section.start) / 2)} y={plot.top - 28} textAnchor="middle">{section.label}</text>)}
+      {labels.map(({ point, text, left, top }) => <text key={point.id} className="chart-vector-label" x={left} y={top + 12}
+        textAnchor="start"><title>{point.label}</title>{text}</text>)}</>}
     footer={<>
       {(series.length > 0 || validBands.length > 0 || validIntervals.length > 0 || validLines.some((line) => !line.arrow)) && <ul className="chart-series-legend">
         {series.map((item) => {
@@ -124,9 +128,11 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
       <ChartItemFeedback interaction={interaction} items={validPoints} collapsible={collapsibleDetails} />
     </>}>
     <defs><marker id={arrowId} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={5} markerHeight={5} orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke" /></marker></defs>
+    {xSections.slice(1).map((section) => <line key={section.id} className="chart-section-separator"
+      x1={x(section.start)} x2={x(section.start)} y1={plot.top} y2={plot.top + plot.height} />)}
     {validBands.map((band) => <path key={band.id} className={`chart-interval-band ${band.className}`} d={`${band.points.map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.x)} ${y(point.upper)}`).join(" ")} ${[...band.points].reverse().map((point) => `L ${x(point.x)} ${y(point.lower)}`).join(" ")} Z`}><title>{band.label}</title></path>)}
-    {validLines.map((line, index) => <g key={`${line.label}-${index}`}><line className={`reference-line ${line.className ?? ""}`} x1={x(line.x1)} x2={x(line.x2)} y1={y(line.y1)} y2={y(line.y2)} markerEnd={line.arrow ? `url(#${arrowId})` : undefined} /><title>{line.label}</title></g>)}
-    {lineSeries.filter((item) => item.connect !== "none").map((item) => <path key={item.id} className={`interactive-data-line ${item.className}`} d={pointPath(item.pointIds.map((id) => byId.get(id)), x, y, item.connect === "step" ? "step" : "line")} />)}
+    {validLines.map((line, index) => <g key={`${line.label}-${index}`}><line className={`reference-line ${line.className ?? ""}`} data-reference-label={line.label} data-x1={line.x1} data-x2={line.x2} data-y1={line.y1} data-y2={line.y2} x1={x(line.x1)} x2={x(line.x2)} y1={y(line.y1)} y2={y(line.y2)} markerEnd={line.arrow ? `url(#${arrowId})` : undefined} /><title>{line.label}</title></g>)}
+    {lineSeries.filter((item) => item.connect !== "none").map((item) => <path key={item.id} className={`interactive-data-line ${item.className}`} d={pointPath(item.pointIds.map((id) => byId.get(id)), x, y, item.connect === "step" ? "step" : "line")} data-series-id={item.id} />)}
     {validIntervals.map((interval) => {
       const at = x(byId.get(interval.pointId)!.x);
       return <g key={interval.id} className={`chart-interval chart-interval-${interval.kind}`} data-interval-kind={interval.kind}>
@@ -141,6 +147,7 @@ export function InteractiveScatterChart({ annotations, chartId, compact = false,
         "aria-label": point.ariaLabel, "aria-describedby": interaction.describedBy(point.id),
         className: `${point.className} ${interaction.stateClass(point.id)}`,
         "data-selected": interaction.pinnedId === point.id ? "true" : "false",
+        "data-point-id": point.id, "data-x": point.x, "data-y": point.y,
         onBlur: () => interaction.clearFocus(point.id), onClick: () => interaction.pin(point.id),
         onFocus: () => interaction.activateItem(point.id, "focus"),
         onKeyDown: (event: React.KeyboardEvent<SVGElement>) => interaction.handleKeyDown(event, point.id),
