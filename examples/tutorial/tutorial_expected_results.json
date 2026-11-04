@@ -368,7 +368,7 @@
       "absolute_tolerance": 1e-08,
       "input_file_sha256": "1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64",
       "method_id": "quality.gage_rr",
-      "method_version": "0.3.0",
+      "method_version": "0.3.1",
       "relative_tolerance": 1e-08,
       "result": {
         "balanced": true,

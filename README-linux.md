@@ -9,14 +9,14 @@ Internet connection are not required for archive installation or runtime.
 
 Use a new empty download directory, not the previous installation directory.
 The next release candidate is
-[2026.10.7 Gage/UI](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-ui-2026.10.7).
+[2026.10.8 Gage part-ID](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-part-id-2026.10.8).
 Publication is complete only when that page contains the exact-source successful
 gate report and matching archive/checksum assets. An absent page is not a release.
 Verify the downloaded archive against the accompanying SHA256SUMS, then:
 
 ```sh
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.7-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.8-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 ./install.sh
 ./run.sh
@@ -105,7 +105,7 @@ Windows trusted-LAN development policy is unchanged.
 ## Identity and Integrity
 
 `BUILD_INFO.json` records source commit, API contract, metadata schema, Python
-target and lock hash. Release version (for example 2026.10.7) is independent of
+target and lock hash. Release version (for example 2026.10.8) is independent of
 app_version and API contract. `FILES.sha256` verifies packaged files at install
 and launch. The release-owned `release_bootstrap.py` runs with `-I -S -B` before
 importing installed app code: no current-directory/PYTHONPATH import, `.pth`

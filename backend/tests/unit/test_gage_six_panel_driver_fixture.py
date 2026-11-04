@@ -21,6 +21,9 @@ def test_hand60_browser_fixture_and_type7_operator_quantiles(driver):
     rows = list(csv.DictReader(StringIO(driver._fixture())))
     counts = Counter((row["part"], row["operator"]) for row in rows)
     assert len(rows) == 60 and len(counts) == 30 and set(counts.values()) == {2}
+    assert list(dict.fromkeys(row["part"] for row in rows)) == [str(i) for i in range(1, 11)]
+    assert sorted({row["part"] for row in rows})[1] == "10"
+    assert fmean(float(row[driver.MEASUREMENT]) for row in rows if row["part"] == "10") == 68
     values = sorted(float(row[driver.MEASUREMENT]) for row in rows if row["operator"] == "O00")
     assert len(values) == 20
     assert fmean(values) == pytest.approx(58.8, abs=1e-12)

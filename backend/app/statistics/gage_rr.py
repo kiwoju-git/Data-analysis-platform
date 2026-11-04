@@ -97,7 +97,7 @@ def calculate_gage_rr_anova(
         "reason": reason,
     }
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "summary_type": "gage_rr",
         "method": "balanced_crossed_anova",
         "missing_policy": missing_policy,
@@ -125,7 +125,7 @@ def calculate_gage_rr_anova(
         "notes": [
             "interaction_pooled" if pooled else "interaction_not_pooled",
             "negative_variance_components_clamped_to_zero",
-            "part_operator_replicate_labels_redacted",
+            "operator_replicate_labels_redacted",
             "automatic_replicate_ordinal_is_not_time_or_round"
             if prepared.replicate_mode == "infer_from_rows"
             else "explicit_replicate_identity_is_cell_local",
@@ -437,7 +437,7 @@ def _warnings(
         "gage_rr_balanced_crossed_anova_assumed",
         "gage_rr_interaction_pooled" if pooled else "gage_rr_interaction_not_pooled",
         "gage_rr_independence_not_proven",
-        "gage_rr_labels_redacted",
+        "gage_rr_operator_replicate_labels_redacted",
     ]
     for key in ("repeatability", "operator", "part_operator", "part_to_part"):
         component = components[key]

@@ -1094,6 +1094,10 @@ def _gage_rr_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         "gage_rr_labels_redacted": (
             "부품, 측정자, 반복 식별값 원문은 결과 payload에 포함하지 않았습니다."
         ),
+        "gage_rr_operator_replicate_labels_redacted": (
+            "부품 식별값은 그래프와 표에 보존하며, 측정자와 반복 식별값 원문은 "
+            "결과 payload에 포함하지 않았습니다."
+        ),
         "gage_rr_negative_variance_component_clamped": (
             "음수 raw variance component가 있어 final variance는 0으로 제한하고 "
             "raw estimate를 함께 기록했습니다."
@@ -1109,6 +1113,7 @@ def _gage_rr_warnings(result: dict[str, object]) -> list[AnalysisWarning]:
         "gage_rr_interaction_not_pooled": "info",
         "gage_rr_independence_not_proven": "info",
         "gage_rr_labels_redacted": "info",
+        "gage_rr_operator_replicate_labels_redacted": "info",
     }
     warnings: list[AnalysisWarning] = []
     for code in warning_codes:

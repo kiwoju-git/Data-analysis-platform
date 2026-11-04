@@ -11,7 +11,7 @@ describe("stored Gage R&R input options", () => {
     const before = JSON.stringify(fixture);
     expect(isGageRrResult(fixture)).toBe(true);
     expect(JSON.stringify(fixture)).toBe(before);
-    expect(isGageRrResult({ ...fixture, schema_version: 4 })).toBe(false);
+    expect(isGageRrResult({ ...fixture, schema_version: 5 })).toBe(false);
     expect(isGageRrResult({ ...fixture, variance_components: null })).toBe(false);
   });
 

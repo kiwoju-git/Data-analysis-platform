@@ -68,7 +68,7 @@ def test_hand_checked_60_rows_plot_values_follow_selected_anova(policy, mse, hal
     result = calculate(observations(), policy=policy)
     bundle = result["plot_bundle"]
     GageRrPlotBundle.model_validate(bundle)
-    assert result["schema_version"] == 3
+    assert result["schema_version"] == 4
     assert bundle["counts"]["n_used"] == 60
     assert bundle["dispersion"]["statistic"] == "range"
     assert bundle["dispersion"]["center"] == pytest.approx(0.2, abs=1e-12)
@@ -86,7 +86,7 @@ def test_hand_checked_60_rows_plot_values_follow_selected_anova(policy, mse, hal
     assert bundle["interaction"]["points"][0]["mean"] == pytest.approx(49.8)
     assert bundle["cells"][0]["sample_sd"] == pytest.approx(math.sqrt(0.02))
     assert bundle["measurement"]["unit"] == "mm"
-    assert "part-000" not in json.dumps(bundle)
+    assert bundle["parts"][0]["part_id"] == "part-000"
     assert "operator-0" not in json.dumps(bundle)
 
 
@@ -195,7 +195,8 @@ def test_shuffle_explicit_inferred_and_long_private_identities_preserve_summarie
     assert actual["response_by_operator"] == expected["response_by_operator"]
     assert actual["interaction"] == expected["interaction"]
     assert actual["counts"] == expected["counts"]
-    assert "sensitive" not in json.dumps(actual)
+    assert "sensitive-operator" not in json.dumps(actual)
+    assert actual["parts"][0]["part_id"] == rows[0][0]
     assert actual["counts"]["part_count"] == 10
 
 

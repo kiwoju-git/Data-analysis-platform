@@ -472,18 +472,20 @@ bounded preview를 만든다. Scatter Plot은 다음 두 구성을 지원한다.
 - **새 기본값:** 별도 반복번호 열 없이 세 열로 실행할 수 있고 interaction은 `auto_pool`이다.
   자동 반복은 기존 행을 세는 방식이며 측정값을 생성하지 않는다. 기본 정책으로 실행한 결과를
   아래 `retain` 기준값과 설정 확인 없이 비교하지 않는다.
-- **현재 표시 계약:** API28, `quality.gage_rr` 0.3.0/result3은 기존 ANOVA 계산을 유지하면서
+- **현재 표시 계약:** API29, `quality.gage_rr` 0.3.1/result4는 기존 ANOVA 계산을 유지하면서
   성분/부품별 측정값, R 또는 S/작업자별 boxplot, Xbar/교호작용 순서의 6개 그래프를 저장한다.
   Cell당 2~8회는 R, 9회 이상은 S이며 Xbar는 선택 모형의 반복성으로 부품 구분을 확인하는
   진단이다. 관리한계 밖 점을 공정 이상으로 단정하지 않는다. 교호작용 그래프는 pooling 여부와
-  관계없이 실제 cell mean이다. P1/O1은 원문 식별자를 가린 표시용 인덱스이지 시간 순서가 아니다.
+  관계없이 실제 cell mean이다. 부품은 원래 ID와 자연 정렬(1,2,...,10)을 사용한다.
+  `1`과 `01`은 서로 다른 ID다. 작업자는 기존 비식별 표시 번호이며 시간 순서가 아니다.
 - **저장/복원 확인:** 페이지를 바꿔도 전체 요약과 공통 축 범위는 유지된다. 원자료 점 표시 제한을
   분석 N과 혼동하지 않는다. HTML 저장 후 같은 결과를 다시 열어 정책·수치·6개 섹션을 확인한다.
   Schema1/2는 저장 성분 외 5개 그래프에 재분석 필요를 표시하며 과거 artifact를 변경하지 않는다.
+  Schema3의 부품 표시 번호는 원래 ID가 아니다. 원본 ID가 필요한 경우 명시적으로 재분석한다.
   실제 브라우저/배포본 실행 증거는 `docs/gage_charts_layout_i18n_audit.md`에서 별도로 확인한다.
 - **실행 전 확인:** 10 x 3 cells마다 replicate 2개가 있고 ID가 비어 있지 않은지 본다.
 <!-- TUTORIAL_RESULT:quality.gage_rr:start -->
-- **검증 source:** `quality.gage_rr` v0.3.0 · input SHA-256 `1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64`
+- **검증 source:** `quality.gage_rr` v0.3.1 · input SHA-256 `1a08df9c58bbc67027c522e215ed8a47f2addc7a41284af6258b7f9d7dd10b64`
 - **예상 실제 결과 (표시 반올림):**
   - N=60, balanced=true, repeatability %study=3.9713, reproducibility=10.5090
   - total Gage R&R=11.2344, part-to-part=99.3669, ndc=12

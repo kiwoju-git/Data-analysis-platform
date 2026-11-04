@@ -81,7 +81,11 @@ def test_gage_rr_balanced_crossed_anova_matches_hand_checkable_fixture() -> None
     assert components["interaction_policy"] == "preserve_part_operator_interaction_no_pooling"
     assert "gage_rr_negative_variance_component_clamped" not in result["warnings"]
     serialized = json.dumps(result, ensure_ascii=False)
-    assert "Part A" not in serialized
+    assert [part["part_id"] for part in result["plot_bundle"]["parts"]] == [
+        "Part A",
+        "Part B",
+        "Part C",
+    ]
     assert "Operator 1" not in serialized
 
 

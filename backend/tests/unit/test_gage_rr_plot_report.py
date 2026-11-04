@@ -3,6 +3,7 @@
 import copy
 import hashlib
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from xml.etree import ElementTree as ET
 
@@ -23,11 +24,11 @@ PLOT_IDS = (
 )
 
 
-def result_fixture(parts=10, operators=3, repeats=2):
+def result_fixture(parts=10, operators=3, repeats=2, part_ids=None):
     rows = [
         [
             str(20 + part * 2 + operator * 0.3 + (repeat - (repeats - 1) / 2) * 0.4),
-            f"PRIVATE-PART-{part}",
+            part_ids[part] if part_ids else f"PRIVATE-PART-{part}",
             f"PRIVATE-OPERATOR-{operator}",
         ]
         for part in range(parts)
@@ -67,7 +68,7 @@ def markup_tree(markup):
 @pytest.mark.parametrize("locale", ["en", "ko"])
 def test_six_stored_charts_are_full_escaped_and_do_not_recalculate(locale, monkeypatch):
     result = result_fixture()
-    assert result["schema_version"] == 3
+    assert result["schema_version"] == 4
     before = checksum(result)
 
     def forbidden(*args, **kwargs):
@@ -86,7 +87,7 @@ def test_six_stored_charts_are_full_escaped_and_do_not_recalculate(locale, monke
     assert root.find('.//div[@class="report-grid"]') is not None
     text = "".join(root.itertext())
     assert "Response <&> 한국어" in text and "mg" in text
-    assert "PRIVATE-PART" not in text and "PRIVATE-OPERATOR" not in text
+    assert "PRIVATE-PART-0" in text and "PRIVATE-OPERATOR" not in text
     assert ("Xbar" in text and "R Chart" in text) if locale == "en" else "R 관리도" in text
     assert "<script" not in report.render() and "https://" not in report.render()
     assert checksum(result) == before
@@ -122,6 +123,10 @@ def test_legacy_only_uses_stored_components_and_marks_five_missing(schema):
         lambda r: r["plot_bundle"]["xbar"].update(lower_limit=float("nan")),
         lambda r: r["plot_bundle"]["response_by_operator"]["boxes"][0].update(q1=None),
         lambda r: r["plot_bundle"]["components"]["items"][0].update(percent_contribution=None),
+        lambda r: r["plot_bundle"]["parts"][0].pop("part_id"),
+        lambda r: r["plot_bundle"]["parts"][0].update(
+            part_id=r["plot_bundle"]["parts"][1]["part_id"]
+        ),
     ],
 )
 def test_malformed_current_bundle_cannot_be_full_or_a_blank_plot(mutation):
@@ -254,7 +259,7 @@ def test_component_bars_and_box_whiskers_are_actual_svg_geometry():
         )
 
 
-def test_schema3_unavailable_stored_plot_is_honest_summary_not_blank_full():
+def test_current_unavailable_stored_plot_is_honest_summary_not_blank_full():
     result = result_fixture()
     result["plot_bundle"]["dispersion"].update(
         status="unavailable",
@@ -288,3 +293,78 @@ def test_consistently_linked_negative_component_is_not_a_valid_chart():
     result["variance_components"]["total_gage_rr"]["percent_contribution"] = -1.0
     result["plot_bundle"]["components"]["items"][0]["percent_contribution"] = -1.0
     assert prepared(result).level == "unsupported"
+
+
+@pytest.mark.parametrize("locale", ["en", "ko"])
+def test_actual_numeric_part_ids_match_saved_values_and_natural_display_order(locale):
+    result = result_fixture(part_ids=[str(i) for i in range(1, 11)])
+    before = checksum(result)
+    report = prepared(result, locale)
+    assert report.level == "full"
+    assert report.definition.renderer_version == "2.3.1"
+    root = markup_tree(report.render())
+    for section_id in ("gage_response_by_part", "gage_interaction"):
+        section = root.find(f'.//div[@data-report-section="{section_id}"]')
+        svg = section.find(".//svg")
+        assert [
+            node.get("data-gage-part-id") for node in svg.findall("text[@data-gage-part-id]")
+        ] == [str(i) for i in range(1, 11)]
+        for point in svg.findall(".//*[@data-part-index]"):
+            index = int(point.get("data-part-index"))
+            assert point.get("data-gage-part-id") == str(index + 1)
+            assert str(index + 1) in point.find("title").text
+    table = root.find('.//div[@data-gage-part-summary="true"]//table')
+    assert [row.find("td").text for row in table.findall(".//tbody/tr")] == [
+        str(i) for i in range(1, 11)
+    ]
+    tenth = root.find(
+        './/div[@data-report-section="gage_interaction"]//circle[@data-gage-part-id="10"]'
+    )
+    assert float(tenth.get("data-y")) == pytest.approx(38.0)
+    assert checksum(result) == before
+
+
+def test_distinct_leading_zero_and_hostile_long_ids_have_full_escaped_detail_paths():
+    part_ids = ["1", "01", "부품" * 80, '<script>alert("part")</script>', "a&b<>/'\\"]
+    result = result_fixture(parts=len(part_ids), part_ids=part_ids)
+    before = checksum(result)
+    root = markup_tree(prepared(result).render())
+    section = root.find('.//div[@data-report-section="gage_response_by_part"]')
+    labels = section.findall(".//svg/text[@data-gage-part-id]")
+    assert {label.get("data-gage-part-id") for label in labels} == set(part_ids)
+    assert all(len("".join(label.findall("tspan")[0].itertext())) <= 6 for label in labels)
+    rows = section.findall(".//table/tbody/tr")
+    assert {row.find("td").text for row in rows} == set(part_ids)
+    assert {
+        row.findall("td")[0].text: float("".join(row.findall("td")[2].itertext())) for row in rows
+    } == {part_id: pytest.approx(20 + index * 2 + 0.3) for index, part_id in enumerate(part_ids)}
+    assert not root.findall(".//script") and not root.findall(".//img")
+    for point in section.findall(".//svg//*[@data-gage-part-id]"):
+        assert point.get("data-gage-part-id") in "".join(point.find("title").itertext())
+    assert "PRIVATE-OPERATOR" not in "".join(root.itertext())
+    assert checksum(result) == before
+
+
+@pytest.mark.parametrize("locale", ["en", "ko"])
+def test_legacy_schema3_preserves_indices_and_labels_original_id_unavailable(locale):
+    path = Path(__file__).parents[3] / "tests/fixtures/gage_rr_six_panel.json"
+    result = json.loads(path.read_text(encoding="utf-8"))["auto_pool"]
+    assert result["schema_version"] == 3
+    before = checksum(result)
+    report = prepared(result, locale)
+    assert report.level == "full"
+    root = markup_tree(report.render())
+    text = "".join(root.itertext())
+    assert ("Part display number" if locale == "en" else "부품 표시 번호") in text
+    assert (
+        "Original part IDs were not stored" if locale == "en" else "원래 부품 ID가 저장되지"
+    ) in text
+    assert ("Reanalysis" if locale == "en" else "재분석") in text
+    assert ("Display 1" if locale == "en" else "표시 번호 1") in text
+    assert "P1" not in text
+    section = root.find('.//div[@data-report-section="gage_interaction"]')
+    point = section.find('.//circle[@data-part-index="1"]')
+    stored = next(p for p in result["plot_bundle"]["interaction"]["points"] if p["part_index"] == 1)
+    assert float(point.get("data-y")) == stored["mean"]
+    assert point.get("data-gage-part-id") is None
+    assert checksum(result) == before

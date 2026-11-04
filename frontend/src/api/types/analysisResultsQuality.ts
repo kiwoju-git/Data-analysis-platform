@@ -715,8 +715,7 @@ export interface GageRrPlotCellSummary {
   sample_sd: number | null;
 }
 
-export interface GageRrPlotBundle {
-  schema_version: 1;
+interface GageRrPlotBundleValues {
   measurement: { column_id: string; display_name: string; unit: string | null };
   measurement_range: { minimum: number; maximum: number };
   counts: {
@@ -733,7 +732,6 @@ export interface GageRrPlotBundle {
     raw_point_policy: "deterministic_cell_stratified_source_row";
     truncated: boolean;
   };
-  parts: { part_index: number; n: number; mean: number | null }[];
   operators: { operator_index: number; n: number; mean: number | null }[];
   cells: GageRrPlotCellSummary[];
   components: GageRrPlotState & {
@@ -795,10 +793,7 @@ export interface GageRrPlotBundle {
     points: { part_index: number; operator_index: number; n: number; mean: number | null }[];
   };
   calculation_metadata: {
-    policy_version: "gage_rr_six_panel_v1";
-    part_order: "sorted_full_stripped_identity";
     operator_order: "sorted_full_stripped_identity";
-    identifier_policy: "zero_based_indices_original_labels_redacted";
     summary_scope: "all_used_observations_before_display_cap";
     selected_interaction_policy: "retain" | "pooled";
     replicate_mode: "infer_from_rows" | "explicit_column";
@@ -806,6 +801,29 @@ export interface GageRrPlotBundle {
     interaction_interpretation: "observed_cell_means_even_when_pooled";
   };
 }
+
+type GageRrPlotPart = { part_index: number; n: number; mean: number | null };
+
+export type GageRrPlotBundle = GageRrPlotBundleValues & (
+  | {
+    schema_version: 1;
+    parts: GageRrPlotPart[];
+    calculation_metadata: {
+      policy_version: "gage_rr_six_panel_v1";
+      part_order: "sorted_full_stripped_identity";
+      identifier_policy: "zero_based_indices_original_labels_redacted";
+    };
+  }
+  | {
+    schema_version: 2;
+    parts: (GageRrPlotPart & { part_id: string })[];
+    calculation_metadata: {
+      policy_version: "gage_rr_six_panel_v2";
+      part_order: "natural_ascii_digit_runs_full_identity_v1";
+      identifier_policy: "part_ids_preserved_operator_replicate_redacted";
+    };
+  }
+);
 
 export interface GageRrResult {
   schema_version: number;

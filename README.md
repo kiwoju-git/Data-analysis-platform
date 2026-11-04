@@ -81,7 +81,7 @@ not an archive validation pass.
 #### Install and Run the Linux Release
 
 Download the Linux `.tar.gz` and `SHA256SUMS` from the
-[2026.10.7 Gage/UI prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-ui-2026.10.7).
+[2026.10.8 Gage part-ID prerelease](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-part-id-2026.10.8).
 This version is publishable only after the exact-source product/security/resource
 and archive gates pass; an absent Release page means publication is not complete.
 The supported target is Ubuntu 24.04, x86_64, CPython 3.12 with `venv` and `pip`
@@ -90,7 +90,7 @@ Verify the archive against the published checksum before extraction:
 
 ```bash
 sha256sum -c SHA256SUMS
-tar -xzf statistical-twin-linux-2026.10.7-ubuntu24.04-x86_64-py312.tar.gz
+tar -xzf statistical-twin-linux-2026.10.8-ubuntu24.04-x86_64-py312.tar.gz
 cd statistical-twin-linux
 bash install.sh
 bash run.sh

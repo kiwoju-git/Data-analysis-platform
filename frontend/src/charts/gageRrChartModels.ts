@@ -18,13 +18,19 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(record);
 const optionalNumber = (value: unknown) => value === null || finite(value);
 const integer = (value: unknown): value is number => finite(value) && Number.isInteger(value) && value >= 0;
+// Match Python str.strip's whitespace set without treating a preserved BOM as whitespace.
+const partEdgeWhitespace = (code: number) => (code >= 9 && code <= 13) || (code >= 28 && code <= 32)
+  || (code >= 0x2000 && code <= 0x200a) || [0x85, 0xa0, 0x1680, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000].includes(code);
+const canonicalPartId = (value: unknown): value is string => typeof value === "string" && value.length > 0
+  && !partEdgeWhitespace(value.charCodeAt(0)) && !partEdgeWhitespace(value.charCodeAt(value.length - 1));
 
 // API validation owns the full statistical contract. This display guard keeps malformed
 // or incomplete historical graph data from taking down the independent ANOVA tables.
 export function gagePlotState(result: GageRrResult): "legacy" | "valid" | "invalid" {
   if (result.schema_version < 3) return "legacy";
   const b: unknown = result.plot_bundle;
-  if (!record(b) || b.schema_version !== 1 || !record(b.measurement) || !record(b.counts) || !record(b.measurement_range) || !record(b.calculation_metadata)) return "invalid";
+  if (!record(b) || !((result.schema_version === 3 && b.schema_version === 1) || (result.schema_version === 4 && b.schema_version === 2))
+    || !record(b.measurement) || !record(b.counts) || !record(b.measurement_range) || !record(b.calculation_metadata)) return "invalid";
   const c = b.counts;
   if (typeof b.measurement.display_name !== "string" || !(b.measurement.unit === null || typeof b.measurement.unit === "string")
     || !["n_total", "n_used", "part_count", "operator_count", "replicate_count", "displayed_raw_point_count", "raw_point_limit"].every((key) => integer(c[key]))) return "invalid";
@@ -34,6 +40,15 @@ export function gagePlotState(result: GageRrResult): "legacy" | "valid" | "inval
   if (!records(b.parts) || !records(b.operators) || !records(b.cells) || b.parts.length !== partCount || b.operators.length !== operatorCount) return "invalid";
   if (b.parts.some((part, index) => part.part_index !== index || !optionalNumber(part.mean) || !integer(part.n))
     || b.operators.some((operator, index) => operator.operator_index !== index || !optionalNumber(operator.mean) || !integer(operator.n))) return "invalid";
+  const metadata = b.calculation_metadata;
+  if (metadata.operator_order !== "sorted_full_stripped_identity") return "invalid";
+  if (b.schema_version === 2) {
+    if (metadata.policy_version !== "gage_rr_six_panel_v2" || metadata.part_order !== "natural_ascii_digit_runs_full_identity_v1"
+      || metadata.identifier_policy !== "part_ids_preserved_operator_replicate_redacted"
+      || b.parts.some((part) => !canonicalPartId(part.part_id))
+      || new Set(b.parts.map((part) => part.part_id)).size !== b.parts.length) return "invalid";
+  } else if (metadata.policy_version !== "gage_rr_six_panel_v1" || metadata.part_order !== "sorted_full_stripped_identity"
+    || metadata.identifier_policy !== "zero_based_indices_original_labels_redacted" || b.parts.some((part) => "part_id" in part)) return "invalid";
   const cellIdentity = (item: Record<string, unknown>) => integer(item.part_index) && item.part_index < partCount && integer(item.operator_index) && item.operator_index < operatorCount;
   const cellRows = (items: unknown, valueKeys: string[], available: boolean) => records(items) && items.length === partCount * operatorCount
     && new Set(items.map((item) => `${String(item.part_index)}:${String(item.operator_index)}`)).size === items.length
@@ -97,15 +112,29 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
   const operators = bundle.operators.slice(operatorPage * GAGE_OPERATOR_PAGE_SIZE, (operatorPage + 1) * GAGE_OPERATOR_PAGE_SIZE);
   const partPosition = new Map(parts.map((part, index) => [part.part_index, index]));
   const operatorPosition = new Map(operators.map((operator, index) => [operator.operator_index, index]));
-  const partLabel = (index: number) => translate("gage.charts.part", { index: index + 1 });
+  const partLabels = new Map(bundle.schema_version === 2
+    ? bundle.parts.map((part) => [part.part_index, part.part_id] as const)
+    : bundle.parts.map((part) => [part.part_index, translate("gage.charts.displayIndex", { index: part.part_index + 1 })] as const));
+  const partLabel = (index: number) => {
+    const label = partLabels.get(index);
+    if (label === undefined) throw new Error("Invalid stored Gage part reference");
+    return label;
+  };
+  const partIdentityLabel = translate(bundle.schema_version === 2 ? "gage.charts.partId" : "gage.charts.displayNumber");
+  const partDetails = (index: number) => [{ label: partIdentityLabel, value: partLabel(index) }];
+  const tickLabel = (index: number) => {
+    const label = Array.from(partLabel(index));
+    return label.length > 10 ? label.slice(0, 9).join("") + "…" : label.join("");
+  };
   const operatorLabel = (index: number) => translate("gage.charts.operator", { index: index + 1 });
   const xRange = { min: -0.5, max: Math.max(0.5, parts.length - 0.5) };
   const yRange = paddedNumericRange([bundle.measurement_range.minimum, bundle.measurement_range.maximum]);
-  const partTicks = parts.filter((_, index) => parts.length <= 5 || index % 3 === 0 || index === parts.length - 1)
-    .map((part) => ({ value: partPosition.get(part.part_index)!, label: partLabel(part.part_index) }));
+  const shortPartIds = bundle.schema_version === 2 && parts.every((part) => Array.from(partLabel(part.part_index)).length <= 3);
+  const partTicks = parts.filter((_, index) => shortPartIds || parts.length <= 5 || index % 3 === 0 || index === parts.length - 1)
+    .map((part) => ({ value: partPosition.get(part.part_index)!, label: tickLabel(part.part_index) }));
   const point = (id: string, part: number, operator: number, x: number, y: number, extra: { label: string; value: string }[] = []): InteractiveScatterPoint => {
     const title = `${partLabel(part)} / ${operatorLabel(operator)}`;
-    const details = [{ label: translate("gage.charts.value"), value: formatExactNumericValue(y) }, ...extra];
+    const details = [...partDetails(part), { label: translate("gage.charts.value"), value: formatExactNumericValue(y) }, ...extra];
     return { id, title, ariaLabel: `${title}; ${details.map((item) => `${item.label}: ${item.value}`).join("; ")}`,
       details, x, y, className: operatorClass(operator), marker: operatorMarker(operator), seriesId: `operator:${operator}` };
   };
@@ -119,7 +148,7 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
     [{ label: translate("gage.charts.sourceRow"), value: String(item.source_row_number) }]));
   const meanPoints: InteractiveScatterPoint[] = parts.flatMap((part) => finite(part.mean) ? [{
     id: `part-mean:${part.part_index}`, title: partLabel(part.part_index), ariaLabel: `${partLabel(part.part_index)}; ${translate("gage.charts.partMean")}: ${formatExactNumericValue(part.mean)}`,
-    details: [{ label: translate("gage.charts.partMean"), value: formatExactNumericValue(part.mean) }, { label: translate("gage.charts.count"), value: String(part.n) }],
+    details: [...partDetails(part.part_index), { label: translate("gage.charts.partMean"), value: formatExactNumericValue(part.mean) }, { label: translate("gage.charts.count"), value: String(part.n) }],
     x: partPosition.get(part.part_index)!, y: part.mean, className: "gage-part-mean", marker: "diamond", seriesId: "part-means",
   }] : []);
   // Keep raw markers above summaries; earlier source rows own overlapping raw hits.
@@ -130,7 +159,8 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
   const sectionWidth = parts.length + 1;
   const sectionRange = { min: -0.5, max: Math.max(0.5, operators.length * sectionWidth - 1.5) };
   const sections = operators.map((operator, index) => ({ id: `operator:${operator.operator_index}`, label: operatorLabel(operator.operator_index), start: index * sectionWidth - 0.5, end: index * sectionWidth + parts.length - 0.5 }));
-  const sectionTicks = operators.flatMap((_, index) => partTicks.map((tick) => ({ ...tick, value: tick.value + index * sectionWidth, label: String(parts[tick.value].part_index + 1) })));
+  const sectionPartTicks = partTicks.filter((tick) => parts.length <= 5 || tick.value % 3 === 0 || tick.value === parts.length - 1);
+  const sectionTicks = operators.flatMap((_, index) => sectionPartTicks.map((tick) => ({ ...tick, value: tick.value + index * sectionWidth })));
   const limitsChart = (kind: "dispersion" | "xbar") => {
     const view = bundle[kind];
     let minimum = Infinity, maximum = -Infinity;
@@ -158,7 +188,7 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
   const dots: SummaryDot[] = bundle.response_by_operator.boxes.filter((box) => operatorPosition.has(box.operator_index)).flatMap((box) => {
     const raw = box.n <= 40 ? bundle.response_by_part.points.filter((item) => item.operator_index === box.operator_index) : box.outliers;
     return raw.map((item) => ({ id: `box-dot:${item.source_row_number}`, title: `${partLabel(item.part_index)} / ${operatorLabel(item.operator_index)}`,
-      details: [{ label: translate("gage.charts.value"), value: formatExactNumericValue(item.value) }, { label: translate("gage.charts.sourceRow"), value: String(item.source_row_number) }],
+      details: [...partDetails(item.part_index), { label: translate("gage.charts.value"), value: formatExactNumericValue(item.value) }, { label: translate("gage.charts.sourceRow"), value: String(item.source_row_number) }],
       x: operatorPosition.get(item.operator_index)! + ((item.source_row_number * 17 % 31) / 30 - 0.5) * 0.3, value: item.value, className: operatorClass(item.operator_index),
       outlier: finite(box.lower_fence) && finite(box.upper_fence) && (item.value < box.lower_fence || item.value > box.upper_fence),
     }));
@@ -166,5 +196,6 @@ export function gageChartModels(bundle: GageRrPlotBundle, partPage: number, oper
   return { xRange, yRange, partTicks, responsePart, interaction: { points: interactionPoints, series: seriesFor(interactionPoints) },
     dispersion: limitsChart("dispersion"), xbar: limitsChart("xbar"), boxes, dots,
     operatorTicks: operators.map((operator, value) => ({ value, label: operatorLabel(operator.operator_index) })),
-    operatorSummaries: bundle.response_by_operator.boxes.filter((box) => operatorPosition.has(box.operator_index)) };
+    operatorSummaries: bundle.response_by_operator.boxes.filter((box) => operatorPosition.has(box.operator_index)),
+    partIdentityLabel, partSummaries: parts.map((part) => ({ ...part, label: partLabel(part.part_index) })) };
 }

@@ -11,6 +11,10 @@
 .gage-chart-pager { display: flex; align-items: center; gap: 8px; }
 .gage-chart-pager output { min-inline-size: 48px; text-align: center; font-variant-numeric: tabular-nums; }
 .gage-chart-pager button { display: grid; place-items: center; inline-size: 32px; block-size: 32px; }
+.gage-part-identities { margin-block: 12px 20px; min-inline-size: 0; }
+.gage-part-identity-table { inline-size: 100%; table-layout: fixed; margin-block-start: 8px; }
+.gage-part-identity-table th:first-child { inline-size: 55%; }
+.gage-part-identity-table th, .gage-part-identity-table td { min-inline-size: 0; white-space: normal; overflow-wrap: anywhere; vertical-align: top; line-height: 1.5; }
 .gage-six-panel .chart-section-label { font-size: 12px; fill: var(--text-primary, #202b35); }
 .gage-six-panel .chart-section-separator { stroke: #9ba6ae; stroke-dasharray: 2 4; }
 .gage-six-panel .gage-operator-0 { --gage-color: #2563a6; }

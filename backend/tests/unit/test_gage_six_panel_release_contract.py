@@ -41,6 +41,9 @@ def receipts():
             "component_bars": 8,
             "operator_paths_per_chart": 3,
             "numeric_svg_checked": True,
+            "part_axis_labels_checked": True,
+            "part_ids": [str(index) for index in range(1, 11)],
+            "part_means": [50 + 2 * index for index in range(10)],
             "dispersion_center": 0.2,
             "dispersion_ucl": 0.6534,
             "xbar_center": 59,
@@ -125,6 +128,8 @@ def receipts():
                     "sha256": item["descriptor"]["sha256"],
                     "locale": item["locale"],
                     "raw_point_count": 60,
+                    "part_axis_labels_checked": True,
+                    "part_ids": [str(index) for index in range(1, 11)],
                     "dispersion_ucl": 0.6534,
                     "sections": [{"section": section, "svg_count": 1} for section in SECTIONS],
                 }
@@ -153,6 +158,12 @@ def test_complete_cross_linked_synthetic_receipt_is_accepted_without_processes(m
 @pytest.mark.parametrize(
     "change",
     [
+        lambda i, r, o: i["gage_six_panel_receipt"]["analyses"][0].update(part_ids=["1", "10"]),
+        lambda i, r, o: i["gage_six_panel_receipt"]["analyses"][0].update(
+            part_axis_labels_checked=False
+        ),
+        lambda i, r, o: r[0]["gage_six_panel_receipt"]["analyses"][0].update(part_means=[50, 68]),
+        lambda i, r, o: o["gage_six_panel_receipt"]["reports"][0].pop("part_ids"),
         lambda i, r, o: i.pop("gage_six_panel_receipt"),
         lambda i, r, o: i["gage_six_panel_receipt"].update(status="running"),
         lambda i, r, o: i["gage_six_panel_receipt"].update(view_only_analysis_post_count=1),

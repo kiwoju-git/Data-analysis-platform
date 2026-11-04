@@ -1,6 +1,16 @@
 # Runtime Compatibility Contract
 
-## Current Gage Six-Panel Contract (API28)
+## Current Gage Part Identity Contract (API29)
+
+API29 adds Gage method0.3.1/result4/plot2. New results preserve full canonical
+part IDs and use natural digit-run order only in their plot view. Operators and
+replicate IDs remain redacted. Statistical preparation and ANOVA are unchanged.
+Frontend/Windows startup require API29/metadata24; no SQL migration is added.
+Result1/2/3 and plot1 remain readable without artifact rewrites. Plot1 lacks
+original part IDs: display numbers are explicitly not original identifiers.
+See [identity fix and evidence](gage_part_identity_fix.md).
+
+## Gage Six-Panel Contract (API28)
 
 API 28 adds `quality.gage_rr` method 0.3.0/result 3 with the stored, typed
 `plot_bundle` schema 1. The six diagnostics use the selected ANOVA's saved values;

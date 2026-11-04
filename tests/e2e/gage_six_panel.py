@@ -61,7 +61,7 @@ REPORT_SECTIONS = (
 
 def _fixture(parts: int = 10, operators: int = 3) -> str:
     return f"part,operator,{MEASUREMENT}\n" + "".join(
-        f"P{i:02},O{operator:02},{50 + 2*i + .2*(operator-1) + error:.10g}\n"
+        f"{i + 1},O{operator:02},{50 + 2*i + .2*(operator-1) + error:.10g}\n"
         for i in range(parts)
         for operator in range(operators)
         for error in (-0.1, 0.1)
@@ -93,7 +93,7 @@ def _run(page: Page, panel: Locator) -> dict:
     response = submitted.value
     assert response.status == 201, response.text()
     envelope = response.json()
-    assert envelope["result"]["schema_version"] == 3
+    assert envelope["result"]["schema_version"] == 4
     expect(panel.locator("[data-gage-six-panel]")).to_be_visible()
     return envelope
 
@@ -129,6 +129,24 @@ def _graph_coordinates(charts: Locator) -> list[dict]:
 
 def _assert_six_values(charts: Locator, result: dict) -> dict:
     bundle = result["plot_bundle"]
+    expected_ids = [str(index) for index in range(1, 11)]
+    assert bundle["schema_version"] == 2
+    assert [part["part_id"] for part in bundle["parts"]] == expected_ids
+    for index, part in enumerate(bundle["parts"]):
+        _assert_close(part["mean"], 50 + 2 * index)
+    identities = charts.locator('[data-gage-part-identities="original"]')
+    expect(identities).to_have_count(1)
+    if identities.get_attribute("open") is None:
+        identities.locator("summary").click()
+    table = charts.locator("[data-gage-part-id-table]")
+    expect(table).to_be_visible()
+    expect(table.locator("td[data-gage-part-id]")).to_have_text(expected_ids)
+    expect(table.locator('[data-gage-part-index="9"]')).to_contain_text("68")
+    for kind in ("response_by_part", "interaction"):
+        ticks = charts.locator(
+            f'[data-gage-chart-kind="{kind}"] .chart-axes .chart-tick-label[text-anchor="middle"]'
+        )
+        expect(ticks).to_have_text(expected_ids)
     for kind in KINDS:
         slot = charts.locator(f'[data-gage-chart-kind="{kind}"]')
         expect(slot).to_have_count(1)
@@ -301,6 +319,9 @@ def _assert_six_values(charts: Locator, result: dict) -> dict:
         "dispersion_ucl": 0.6534,
         "xbar_center": 59,
         "xbar_half_width": half_width,
+        "part_ids": expected_ids,
+        "part_means": [50 + 2 * index for index in range(10)],
+        "part_axis_labels_checked": True,
     }
 
 
@@ -314,6 +335,7 @@ def _interaction(page: Page, charts: Locator) -> None:
     second = chart.locator('[data-point-id="raw:2"]')
     first.hover()
     expect(page.get_by_role("tooltip")).to_be_visible()
+    expect(page.get_by_role("tooltip")).to_contain_text("1")
     first.click()
     expect(first).to_have_attribute("data-selected", "true")
     second.hover()
@@ -344,6 +366,12 @@ def _interaction(page: Page, charts: Locator) -> None:
     assert visited == expected_ids, "Keyboard must reach every raw and mean marker"
     page.keyboard.press("Tab")
     assert not chart.locator("svg.chart-frame-svg [data-point-id]:focus").count()
+    last_part = chart.locator('[data-point-id="part-mean:9"]')
+    last_part.focus()
+    last_part.press("Enter")
+    expect(page.get_by_role("tooltip")).to_contain_text("10")
+    expect(page.get_by_role("tooltip")).to_contain_text("68")
+    last_part.press("Escape")
 
 
 def _layout(page: Page, charts: Locator) -> dict:
@@ -405,6 +433,24 @@ def verify_gage_report_html(page: Page, artifact: dict, output: Path) -> dict:
         expect(panel).to_be_visible()
         assert panel.locator("svg").count() >= 1
         sections.append({"section": section, "svg_count": panel.locator("svg").count()})
+    part_ids = [str(index) for index in range(1, 11)]
+    for section in ("gage_response_by_part", "gage_interaction"):
+        panel = page.locator(f'[data-report-section="{section}"]')
+        ticks = panel.locator("text[data-gage-part-id]")
+        assert ticks.evaluate_all("nodes => nodes.map(n => n.dataset.gagePartId)") == part_ids
+        assert ticks.evaluate_all(
+            "nodes => nodes.map(n => [...n.querySelectorAll('tspan')].map(c => c.textContent).join(''))"
+        ) == part_ids
+    summary = page.locator('[data-gage-part-summary="true"] tbody tr')
+    expect(summary).to_have_count(10)
+    expect(summary.locator("td:first-child")).to_have_text(part_ids)
+    for index in range(10):
+        _assert_close(float(summary.nth(index).locator("td").nth(2).inner_text()), 50 + 2 * index)
+    tenth = page.locator(
+        '[data-report-section="gage_response_by_part"] [data-role="part_mean"][data-gage-part-id="10"]'
+    )
+    expect(tenth).to_have_count(1)
+    _assert_close(float(tenth.get_attribute("data-y")), 68)
     raw = page.locator(
         '[data-report-section="gage_response_by_part"] [data-role="measurement"]'
     )
@@ -431,6 +477,8 @@ def verify_gage_report_html(page: Page, artifact: dict, output: Path) -> dict:
         "sha256": descriptor["sha256"],
         "sections": sections,
         "raw_point_count": 60,
+        "part_ids": part_ids,
+        "part_axis_labels_checked": True,
         "dispersion_ucl": 0.6534,
     }
 

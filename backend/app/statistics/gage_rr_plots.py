@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from math import exp, floor, fsum, hypot, isfinite, lgamma, log, sqrt
 from typing import Any, cast
 
+from app.statistics.gage_part_order import natural_part_id_key
 from app.statistics.gage_rr_data import GageObservation, GageRrColumn, PreparedGageData
 from app.statistics.subgroup_chart import XBAR_R_CONSTANTS
 
@@ -22,7 +23,7 @@ def build_gage_rr_plot_bundle(
 ) -> dict[str, Any]:
     if not 1 <= raw_point_limit <= RAW_POINT_LIMIT:
         raise ValueError("gage_plot_point_limit_invalid")
-    parts = cast(list[str], prepared.design["part_ids"])
+    parts = sorted(cast(list[str], prepared.design["part_ids"]), key=natural_part_id_key)
     operators = cast(list[str], prepared.design["operator_ids"])
     repeats = cast(int, prepared.design["replicate_count"])
     part_indices = {value: index for index, value in enumerate(parts)}
@@ -97,7 +98,7 @@ def build_gage_rr_plot_bundle(
         value is not None for value in (grand_mean, lower, upper, repeatability_variance)
     ) and all(cell["mean"] is not None for cell in cells)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "measurement": {
             "column_id": measurement_column.column_id,
             "display_name": measurement_column.display_name,
@@ -117,7 +118,12 @@ def build_gage_rr_plot_bundle(
             "truncated": len(raw_points) < len(values),
         },
         "parts": [
-            {"part_index": p, "n": len(part_values[p]), "mean": _mean(part_values[p])}
+            {
+                "part_index": p,
+                "part_id": parts[p],
+                "n": len(part_values[p]),
+                "mean": _mean(part_values[p]),
+            }
             for p in range(len(parts))
         ],
         "operators": [
@@ -193,10 +199,10 @@ def build_gage_rr_plot_bundle(
             ],
         },
         "calculation_metadata": {
-            "policy_version": "gage_rr_six_panel_v1",
-            "part_order": "sorted_full_stripped_identity",
+            "policy_version": "gage_rr_six_panel_v2",
+            "part_order": "natural_ascii_digit_runs_full_identity_v1",
             "operator_order": "sorted_full_stripped_identity",
-            "identifier_policy": "zero_based_indices_original_labels_redacted",
+            "identifier_policy": "part_ids_preserved_operator_replicate_redacted",
             "summary_scope": "all_used_observations_before_display_cap",
             "selected_interaction_policy": "pooled" if interaction_pooled else "retain",
             "replicate_mode": prepared.replicate_mode,

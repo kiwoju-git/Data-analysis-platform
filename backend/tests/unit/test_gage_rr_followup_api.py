@@ -1,6 +1,7 @@
 import hashlib
 import json
 from dataclasses import replace
+from pathlib import Path
 from uuid import UUID
 
 import pytest
@@ -16,13 +17,14 @@ from app.services.report_coverage import INLINE_REPORT_CONTRACTS
 from app.storage.metadata import get_analysis_run_record
 
 
-def upload(client, *, explicit=False):
+def upload(client, *, explicit=False, numeric_parts=False):
     content = (
         "part,operator,measurement"
         + (",replicate" if explicit else "")
         + "\n"
         + "".join(
-            f"P{part},O{operator},{100+2*part+operator+0.01*(part-4.5)*(operator-1)+error}"
+            f"{str(part + 1) if numeric_parts else f'P{part}'},O{operator},"
+            f"{100+2*part+operator+0.01*(part-4.5)*(operator-1)+error}"
             + (f",r{repeat}" if explicit else "")
             + "\n"
             for part in range(10)
@@ -102,7 +104,7 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
         assert response.status_code == 201, response.text
         envelope = response.json()
         result = envelope["result"]
-        assert result["schema_version"] == 3
+        assert result["schema_version"] == 4
         GageRrPlotBundle.model_validate(result["plot_bundle"])
         assert result["interaction_selection"]["pooled"]
         assert result["design"]["replicate_count"] == 2
@@ -160,7 +162,8 @@ def test_three_column_filtered_preflight_run_restore_and_report(tmp_path, monkey
             assert "infer_from_rows" in downloaded.text
         assert hashlib.sha256(client.get(path + "/result").content).hexdigest() == digest
         assert not list(tmp_path.rglob("*preflight*"))
-        assert "P0" not in json.dumps(result)
+        assert result["plot_bundle"]["parts"][0]["part_id"] == "P0"
+        assert "O0" not in json.dumps(result)
 
         # Synthetic schema-1 archive exercises the unchanged checksum reader.
         legacy = old_response.json()
@@ -316,3 +319,101 @@ def test_mode_contradictions_and_empty_alpha_rejected(tmp_path):
         )
         assert invalid_alpha.status_code == 422
         assert invalid_alpha.json()["error"]["code"] == "invalid_gage_rr_options"
+
+
+def test_numeric_part_id_api_join_restore_filter_and_legacy_schema3_bytes(tmp_path, monkeypatch):
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        version = upload(client, numeric_parts=True)
+        columns = {column["display_name"]: column["column_id"] for column in version["columns"]}
+        request = {
+            "method_id": "quality.gage_rr",
+            "method_version": METHOD_VERSIONS["quality.gage_rr"],
+            "dataset_version_id": version["version_id"],
+            "roles": {},
+            "options": {
+                "measurement_column_id": columns["measurement"],
+                "part_column_id": columns["part"],
+                "operator_column_id": columns["operator"],
+                "replicate_mode": "infer_from_rows",
+                "interaction_policy": "retain",
+            },
+        }
+        response = client.post("/api/v1/analysis-runs", json=request)
+        assert response.status_code == 201, response.text
+        envelope = response.json()
+        bundle = envelope["result"]["plot_bundle"]
+        assert [part["part_id"] for part in bundle["parts"]] == [str(i) for i in range(1, 11)]
+        assert len(bundle["cells"]) == 30
+        assert len(bundle["response_by_part"]["points"]) == 60
+        for point in bundle["response_by_part"]["points"]:
+            assert bundle["parts"][point["part_index"]]["part_id"] == str(
+                (point["source_row_number"] - 1) // 6 + 1
+            )
+        path = f"/api/v1/analysis-runs/{envelope['analysis_id']}"
+        original = client.get(path + "/result").content
+        assert client.get(path + "/result").json() == envelope
+        for locale in ("ko", "en"):
+            exported = client.post(path + "/exports/html", json={"locale": locale})
+            assert exported.status_code == 201, exported.text
+            descriptor = exported.json()
+            exported_id = descriptor["export_id"]
+            downloaded = client.get(path + f"/exports/{exported_id}/download")
+            assert downloaded.status_code == 200
+            assert 'data-report-level="full"' in downloaded.text
+            assert downloaded.headers["content-disposition"] == (
+                f'attachment; filename="statistical-twin-analysis-{envelope["analysis_id"]}'
+                f'-export-{exported_id}.html"'
+            )
+            assert "part_id" not in json.dumps(descriptor)
+            assert "O0" not in downloaded.text
+        assert client.get(path + "/result").content == original
+
+        filtered = client.post(
+            "/api/v1/analysis-runs",
+            json={
+                **request,
+                "filter_snapshot": {
+                    "expression_version": 1,
+                    "conditions": [{"column_id": columns["part"], "operator": "ne", "value": 1}],
+                },
+            },
+        )
+        assert filtered.status_code == 201, filtered.text
+        filtered_bundle = filtered.json()["result"]["plot_bundle"]
+        assert filtered_bundle["counts"]["n_used"] == 54
+        assert [part["part_id"] for part in filtered_bundle["parts"]] == [
+            str(i) for i in range(2, 11)
+        ]
+        assert (
+            min(p["source_row_number"] for p in filtered_bundle["response_by_part"]["points"]) == 7
+        )
+
+        # Genuine frozen schema-3 payload, not a v2 bundle with IDs silently stripped.
+        fixture = Path(__file__).resolve().parents[3] / "tests/fixtures/gage_rr_six_panel.json"
+        fixture_bytes = fixture.read_bytes()
+        legacy = json.loads(original)
+        legacy["method_version"] = "0.3.0"
+        legacy["result"] = json.loads(fixture_bytes)["retain"]
+        legacy_bytes = json.dumps(legacy, ensure_ascii=False).encode()
+        legacy_path = tmp_path / "synthetic-schema3-original-part-labels-absent.json"
+        legacy_path.write_bytes(legacy_bytes)
+        analysis_id = UUID(envelope["analysis_id"])
+        record = get_analysis_run_record(tmp_path, str(analysis_id))
+        assert record is not None
+        legacy_record = replace(
+            record,
+            method_version="0.3.0",
+            result_path=legacy_path.name,
+            result_sha256=hashlib.sha256(legacy_bytes).hexdigest(),
+        )
+        monkeypatch.setattr(
+            "app.services.analysis_run_results.get_analysis_run_record", lambda *args: legacy_record
+        )
+        restored = load_analysis_run_result(settings, analysis_id)
+        assert restored.envelope.result == legacy["result"]
+        assert all(
+            "part_id" not in part for part in restored.envelope.result["plot_bundle"]["parts"]
+        )
+        assert legacy_path.read_bytes() == legacy_bytes
+        assert fixture.read_bytes() == fixture_bytes

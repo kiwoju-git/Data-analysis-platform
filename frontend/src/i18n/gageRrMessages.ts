@@ -7,6 +7,7 @@ export const gageRrNoticeKeys: ApiNoticeMessageKeys = {
   gage_rr_interaction_pooled: "gage.notice.interactionPooled",
   gage_rr_independence_not_proven: "gage.notice.independence",
   gage_rr_labels_redacted: "gage.notice.labelsRedacted",
+  gage_rr_operator_replicate_labels_redacted: "gage.notice.operatorReplicateLabelsRedacted",
   gage_rr_negative_variance_component_clamped: "gage.notice.negativeComponent",
   gage_rr_identifier_missing_excluded: "gage.notice.missingIdentifiers",
   gage_rr_preflight_only_no_variance_components: "gage.notice.preflightOnly",

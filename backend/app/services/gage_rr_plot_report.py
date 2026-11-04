@@ -1,6 +1,6 @@
 """Static Gage charts from validated saved summaries, never from source measurements."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from hashlib import sha256
 from html import escape
 from typing import Any
@@ -64,6 +64,8 @@ class _Plot:
         x_ticks: Sequence[tuple[float, str]],
         y_values: Sequence[float],
         legend: Sequence[str] = (),
+        *,
+        part_tick_ids: Mapping[float, str] | None = None,
     ) -> None:
         if not x_ticks or not y_values:
             raise ValueError("analysis_report_payload_invalid")
@@ -89,9 +91,14 @@ class _Plot:
         ]
         for x, label in x_ticks:
             lines = label.split("\n")
+            part_id = None if part_tick_ids is None else part_tick_ids.get(x)
+            identity = _attrs({"data-gage-part-id": part_id}) if part_id is not None else ""
             self.parts.append(
-                f'<text x="{self.sx(x):.6f}" y="257" text-anchor="middle" font-size="11">'
+                f'<text x="{self.sx(x):.6f}" y="257" text-anchor="middle" '
+                f'font-size="11" {identity}>'
             )
+            if part_id is not None:
+                self.parts.append(f"<title>{escape(part_id)}</title>")
             for index, line in enumerate(lines):
                 self.parts.append(
                     f'<tspan x="{self.sx(x):.6f}" dy="{0 if index == 0 else 13}">'
@@ -238,9 +245,75 @@ def _component_chart(items: Sequence[GageComponentPlotItem], locale: ReportLocal
     )
 
 
-def _page_heading(parts: range, operators: range, locale: ReportLocale) -> str:
+def _part_label(bundle: GageRrPlotBundle, index: int, locale: ReportLocale) -> str:
+    if bundle.schema_version == 2:
+        part_id = bundle.parts[index].part_id
+        if part_id is None:
+            raise ValueError("analysis_report_payload_invalid")
+        return part_id
+    return f'{_text(locale, "Display", "표시 번호")} {index+1}'
+
+
+def _part_tick_label(bundle: GageRrPlotBundle, index: int, limit: int) -> str:
     return (
-        f'<h4>{escape(_text(locale, "Parts", "부품"))} P{parts.start+1}-P{parts.stop}; '
+        short_label(_part_label(bundle, index, "en"), limit)
+        if bundle.schema_version == 2
+        else str(index + 1)
+    )
+
+
+def _part_axis(bundle: GageRrPlotBundle, locale: ReportLocale) -> str:
+    return (
+        _text(locale, "Part ID", "부품 ID")
+        if bundle.schema_version == 2
+        else _text(locale, "Part display number", "부품 표시 번호")
+    )
+
+
+def _part_identity_attrs(bundle: GageRrPlotBundle, index: int) -> dict[str, object]:
+    return (
+        {"data-gage-part-id": _part_label(bundle, index, "en")}
+        if bundle.schema_version == 2
+        else {}
+    )
+
+
+def _identity_note(bundle: GageRrPlotBundle, locale: ReportLocale) -> str:
+    return _paragraph(
+        _text(
+            locale,
+            "Part IDs are the original saved identities. Axis labels may be shortened; "
+            "the complete IDs appear in point descriptions and the tables below. "
+            "O1/O2 are display numbers; original operator and replicate IDs remain redacted.",
+            "부품 ID는 저장된 원래 식별자입니다. 축 이름은 짧게 표시할 수 있으며 "
+            "점 설명과 아래 표에서 전체 ID를 확인할 수 있습니다. "
+            "O1/O2는 표시 번호이고 원래 작업자와 반복 ID는 비식별화 상태를 유지합니다.",
+        )
+        if bundle.schema_version == 2
+        else _text(
+            locale,
+            "Display 1 / Display 2 are part display numbers, not original IDs. "
+            "Original part IDs were not stored "
+            "in this historical result. Reanalysis is required to display original part IDs; "
+            "the stored index/value mapping is unchanged. O1/O2 are redacted operator numbers.",
+            "표시 번호 1 / 표시 번호 2는 원래 ID가 아닌 부품 표시 번호입니다. "
+            "이 과거 결과에는 원래 부품 ID가 저장되지 "
+            "않았습니다. 원래 부품 ID를 표시하려면 재분석이 필요하며 저장된 번호와 값의 연결은 "
+            "그대로 유지됩니다. O1/O2는 비식별 작업자 번호입니다.",
+        )
+    )
+
+
+def _page_heading(
+    bundle: GageRrPlotBundle, parts: range, operators: range, locale: ReportLocale
+) -> str:
+    part_range = (
+        f'{_text(locale, "Part positions", "부품 표시 위치")} {parts.start+1}-{parts.stop}'
+        if bundle.schema_version == 2
+        else f"{_part_axis(bundle, locale)} {parts.start+1}-{parts.stop}"
+    )
+    return (
+        f"<h4>{escape(part_range)}; "
         f'{escape(_text(locale, "Operators", "작업자"))} '
         f"O{operators.start+1}-O{operators.stop}</h4>"
     )
@@ -261,21 +334,28 @@ def _cell_charts(
     y_values = [report_number(point.value) for point in plot_data.points] + [
         value for _, value in limits
     ]
-    result: list[str] = []
+    result: list[str] = [_identity_note(bundle, locale)]
     for parts in _pages(bundle.counts.part_count, 5):
         for operators in _pages(bundle.counts.operator_count, 3):
             x_ticks = [
-                (float(j * (len(parts) + 1) + i), f"P{p+1}")
+                (float(j * (len(parts) + 1) + i), _part_tick_label(bundle, p, 4))
                 for j, _ in enumerate(operators)
                 for i, p in enumerate(parts)
             ]
             plot = _Plot(
                 title + f" {parts.start}/{operators.start}",
-                _text(locale, "Part within operator", "작업자별 부품"),
+                _part_axis(bundle, locale) + " / " + _text(locale, "Operator", "작업자"),
                 ylabel,
                 x_ticks,
                 y_values,
                 [f"O{o+1}" for o in operators],
+                part_tick_ids={
+                    float(j * (len(parts) + 1) + i): _part_label(bundle, p, locale)
+                    for j, _ in enumerate(operators)
+                    for i, p in enumerate(parts)
+                }
+                if bundle.schema_version == 2
+                else None,
             )
             for name, value in limits:
                 plot.reference(
@@ -304,17 +384,18 @@ def _cell_charts(
                     plot.point(
                         x,
                         y,
-                        f"P{part+1} / O{operator+1}; n={point.n}",
+                        f"{_part_label(bundle, part, locale)} / O{operator+1}; n={point.n}",
                         color=_COLORS[j],
                         shape="square" if outside else "circle",
                         attrs={
+                            **_part_identity_attrs(bundle, part),
                             "data-part-index": part,
                             "data-operator-index": operator,
                             "data-role": key,
                         },
                     )
                 plot.line(series, _COLORS[j])
-            result.extend((_page_heading(parts, operators, locale), plot.finish()))
+            result.extend((_page_heading(bundle, parts, operators, locale), plot.finish()))
     result.append(
         report_table(
             [_text(locale, "Limit", "한계"), _text(locale, "Stored value", "저장된 값")],
@@ -326,9 +407,14 @@ def _cell_charts(
     )
     result.append(
         report_table(
-            [_text(locale, "Part", "부품"), _text(locale, "Operator", "작업자"), "n", ylabel],
+            [_part_axis(bundle, locale), _text(locale, "Operator", "작업자"), "n", ylabel],
             [
-                [f"P{point.part_index+1}", f"O{point.operator_index+1}", point.n, point.value]
+                [
+                    _part_label(bundle, point.part_index, locale),
+                    f"O{point.operator_index+1}",
+                    point.n,
+                    point.value,
+                ]
                 for point in plot_data.points
             ],
         )
@@ -389,7 +475,7 @@ def _cell_charts(
 def _part_charts(
     bundle: GageRrPlotBundle, locale: ReportLocale, title: str, ylabel: str, *, interaction: bool
 ) -> str:
-    result: list[str] = []
+    result: list[str] = [_identity_note(bundle, locale)]
     means = {part.part_index: part for part in bundle.parts}
     for parts in _pages(bundle.counts.part_count, 10):
         for operators in _pages(bundle.counts.operator_count, 3):
@@ -402,11 +488,14 @@ def _part_charts(
                 ]
             plot = _Plot(
                 title + f" {parts.start}/{operators.start}",
-                _text(locale, "Part", "부품"),
+                _part_axis(bundle, locale),
                 ylabel,
-                [(float(part), f"P{part+1}") for part in parts],
+                [(float(part), _part_tick_label(bundle, part, 6)) for part in parts],
                 _measurement_bounds(bundle),
                 legend,
+                part_tick_ids={float(part): _part_label(bundle, part, locale) for part in parts}
+                if bundle.schema_version == 2
+                else None,
             )
             source = bundle.interaction.points if interaction else bundle.response_by_part.points
             for j, operator in enumerate(operators):
@@ -420,9 +509,10 @@ def _part_charts(
                     plot.point(
                         x,
                         y,
-                        f"P{point.part_index+1} / O{operator+1}",
+                        f"{_part_label(bundle, point.part_index, locale)} / O{operator+1}",
                         color=_COLORS[j],
                         attrs={
+                            **_part_identity_attrs(bundle, point.part_index),
                             "data-part-index": point.part_index,
                             "data-operator-index": operator,
                             "data-role": "cell_mean" if interaction else "measurement",
@@ -435,12 +525,16 @@ def _part_charts(
                     plot.point(
                         float(part),
                         report_number(means[part].mean),
-                        f"P{part+1}; n={means[part].n}",
+                        f"{_part_label(bundle, part, locale)}; n={means[part].n}",
                         color="#172033",
                         shape="square",
-                        attrs={"data-role": "part_mean"},
+                        attrs={
+                            "data-role": "part_mean",
+                            "data-part-index": part,
+                            **_part_identity_attrs(bundle, part),
+                        },
                     )
-            result.extend((_page_heading(parts, operators, locale), plot.finish()))
+            result.extend((_page_heading(bundle, parts, operators, locale), plot.finish()))
     if interaction:
         result.append(
             _paragraph(
@@ -458,13 +552,18 @@ def _part_charts(
         result.append(
             report_table(
                 [
-                    _text(locale, "Part", "부품"),
+                    _part_axis(bundle, locale),
                     _text(locale, "Operator", "작업자"),
                     "n",
                     _text(locale, "Cell mean", "셀 평균"),
                 ],
                 [
-                    [f"P{point.part_index+1}", f"O{point.operator_index+1}", point.n, point.mean]
+                    [
+                        _part_label(bundle, point.part_index, locale),
+                        f"O{point.operator_index+1}",
+                        point.n,
+                        point.mean,
+                    ]
                     for point in bundle.interaction.points
                 ],
             )
@@ -488,10 +587,15 @@ def _part_charts(
             )
         )
         result.append(
-            report_table(
-                [_text(locale, "Part", "부품"), "n", _text(locale, "Part mean", "부품 평균")],
-                [[f"P{part.part_index+1}", part.n, part.mean] for part in bundle.parts],
+            '<div data-gage-part-summary="true">'
+            + report_table(
+                [_part_axis(bundle, locale), "n", _text(locale, "Part mean", "부품 평균")],
+                [
+                    [_part_label(bundle, part.part_index, locale), part.n, part.mean]
+                    for part in bundle.parts
+                ],
             )
+            + "</div>"
         )
     return "".join(result)
 
@@ -678,16 +782,7 @@ def gage_rr_plot_sections(
         bundle.interaction,
     )
     renderers = (
-        lambda: _component_chart(bundle.components.items, locale)
-        + _paragraph(
-            _text(
-                locale,
-                "P1/P2 and O1/O2 are display aliases of stored indices. "
-                "Original part/operator identities were redacted.",
-                "P1/P2와 O1/O2는 저장 인덱스의 표시 별칭이며 "
-                "원래 부품/작업자 식별자는 비식별화되었습니다.",
-            )
-        ),
+        lambda: _component_chart(bundle.components.items, locale) + _identity_note(bundle, locale),
         lambda: _part_charts(bundle, locale, titles[1], ylabel, interaction=False),
         lambda: _cell_charts(
             bundle,

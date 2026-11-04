@@ -6413,7 +6413,7 @@ def test_analysis_run_executes_gage_rr_from_balanced_dataset_version(tmp_path) -
         "gage_rr_balanced_crossed_anova_assumed",
         "gage_rr_interaction_not_pooled",
         "gage_rr_independence_not_proven",
-        "gage_rr_labels_redacted",
+        "gage_rr_operator_replicate_labels_redacted",
     ]
     result = payload["result"]
     assert result["summary_type"] == "gage_rr"
@@ -6427,7 +6427,11 @@ def test_analysis_run_executes_gage_rr_from_balanced_dataset_version(tmp_path) -
     )
     assert result["variance_components"]["part_to_part"]["final_variance"] == pytest.approx(99)
     assert result["variance_components"]["ndc"] == 4
-    assert "Part A" not in json.dumps(result)
+    assert [part["part_id"] for part in result["plot_bundle"]["parts"]] == [
+        "Part A",
+        "Part B",
+        "Part C",
+    ]
     assert "Operator 1" not in json.dumps(result)
     assert result_response.status_code == 200
     assert result_response.json() == payload
@@ -11726,7 +11730,7 @@ def test_analysis_result_html_report_export_renders_quality_capability_and_gage_
     assert 'data-report-section="gage_variance_components"' in gage_body
     assert "total_gage_rr" in gage_body
     assert "<td>design.part_count</td>" in gage_body
-    assert "Part A" not in gage_body
+    assert "Part A" in gage_body
     assert "Operator 1" not in gage_body
 
     gage_run_body = gage_run_text.split("<details", 1)[0]

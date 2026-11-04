@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "api_contract_version": 28,
+  "api_contract_version": 29,
   "metadata_schema_version": 24,
   "methods": [
     {
@@ -3558,7 +3558,7 @@
     },
     {
       "method_id": "quality.gage_rr",
-      "method_version": "0.3.0",
+      "method_version": "0.3.1",
       "module_id": "quality",
       "label_ko": "Gage R&R",
       "label_en": "Gage R&R Study",
@@ -3583,10 +3583,11 @@
           "accepted_schemas": [
             1,
             2,
-            3
+            3,
+            4
           ],
           "renderer_id": "gage_rr",
-          "renderer_version": "2.3.0",
+          "renderer_version": "2.3.1",
           "variants": [
             {
               "variant_id": "default",

@@ -61,4 +61,13 @@ describe("Gage warning presentation", () => {
     expect(presentApiNotice({ code: "constructor", message: "Original" }, "en", gageRrNoticeKeys))
       .toEqual({ code: "constructor", message: "Original", knownCode: false });
   });
+
+  it("distinguishes new part-ID preservation from historical full-label redaction", () => {
+    const legacy = { code: "gage_rr_labels_redacted", message: "saved legacy message" };
+    const current = { code: "gage_rr_operator_replicate_labels_redacted", message: "saved current message" };
+    const before = JSON.stringify([legacy, current]);
+    expect(presentApiNotice(current, "en", gageRrNoticeKeys).message).toContain("Original part IDs are preserved");
+    expect(presentApiNotice(legacy, "en", gageRrNoticeKeys).message).not.toContain("Original part IDs are preserved");
+    expect(JSON.stringify([legacy, current])).toBe(before);
+  });
 });

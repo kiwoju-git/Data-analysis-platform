@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { GageRrResult, GageRrPlotBundle } from "./api/types/analysisResultsQuality";
 import { useI18n } from "./i18n/LocaleProvider";
+import { formatMeasurement } from "./statisticalNumberFormat";
 import { InteractiveScatterChart, type InteractiveScatterChartProps } from "./charts/InteractiveScatterChart";
 import { InteractiveGroupedBarChart, InteractiveVerticalBoxplotChart } from "./charts/InteractiveSummaryChart";
 import { componentChart, gageChartModels, gagePlotState, GAGE_OPERATOR_PAGE_SIZE, GAGE_PART_PAGE_SIZE } from "./charts/gageRrChartModels";
@@ -15,7 +16,9 @@ export function GageRrResultCharts({ result, sourceKey }: { result: GageRrResult
   const state = gagePlotState(result);
   return <section className="gage-six-panel" data-gage-six-panel data-plot-state={state} aria-label={t("gage.charts.title")}>
     <h3>{t("gage.charts.title")}</h3>
-    <p>{t("gage.charts.identity")}</p>
+    {state === "valid" ? <p data-gage-part-identity={result.plot_bundle!.schema_version === 2 ? "original" : "legacy"}>
+      {t(result.plot_bundle!.schema_version === 2 ? "gage.charts.originalPartIdentity" : "gage.charts.legacyPartIdentity")}
+    </p> : state === "legacy" ? <p>{t("gage.charts.identity")}</p> : null}
     {state === "invalid" ? <p className="notice-box notice-warning" role="alert">{t("gage.charts.invalid")}</p>
       : <GageChartBody key={sourceKey} result={result} sourceKey={sourceKey} bundle={state === "valid" ? result.plot_bundle! : null} />}
   </section>;
@@ -53,7 +56,7 @@ function GageChartBody({ result, bundle, sourceKey }: { result: GageRrResult; bu
     return <InteractiveScatterChart chartId={`gage-${kind}`} sourceKey={`${sourceKey}:${kind}:1`}
       title={titles[kind]} description={help[kind]} annotations={[]} emptyLabel={t("gage.charts.unavailable")}
       points={[]} xRange={models.xRange} yRange={models.yRange} xTicks={models.partTicks}
-      xLabel={t("gage.charts.partAxis")} yLabel={measurement} yUnit={unit} collapsibleDetails {...options} />;
+      xLabel={models.partIdentityLabel} yLabel={measurement} yUnit={unit} collapsibleDetails {...options} />;
   }
   function render(kind: Kind) {
     if (kind === "components") {
@@ -82,6 +85,14 @@ function GageChartBody({ result, bundle, sourceKey }: { result: GageRrResult; bu
         <Pager label={t("gage.charts.partPage")} page={partPage} count={Math.ceil(bundle.counts.part_count / GAGE_PART_PAGE_SIZE)} onChange={setPartPage} />
         <Pager label={t("gage.charts.operatorPage")} page={operatorPage} count={Math.ceil(bundle.counts.operator_count / GAGE_OPERATOR_PAGE_SIZE)} onChange={setOperatorPage} />
       </div>
+      {bundle.schema_version === 2 && models && <details data-gage-part-identities="original" className="gage-part-identities">
+        <summary>{t("gage.charts.originalPartIds")}</summary>
+        <table data-gage-part-id-table className="gage-part-identity-table"><thead><tr>
+          <th scope="col">{t("gage.charts.partId")}</th><th scope="col">{t("gage.charts.count")}</th><th scope="col">{t("gage.charts.partMean")}</th>
+        </tr></thead><tbody>{models.partSummaries.map((part) => <tr key={part.part_index} data-gage-part-index={part.part_index}>
+          <td data-gage-part-id={part.label}><bdi>{part.label}</bdi></td><td>{part.n}</td><td>{formatMeasurement(part.mean)}</td>
+        </tr>)}</tbody></table>
+      </details>}
     </> : <p className="notice-box">{t("gage.charts.legacy")}</p>}
     <div className="gage-six-grid">{kinds.map((kind) => <div className="gage-chart-panel" key={kind} data-gage-chart-kind={kind}
       data-gage-chart-state={kind === "components" ? (components.bars.length === 8 ? "available" : "unavailable") : (bundle?.[kind].status ?? "unavailable")}>

@@ -1,7 +1,7 @@
 # Gage R&R Method Contract
 
-Updated: 2026-11-03. Method `quality.gage_rr` 0.3.0, result schema 3.
-API 28 adds the saved six-panel presentation contract; no SQL migration is required.
+Updated: 2026-11-05. Method `quality.gage_rr` 0.3.1, result schema 4.
+API29 corrects saved part identity/order (plot bundle2); metadata24 is unchanged.
 The schema-2 full/final ANOVA, pooling and variance-component calculations are unchanged.
 
 ## Supported Design
@@ -24,8 +24,10 @@ Omitted mode resolves to explicit when a column is present, otherwise inferred;
 an explicit contradictory mode/column pair is rejected.
 
 Identifiers retain their full stripped strings. No case folding, numerical
-coercion or display truncation is used for grouping. Original IDs are not
-returned in diagnostic payloads or errors. Complete-case exclusions and counts
+coercion or display truncation is used for grouping. Original part IDs are now
+saved deliberately in new result/report plot summaries. Operator/replicate IDs
+remain redacted, as do all original IDs in preflight, errors and support diagnostics.
+Complete-case exclusions and counts
 are recorded. Structural `balanced` and overall `ready_for_anova` are distinct;
 duplicate replicate IDs or constant measurements do not falsely imply unequal
 cell counts.
@@ -78,10 +80,16 @@ Zero denominators yield unavailable tests, not invented p-values.
 `gage_rr_plots.build_gage_rr_plot_bundle` runs once after selection of the final
 ANOVA/components, using the same `PreparedGageData` observations. It does not refit,
 replace measurements, reread source rows, or alter selected ANOVA values.
-`plot_bundle.schema_version=1` is validated by `GageRrPlotBundle` and by the saved
+`plot_bundle.schema_version=2` is validated by `GageRrPlotBundle` and by the saved
 result envelope. Numeric fields are finite or explicitly null with an unavailable
-reason. Original part/operator/replicate labels are absent: zero-based indices
-follow the existing sorted, full stripped identity order. Measurement name/unit
+reason. Each part summary preserves a required unique full string `part_id`.
+The plot builder, not statistical preparation, sorts parts by ASCII digit runs
+with a full-string tie-break: 1,2,...,10 and P1,P2,P10. IDs remain categorical:
+`1` and `01` are distinct. No int/float grouping, case folding or new trimming.
+Zero-based plot indices refer to this same mapping across every panel. Operator
+indices retain the prior sorted order; operator/replicate strings remain absent.
+Policy: `natural_ascii_digit_runs_full_identity_v1` and
+`part_ids_preserved_operator_replicate_redacted`. Measurement name/unit
 and original `source_row_number` remain available; these indices are not time.
 
 The six panels are:
@@ -123,23 +131,30 @@ an explicit unavailable plot, not non-finite JSON or a replacement ANOVA failure
 New results record replicate mode, sample/design diagnostics, requested and
 effective policy, alpha, interaction p, pooling reason, full ANOVA, optional
 reduced ANOVA, and final ANOVA in the existing `anova_table` field.
-Schema1/2 results remain readable using their original policy and stored bytes.
+Schema1/2/3 results remain readable using their original policy and stored bytes.
 Missing plot bundles are not rebuilt from today's dataset or filled with current
-defaults. The reader checks the original artifact checksum and validates schema3
+defaults. The reader checks the original artifact checksum and validates schema3/4
 bundle identity/count/component/policy relationships without mutating the result.
 Reports read stored plot values and identify full versus final ANOVA and the saved
 policy. Schema1/2 can show stored components but retain unavailable notices for
 the five raw-observation-dependent panels. Export does not reload rows or compute ANOVA.
 
-HTML renderer 2.3.0 displays the six saved sections in row-pair order: components /
+HTML renderer 2.3.1 displays the six saved sections in row-pair order: components /
 response by part; R or S / response by operator; Xbar / interaction. Larger
 studies use explicit print pages with unchanged global ranges and limits; all
-cell summaries remain available in tables. A well-formed schema 3 result with
+cell summaries remain available in tables. A well-formed schema3/4 result with
 all six available panels is `full`; legitimate unavailable summaries yield
 `summary`, and malformed bundles are `unsupported`, not blank full reports.
 Legacy missing-panel reason is `gage_plot_bundle_not_stored_reanalysis_required`.
 All visible text, SVG titles, units and names are escaped and localized; exports
 remain offline inline SVG without a script, CDN or calculation dependency.
+
+Result3/plot1 has no original part IDs. Its charts say Display N / 표시번호 N,
+explain that these are not the original IDs, and offer reanalysis guidance.
+Do not infer an ID from an index or reload current source rows to modify a saved
+result. New missing/duplicate part IDs are invalid, not a legacy fallback.
+Long IDs remain available in a full-ID table and point details even when axis
+labels are shortened. Operator identity privacy is not broadened by this change.
 
 ## Verification
 

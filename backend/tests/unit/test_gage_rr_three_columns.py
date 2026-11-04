@@ -124,7 +124,8 @@ def test_cell_local_replicate_ids_inference_shuffle_and_full_long_id_identity():
         row[1] = "operator" * 30 + row[1]
     renamed = run(rows)
     assert renamed["variance_components"] == automatic["variance_components"]
-    assert "긴" not in json.dumps(renamed, ensure_ascii=False)
+    assert {part["part_id"] for part in renamed["plot_bundle"]["parts"]} == {row[0] for row in rows}
+    assert "operator" * 30 not in json.dumps(renamed, ensure_ascii=False)
 
 
 def test_retain_remains_legacy_default_and_differs_from_auto_pool():

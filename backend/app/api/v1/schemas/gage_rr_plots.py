@@ -4,6 +4,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.statistics.gage_part_order import natural_part_id_key
+
 NonNegativeFinite = Annotated[FiniteFloat, Field(ge=0)]
 
 
@@ -50,6 +52,7 @@ class GagePlotCounts(GagePlotModel):
 
 class GagePartSummary(GagePlotModel):
     part_index: int = Field(ge=0)
+    part_id: str | None = None
     n: int = Field(ge=1)
     mean: FiniteFloat | None
 
@@ -172,10 +175,15 @@ class GageInteractionPlot(GagePlotState):
 
 
 class GagePlotCalculationMetadata(GagePlotModel):
-    policy_version: Literal["gage_rr_six_panel_v1"]
-    part_order: Literal["sorted_full_stripped_identity"]
+    policy_version: Literal["gage_rr_six_panel_v1", "gage_rr_six_panel_v2"]
+    part_order: Literal[
+        "sorted_full_stripped_identity", "natural_ascii_digit_runs_full_identity_v1"
+    ]
     operator_order: Literal["sorted_full_stripped_identity"]
-    identifier_policy: Literal["zero_based_indices_original_labels_redacted"]
+    identifier_policy: Literal[
+        "zero_based_indices_original_labels_redacted",
+        "part_ids_preserved_operator_replicate_redacted",
+    ]
     summary_scope: Literal["all_used_observations_before_display_cap"]
     selected_interaction_policy: Literal["retain", "pooled"]
     replicate_mode: Literal["infer_from_rows", "explicit_column"]
@@ -184,7 +192,7 @@ class GagePlotCalculationMetadata(GagePlotModel):
 
 
 class GageRrPlotBundle(GagePlotModel):
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     measurement: GagePlotMeasurement
     measurement_range: GageMeasurementRange
     counts: GagePlotCounts
@@ -201,6 +209,29 @@ class GageRrPlotBundle(GagePlotModel):
 
     @model_validator(mode="after")
     def validate_identity_and_counts(self) -> "GageRrPlotBundle":
+        metadata = self.calculation_metadata
+        if self.schema_version == 1:
+            if any("part_id" in item.model_fields_set for item in self.parts) or (
+                metadata.policy_version != "gage_rr_six_panel_v1"
+                or metadata.part_order != "sorted_full_stripped_identity"
+                or metadata.identifier_policy != "zero_based_indices_original_labels_redacted"
+            ):
+                raise ValueError("gage_plot_legacy_identity_policy_invalid")
+        else:
+            identities = [item.part_id for item in self.parts]
+            if any(value is None or not value or value != value.strip() for value in identities):
+                raise ValueError("gage_plot_part_identity_invalid")
+            full_ids = [value for value in identities if value is not None]
+            if len(set(full_ids)) != len(full_ids) or full_ids != sorted(
+                full_ids, key=natural_part_id_key
+            ):
+                raise ValueError("gage_plot_part_identity_order_invalid")
+            if (
+                metadata.policy_version != "gage_rr_six_panel_v2"
+                or metadata.part_order != "natural_ascii_digit_runs_full_identity_v1"
+                or metadata.identifier_policy != "part_ids_preserved_operator_replicate_redacted"
+            ):
+                raise ValueError("gage_plot_part_identity_policy_invalid")
         counts = self.counts
         cells = {(p, o) for p in range(counts.part_count) for o in range(counts.operator_count)}
         if (
@@ -361,9 +392,11 @@ def validate_gage_rr_plot_result(result: dict[str, Any]) -> None:
         raise ValueError("gage_result_schema_unsupported")
     if version in (1, 2):
         return
-    if version != 3:
+    if version not in (3, 4):
         raise ValueError("gage_result_schema_unsupported")
     bundle = GageRrPlotBundle.model_validate(result.get("plot_bundle"))
+    if bundle.schema_version != version - 2:
+        raise ValueError("gage_plot_result_schema_mismatch")
     sample, design, components, selection, columns = (
         result.get(key)
         for key in ("sample", "design", "variance_components", "interaction_selection", "columns")

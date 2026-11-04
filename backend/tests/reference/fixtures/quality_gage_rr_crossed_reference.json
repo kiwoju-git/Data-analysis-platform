@@ -57,7 +57,7 @@
     "gage_rr_balanced_crossed_anova_assumed",
     "gage_rr_interaction_not_pooled",
     "gage_rr_independence_not_proven",
-    "gage_rr_labels_redacted",
+    "gage_rr_operator_replicate_labels_redacted",
     "gage_rr_negative_variance_component_clamped"
   ],
   "tolerances": {

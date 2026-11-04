@@ -913,6 +913,9 @@ def require_gage_six_panel_receipts(
         }
         if (
             item.get("numeric_svg_checked") is not True
+            or item.get("part_axis_labels_checked") is not True
+            or item.get("part_ids") != [str(index) for index in range(1, 11)]
+            or item.get("part_means") != [50 + 2 * index for index in range(10)]
             or any(
                 type(item.get(key)) is not int or item[key] != value
                 for key, value in integers.items()
@@ -1073,6 +1076,8 @@ def require_gage_six_panel_receipts(
             (item.get("sha256"), item.get("locale"))
             != expected_reports[item["export_id"]]
             or item.get("raw_point_count") != 60
+            or item.get("part_ids") != [str(index) for index in range(1, 11)]
+            or item.get("part_axis_labels_checked") is not True
             or not close(item.get("dispersion_ucl"), 0.6534)
         ):
             raise ValueError("Gage offline report bytes or numeric values changed")
@@ -1094,6 +1099,7 @@ def require_gage_six_panel_receipts(
         "real_zoom_factors": [1.25, 1.5],
         "report_bytes_unchanged": True,
         "server_stopped_six_sections_visible": True,
+        "original_part_ids_and_natural_order_verified": True,
     }
 
 
