@@ -1,12 +1,13 @@
 """Part display identity regressions; grouping and ANOVA arithmetic stay unchanged."""
 
-import hashlib
 import json
 import random
 from copy import deepcopy
+from math import floor, gamma, sqrt, ulp
 from pathlib import Path
 
 import pytest
+from scipy.integrate import quad
 
 from app.api.v1.schemas.gage_rr_plots import validate_gage_rr_plot_result
 from app.statistics.gage_part_order import natural_part_id_key
@@ -69,17 +70,16 @@ def test_numeric_original_ids_follow_natural_order_with_every_cell_and_raw_row(p
     assert result == original
 
 
-@pytest.mark.parametrize(
-    "policy,baseline_sha",
-    [
-        ("retain", "37c2dabf1e30dfa2a7675da32c08cf4bd35a52a916044b7ff3c9704998902356"),
-        ("auto_pool", "c84b1548650c8ba517d8a2bfc7f196a2d2ea9915ef06bd5c9269d810db4b1648"),
-    ],
-)
-def test_statistical_payload_is_byte_identical_to_pre_identity_fix(policy, baseline_sha):
-    # Captured from BASE21ccddc on the same deterministic inputs before this display fix.
-    # This is a regression fingerprint, not an independent statistical reference.
-    result = calculate(rows(), policy)
+@pytest.mark.parametrize("policy", ["retain", "auto_pool"])
+def test_plot_order_isolated_from_statistical_payload_in_same_runtime(policy, monkeypatch):
+    # Compare the display policies in one runtime, not a Windows float JSON hash
+    # against a different Python/libm/SciPy build. This is an isolation regression,
+    # not an independent reference or a copy of the previous calculation engine.
+    natural = calculate(rows(), policy)
+    monkeypatch.setattr("app.statistics.gage_rr_plots.natural_part_id_key", lambda value: value)
+    lexical = calculate(rows(), policy)
+    assert [part["part_id"] for part in natural["plot_bundle"]["parts"]][:3] == ["1", "2", "3"]
+    assert [part["part_id"] for part in lexical["plot_bundle"]["parts"]][:3] == ["1", "10", "2"]
     keys = (
         "sample",
         "design",
@@ -89,10 +89,91 @@ def test_statistical_payload_is_byte_identical_to_pre_identity_fix(policy, basel
         "interaction_selection",
         "variance_components",
     )
-    encoded = json.dumps(
-        {key: result[key] for key in keys}, sort_keys=True, separators=(",", ":"), allow_nan=False
-    ).encode()
-    assert hashlib.sha256(encoded).hexdigest() == baseline_sha
+
+    def encoded(result):
+        return json.dumps(
+            {key: result[key] for key in keys},
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+
+    assert encoded(natural) == encoded(lexical)
+
+
+@pytest.mark.parametrize("policy", ["retain", "auto_pool"])
+def test_identity_fixture_matches_independent_balanced_anova_algebra(policy):
+    # y=50+2*i+0.2*j+e, i=0..9, j=-1..1, e=+-0.1. Orthogonal effects give
+    # SS=(6*4*82.5, 20*0.04*2, 0, 60*0.01). No production helper is a reference.
+    result = calculate(rows(), policy)
+    ss = {
+        "part": 1980.0,
+        "operator": 1.6,
+        "part_operator": 0.0,
+        "repeatability": 0.6,
+        "total": 1982.2,
+    }
+    dfs = {"part": 9, "operator": 2, "part_operator": 18, "repeatability": 30, "total": 59}
+    # At most 60 additions of squared deviations below 2048; this conservative
+    # absolute roundoff budget remains below the existing 1e-10 ANOVA reference gate.
+    ss_roundoff = 60 * ulp(2048.0)
+    full = {row["source"]: row for row in result["full_anova_table"]}
+    for source, row in full.items():
+        assert row["degrees_of_freedom"] == dfs[source]
+        assert row["sum_of_squares"] == pytest.approx(ss[source], rel=0, abs=ss_roundoff)
+        if source != "total":
+            assert row["mean_square"] == pytest.approx(
+                ss[source] / dfs[source], rel=0, abs=ss_roundoff / dfs[source]
+            )
+    assert full["part_operator"]["sum_of_squares"] == 0
+    assert full["part_operator"]["p_value"] == 1
+    assert full["part"]["p_value"] is None and full["operator"]["p_value"] is None
+    pooled = policy == "auto_pool"
+    error = 0.6 / (48 if pooled else 30)
+    comparison = error if pooled else 0.0
+    expected = {
+        "repeatability": error,
+        "operator": (0.8 - comparison) / 20,
+        "part_operator": 0.0 if pooled else -0.01,
+        "part_to_part": (220 - comparison) / 6,
+    }
+    expected["reproducibility"] = expected["operator"]
+    expected["total_gage_rr"] = error + expected["operator"]
+    expected["total_variation"] = expected["total_gage_rr"] + expected["part_to_part"]
+    components = result["variance_components"]
+    for name, raw in expected.items():
+        item = components[name]
+        final = max(raw, 0)
+        for key, value in {
+            "raw_variance": raw,
+            "final_variance": final,
+            "standard_deviation": sqrt(final),
+            "study_variation": 6 * sqrt(final),
+            "percent_contribution": 100 * final / expected["total_variation"],
+            "percent_study_variation": 100 * sqrt(final / expected["total_variation"]),
+        }.items():
+            assert item[key] == pytest.approx(value, rel=1e-12, abs=1e-14)
+        assert item["clamped_to_zero"] is (raw < 0)
+    assert components["ndc"] == floor(
+        1.41 * sqrt(expected["part_to_part"] / expected["total_gage_rr"])
+    )
+    final = {row["source"]: row for row in result["anova_table"]}
+    assert final["repeatability"]["degrees_of_freedom"] == (48 if pooled else 30)
+    assert final["repeatability"]["mean_square"] == pytest.approx(error, rel=1e-12)
+    if pooled:
+        assert final["part"]["f_statistic"] == pytest.approx(17600, rel=1e-12)
+        assert final["operator"]["f_statistic"] == pytest.approx(64, rel=1e-12)
+        # F(2,48) survival has this closed form. F(9,48) uses independently
+        # integrated beta density, scaled to [0,1] to resolve its small tail.
+        x = 48 / (48 + 9 * 17600)
+        integral, _ = quad(lambda u: u**23 * (1 - x * u) ** 3.5, 0, 1, epsabs=1e-14, epsrel=1e-13)
+        part_p = x**24 * integral * gamma(28.5) / (gamma(24) * gamma(4.5))
+        assert final["part"]["p_value"] == pytest.approx(part_p, rel=1e-12, abs=0)
+        assert final["operator"]["p_value"] == pytest.approx((3 / 11) ** 24, rel=1e-12, abs=0)
+    fixture = Path(__file__).resolve().parents[3] / "tests/fixtures/gage_rr_part_ids.json"
+    saved = json.loads(fixture.read_bytes())[policy]
+    for key in ("sample", "design", "interaction_selection"):
+        assert result[key] == saved[key]
 
 
 @pytest.mark.parametrize(

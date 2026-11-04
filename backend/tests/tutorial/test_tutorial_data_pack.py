@@ -341,8 +341,8 @@ def test_tutorial_gage_api_preserves_explicit_retain_numeric_values(tmp_path: Pa
     assert response["method_version"] == METHOD_VERSIONS["quality.gage_rr"]
     assert section["method_version"] == response["method_version"]
     result = response["result"]
-    assert result["schema_version"] == 3
-    assert result["plot_bundle"]["schema_version"] == 1
+    assert result["schema_version"] == 4
+    assert result["plot_bundle"]["schema_version"] == 2
     assert result["plot_bundle"]["counts"]["n_used"] == 60
     assert result["replicate_mode"] == "explicit_column"
     assert result["interaction_selection"]["requested_policy"] == "retain"

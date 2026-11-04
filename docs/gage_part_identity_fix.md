@@ -36,7 +36,7 @@ No production tolerance or statistic was changed. Actual user data was not suppl
 | Boundary | Current evidence |
 | --- | --- |
 | Source/cause | source-confirmed; reproduced with synthetic1..10 IDs |
-| Backend identity | fixed; pre-fix two red cases; 59 focused tests green; exact pre-fix statistical payload digest retained for both policies |
+| Backend identity | fixed; pre-fix two red cases; 59 focused tests green on local Windows3.10; exact pre-fix statistical payload digest matched there, not a cross-platform bitwise guarantee |
 | UI | fixed; 37 focused tests green; original10 means68/raw-row55; separate01/1, long/Korean/escaped IDs; legacy DisplayN |
 | HTML | fixed; 25 renderer and 36 coverage tests green; full IDs/means, escaped long IDs, malformed identity rejection |
 | Legacy/API/source | 73 focused API/calculation tests green; real CSV/filter/report, schema3 frozen bytes; no source reread/refit |
@@ -49,6 +49,28 @@ No production tolerance or statistic was changed. Actual user data was not suppl
 Commands/results and final release receipt will distinguish source/unit/API,
 built-browser and exact-archive checks. Historical successful runs are not current
 evidence. Final archive receipts are release assets, avoiding a source-SHA cycle.
+
+### First Native Attempt
+
+CI [41859324549](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/41859324549)
+on1822844 failed before browser execution: Linux3.12 had three failing tests,
+3248 passed/16 skipped; Python3.11 had the stale tutorial schema expectation and
+one statistical JSON fingerprint mismatch. Remaining jobs were cancelled only
+after those failures were recorded. This run is not release evidence.
+
+The tutorial test still expected result3/plot1 and its warning fixture still
+described all IDs as redacted. Those expectations are corrected to result4/plot2
+and operator/replicate-only redaction; numeric reference values are unchanged.
+The byte fingerprints were captured on Windows3.10 and are not valid universal
+floating-point guarantees. Native tests instead isolate plot-order changes in
+the same runtime and retain the independent hand-checkable numerical assertions.
+No production calculation or numerical tolerance is relaxed. The failed logs
+contain hashes, not field-level differences, so no specific math-library cause
+is asserted. Final-source gates must all succeed before main/release publication.
+After correction, 70 focused Gage tests and all11 tutorial tests passed locally.
+The independent ANOVA algebra uses a60*ulp(2048) SS roundoff budget (below the
+existing1e-10 gate), relative1e-12 for components/p-values and absolute0 for tiny
+p-values; same-runtime plot-order statistical equality remains exact.
 
 The built-browser journey now uses original CSV part IDs1..10, asserts every
 visible main/interaction axis label, the accessible full-ID table, part10's
