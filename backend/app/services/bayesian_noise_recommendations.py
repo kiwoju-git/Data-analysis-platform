@@ -138,6 +138,14 @@ def worker_payload(
 def create_noise_batch(
     settings: Settings, study_id: UUID, body: BayesianNoiseBatchCreateRequest
 ) -> BayesianNoiseBatchResponse:
+    study, payload = validated_noise_source(settings, study_id, body)
+    calculated = calculate_noise_recommendation(payload, body)
+    return commit_noise_batch(settings, study, body, calculated)
+
+
+def validated_noise_source(
+    settings: Settings, study_id: UUID, body: BayesianNoiseBatchCreateRequest
+) -> tuple[Any, dict[str, Any]]:
     from app.services.bayesian_studies import get_bayesian_study
 
     study = get_bayesian_study(settings, study_id)
@@ -164,6 +172,12 @@ def create_noise_batch(
     if len(study.trials) + body.batch_size > min(body.search.total_trial_budget, 200):
         raise _error("bayesian_optimization_batch_budget_exceeded")
     payload = worker_payload(study, body, completed)
+    return study, payload
+
+
+def calculate_noise_recommendation(
+    payload: dict[str, Any], body: BayesianNoiseBatchCreateRequest
+) -> BayesianNoiseCalculation:
     try:
         calculated = BayesianNoiseCalculation.model_validate(
             _run_worker(payload, timeout_ms=body.search.time_budget_ms + 20_000)
@@ -171,7 +185,32 @@ def create_noise_batch(
     except ValidationError as exc:
         raise _error() from exc
     validate_calculation(calculated, payload, body)
-    batch_id = uuid4()
+    return calculated
+
+
+def noise_config(study: Any, body: BayesianNoiseBatchCreateRequest) -> dict[str, Any]:
+    history = study.observation_history
+    return {
+        "schema_version": 2,
+        "study_id": str(study.study_id),
+        "study_version_id": str(study.study_version_id),
+        "source_history_revision_id": str(history.history_revision_id),
+        "source_observation_history_sha256": history.observation_history_sha256,
+        "definition_sha256": study.definition_sha256,
+        "request": body.model_dump(mode="json"),
+    }
+
+
+def commit_noise_batch(
+    settings: Settings,
+    study: Any,
+    body: BayesianNoiseBatchCreateRequest,
+    calculated: BayesianNoiseCalculation,
+    *,
+    reviewed_batch_id: UUID | None = None,
+) -> BayesianNoiseBatchResponse:
+    history = study.observation_history
+    batch_id = reviewed_batch_id or uuid4()
     created_at = utc_now()
     trials: list[BayesianTrialRecord] = []
     items: list[BayesianNoiseBatchItem] = []
@@ -241,7 +280,7 @@ def create_noise_batch(
         "model_schema_version": 3,
         "item_schema_version": 2,
     }
-    config = {"schema_version": 2, **identity, "request": body.model_dump(mode="json")}
+    config = noise_config(study, body)
     config_json = _json(config)
     runtime = runtime_build_provenance(settings)
     provenance = {
@@ -316,6 +355,7 @@ def create_noise_batch(
             expected_history_revision_id=str(history.history_revision_id),
             expected_history_sha256=history.observation_history_sha256,
             total_trial_budget=body.search.total_trial_budget,
+            allow_existing=reviewed_batch_id is not None,
         )
     except BayesianStorageConflict as exc:
         raise _error(exc.code) from exc

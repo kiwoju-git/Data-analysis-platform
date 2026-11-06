@@ -314,6 +314,14 @@ export const apiRoutes = {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendation-batches`);
   },
 
+  bayesianRecommendationReviews(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendation-reviews`);
+  },
+
+  bayesianRecommendationReviewConfirm(studyId: string, reviewId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendation-reviews/${pathId(reviewId)}/confirm`);
+  },
+
   bayesianRecommendationBatch(studyId: string, batchId: string): string {
     return apiUrl(
       `/bayesian-studies/${pathId(studyId)}/recommendation-batches/${pathId(batchId)}`,

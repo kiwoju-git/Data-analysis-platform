@@ -14,6 +14,9 @@ import type {
   BayesianRecommendationBatchCreateRequest,
   BayesianRecommendationBatchResponse,
   BayesianNoiseBatchCreateRequest,
+  BayesianNoiseBatchResponse,
+  BayesianRecommendationReviewResponse,
+  BayesianRecommendationReviewConfirmRequest,
   BayesianReplicateCreateRequest,
   BayesianReplicateCreateResponse,
   BayesianStudyCreateRequest,
@@ -28,6 +31,37 @@ import type {
   BayesianTrialAbandonRequest,
   BayesianTrialTransitionResponse,
 } from "./types";
+
+export async function createBayesianRecommendationReview(
+  studyId: string,
+  request: BayesianNoiseBatchCreateRequest,
+): Promise<BayesianRecommendationReviewResponse> {
+  const response = await fetchApi(apiRoutes.bayesianRecommendationReviews(studyId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_recommendation_review_failed"));
+  }
+  return (await response.json()) as BayesianRecommendationReviewResponse;
+}
+
+export async function confirmBayesianRecommendationReview(
+  studyId: string,
+  reviewId: string,
+  request: BayesianRecommendationReviewConfirmRequest,
+): Promise<BayesianNoiseBatchResponse> {
+  const response = await fetchApi(apiRoutes.bayesianRecommendationReviewConfirm(studyId, reviewId), {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(await apiErrorCode(response, "bayesian_recommendation_confirm_failed"));
+  }
+  return (await response.json()) as BayesianNoiseBatchResponse;
+}
 
 export async function createBayesianRecommendationBatch(
   studyId: string,

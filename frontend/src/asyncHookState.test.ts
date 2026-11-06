@@ -20,6 +20,7 @@ import type {
   BayesianRecommendationResponse,
   BayesianRecommendationBatchCreateRequest,
   BayesianRecommendationBatchResponse,
+  BayesianRecommendationReviewResponse,
   BayesianStudyDeletionPreflightResponse,
   BayesianStudyListResponse,
   BayesianStudyResponse,
@@ -178,6 +179,8 @@ const apiMocks = vi.hoisted(() => ({
   closeBayesianStudy: vi.fn(),
   createBayesianRecommendation: vi.fn(),
   createBayesianRecommendationBatch: vi.fn(),
+  createBayesianRecommendationReview: vi.fn(),
+  confirmBayesianRecommendationReview: vi.fn(),
   createBayesianStudy: vi.fn(),
   confirmDatasetParsing: vi.fn(),
   createDatasetCellCorrection: vi.fn(),
@@ -1192,6 +1195,8 @@ function bayesianRecommendationBatch(
   return {
     batch_id: batchId,
     study_id: studyId,
+    study_version_id: `${studyId}-version`,
+    config_sha256: "c".repeat(64),
     source_history_revision_id: `${studyId}-history`,
     source_observation_history_sha256: "b".repeat(64),
     execution_mode: "parallel_batch",
@@ -1203,6 +1208,20 @@ function bayesianRecommendationBatch(
     },
     requested_total_trial_budget: 50,
   } as BayesianRecommendationBatchResponse;
+}
+
+function bayesianRecommendationReview(studyId: string, reviewId: string): BayesianRecommendationReviewResponse {
+  return {
+    schema_version: 1,
+    review_id: reviewId,
+    study_id: studyId,
+    study_version_id: `${studyId}-version`,
+    source_history_revision_id: `${studyId}-history`,
+    source_observation_history_sha256: "b".repeat(64),
+    config_sha256: "c".repeat(64),
+    expires_at: "2026-11-07T10:20:00Z",
+    calculation: { batch_size: 4, items: [] },
+  } as unknown as BayesianRecommendationReviewResponse;
 }
 
 function bayesianDeletionPreflight(
@@ -1259,7 +1278,7 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 29,
+    api_contract_version: 30,
     metadata_schema_version: 24,
     build_commit: "unknown",
     capabilities: {
@@ -1279,6 +1298,7 @@ function runtimeInfo(
       lhs_design: true,
       bayesian_lhs_initial_design: true,
       bayesian_batch_recommendation: true,
+      bayesian_recommendation_review: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },
@@ -3954,13 +3974,13 @@ describe("async workbench hooks", () => {
   });
 
   it("ignores recommendation creation after a Study change and clears loading", async () => {
-    const created = deferred<BayesianRecommendationBatchResponse>();
+    const created = deferred<BayesianRecommendationReviewResponse>();
     apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({
       study_id: "study-a",
       study_version_id: "study-a-version",
       item: null,
     });
-    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(created.promise);
+    apiMocks.createBayesianRecommendationReview.mockReturnValueOnce(created.promise);
     const selected = vi.fn();
     const runner = new HookRunner<
       Parameters<typeof useBayesianRecommendationState>[0],
@@ -3986,7 +4006,7 @@ describe("async workbench hooks", () => {
       onRecommendationSelected: selected,
     });
     expect(runner.output.isRecommending).toBe(false);
-    created.resolve(bayesianRecommendationBatch("study-a", "batch-a"));
+    created.resolve(bayesianRecommendationReview("study-a", "batch-a"));
     await runner.flush();
 
     expect(runner.output.recommendation).toBeNull();
@@ -3994,15 +4014,15 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
-  it("creates one atomic batch request with a distinct batch size and candidate pool", async () => {
+  it("reviews candidates without pending trials, then explicitly confirms the same ordered batch", async () => {
     const selectedBatch = vi.fn();
     apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({
       study_id: "study-a",
       study_version_id: "study-a-version",
       item: null,
     });
-    apiMocks.createBayesianRecommendationBatch.mockResolvedValue(
-      bayesianRecommendationBatch("study-a", "batch-a"),
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(
+      bayesianRecommendationReview("study-a", "batch-a"),
     );
     const runner = new HookRunner<
       Parameters<typeof useBayesianRecommendationState>[0],
@@ -4030,8 +4050,8 @@ describe("async workbench hooks", () => {
     await recommendationPromise;
     await runner.flush();
 
-    expect(apiMocks.createBayesianRecommendationBatch).toHaveBeenCalledTimes(1);
-    const request = apiMocks.createBayesianRecommendationBatch.mock.calls[0]?.[1] as
+    expect(apiMocks.createBayesianRecommendationReview).toHaveBeenCalledTimes(1);
+    const request = apiMocks.createBayesianRecommendationReview.mock.calls[0]?.[1] as
       | BayesianRecommendationBatchCreateRequest
       | undefined;
     if (request === undefined) {
@@ -4059,15 +4079,25 @@ describe("async workbench hooks", () => {
     expect(request.batch_size).not.toBe(
       request.search.candidate_count_per_step,
     );
-    expect(selectedBatch).toHaveBeenCalledWith("batch-a");
+    expect(selectedBatch).not.toHaveBeenCalled();
+    expect(apiMocks.createBayesianRecommendationBatch).not.toHaveBeenCalled();
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    expect(runner.output.batch).toBeNull();
+    expect(runner.output.review?.review_id).toBe("batch-a");
+    apiMocks.confirmBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationBatch("study-a", "batch-a"));
+    await runner.act(() => { void runner.output.onConfirmReview(bayesianStudy("study-a")); });
+    expect(apiMocks.confirmBayesianRecommendationReview).toHaveBeenCalledExactlyOnceWith("study-a", "batch-a", { expected_config_sha256: "c".repeat(64) });
+    expect(selectedBatch).toHaveBeenCalledExactlyOnceWith("batch-a");
+    expect(runner.output.batch?.batch_id).toBe("batch-a");
+    expect(runner.output.review).toBeNull();
     runner.unmount();
   });
 
   it.each(["resolve", "reject"])("ignores old BO %s and finally after noise edits start a newer request", async (outcome) => {
     apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
-    const old = deferred<BayesianRecommendationBatchResponse>();
-    const next = deferred<BayesianRecommendationBatchResponse>();
-    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const old = deferred<BayesianRecommendationReviewResponse>();
+    const next = deferred<BayesianRecommendationReviewResponse>();
+    apiMocks.createBayesianRecommendationReview.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
     const selectedBatch = vi.fn();
     const runner = new HookRunner(useBayesianRecommendationState, {
       selectedStudyId: "study-a", requestedRecommendationId: null, onBatchSelected: selectedBatch,
@@ -4078,37 +4108,170 @@ describe("async workbench hooks", () => {
     await runner.act(() => runner.output.onNoiseDraftChange({ ...runner.output.noiseDraft, noiseMode: "near_noiseless" }));
     expect(runner.output.draftChanged).toBe(true);
     await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
-    if (outcome === "resolve") old.resolve(bayesianRecommendationBatch("study-a", "old"));
+    if (outcome === "resolve") old.resolve(bayesianRecommendationReview("study-a", "old"));
     else old.reject(new Error("old_network_failure"));
     await runner.flush();
     expect(runner.output.isRecommending).toBe(true);
     expect(runner.output.error).toBeNull();
     expect(runner.output.batch).toBeNull();
-    next.resolve(bayesianRecommendationBatch("study-a", "new"));
+    next.resolve(bayesianRecommendationReview("study-a", "new"));
     await runner.flush();
-    expect(runner.output.batch?.batch_id).toBe("new");
-    expect(selectedBatch).toHaveBeenCalledExactlyOnceWith("new");
-    expect(apiMocks.createBayesianRecommendationBatch.mock.calls[1][1]).toMatchObject({ surrogate: { noise_mode: "near_noiseless" } });
+    expect(runner.output.review?.review_id).toBe("new");
+    expect(runner.output.batch).toBeNull();
+    expect(selectedBatch).not.toHaveBeenCalled();
+    expect(apiMocks.createBayesianRecommendationReview.mock.calls[1][1]).toMatchObject({ surrogate: { noise_mode: "near_noiseless" } });
     runner.unmount();
   });
 
   it("keeps q1 target on the batch core and cancels a response after same-study history changes", async () => {
     apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
-    const response = deferred<BayesianRecommendationBatchResponse>();
-    apiMocks.createBayesianRecommendationBatch.mockReturnValueOnce(response.promise);
+    const response = deferred<BayesianRecommendationReviewResponse>();
+    apiMocks.createBayesianRecommendationReview.mockReturnValueOnce(response.promise);
     const props = { selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(), sourceHistoryKey: "history-1" };
     const runner = new HookRunner(useBayesianRecommendationState, props);
     await runner.flush();
     const study = bayesianStudy("study-a");
     study.objective = { ...study.objective, goal_type: "match_target", target_value: 1, target_tolerance: 0.1 };
     await runner.act(() => { void runner.output.onRecommend(study); });
-    expect(apiMocks.createBayesianRecommendationBatch.mock.calls[0][1]).toMatchObject({ batch_size: 1, acquisition: { kind: "expected_target_improvement" } });
+    expect(apiMocks.createBayesianRecommendationReview.mock.calls[0][1]).toMatchObject({ batch_size: 1, acquisition: { kind: "expected_target_improvement" } });
     runner.update({ ...props, sourceHistoryKey: "history-2" });
-    response.resolve(bayesianRecommendationBatch("study-a", "old"));
+    response.resolve(bayesianRecommendationReview("study-a", "old"));
     await runner.flush();
     expect(runner.output.batch).toBeNull();
     expect(runner.output.isRecommending).toBe(false);
     expect(apiMocks.createBayesianRecommendation).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("keeps an unconfirmed review after network failure and retries only on explicit confirmation", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "review-a"));
+    apiMocks.confirmBayesianRecommendationReview.mockRejectedValueOnce(new Error("network_failed"))
+      .mockResolvedValueOnce(bayesianRecommendationBatch("study-a", "review-a"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    await runner.act(() => { void runner.output.onConfirmReview(bayesianStudy("study-a")); });
+    expect(runner.output.review?.review_id).toBe("review-a");
+    expect(runner.output.isConfirming).toBe(false);
+    expect(apiMocks.confirmBayesianRecommendationReview).toHaveBeenCalledTimes(1);
+    await runner.flush();
+    expect(apiMocks.confirmBayesianRecommendationReview).toHaveBeenCalledTimes(1);
+    await runner.act(() => { void runner.output.onConfirmReview(bayesianStudy("study-a")); });
+    expect(apiMocks.confirmBayesianRecommendationReview.mock.calls[0]).toEqual(apiMocks.confirmBayesianRecommendationReview.mock.calls[1]);
+    expect(runner.output.batch?.batch_id).toBe("review-a");
+    expect(apiMocks.createBayesianRecommendationReview).toHaveBeenCalledTimes(1);
+    runner.unmount();
+  });
+
+  it("preserves the saved batch and its stale-draft notice while generating and dismissing a review", async () => {
+    apiMocks.fetchBayesianRecommendationBatch.mockResolvedValue(bayesianRecommendationBatch("study-a", "saved-batch"));
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "review-a"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedBatchId: "saved-batch", requestedRecommendationId: null,
+      onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    expect(runner.output.batch?.batch_id).toBe("saved-batch");
+    await runner.act(() => runner.output.setCustomXi("0.2"));
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    expect(runner.output.review?.review_id).toBe("review-a");
+    expect(runner.output.draftChanged).toBe(true);
+    expect(runner.output.batch?.batch_id).toBe("saved-batch");
+    await runner.act(() => runner.output.discardReview());
+    expect(runner.output.review).toBeNull();
+    expect(runner.output.batch?.batch_id).toBe("saved-batch");
+    expect(runner.output.draftChanged).toBe(true);
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("blocks a captured confirmation callback immediately when input changes before rerender", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "review-a"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    const capturedConfirm = runner.output.onConfirmReview;
+    let confirmation: Promise<boolean> | undefined;
+    await runner.act(() => {
+      runner.output.setCustomXi("0.2");
+      confirmation = capturedConfirm(bayesianStudy("study-a"));
+    });
+    expect(await confirmation).toBe(false);
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    expect(runner.output.review).toBeNull();
+    runner.unmount();
+  });
+
+  it("does not start a review through a captured callback from a previous study", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    const props = { selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn() };
+    const runner = new HookRunner(useBayesianRecommendationState, props);
+    await runner.flush();
+    const oldRecommend = runner.output.onRecommend;
+    runner.update({ ...props, selectedStudyId: "study-b" });
+    await runner.flush();
+    expect(await oldRecommend(bayesianStudy("study-a"))).toBe(false);
+    expect(apiMocks.createBayesianRecommendationReview).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it.each(["resolve", "reject"])("ignores stale confirmation %s and finally while a newer review runs", async outcome => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValueOnce(bayesianRecommendationReview("study-a", "review-a"));
+    const confirm = deferred<BayesianRecommendationBatchResponse>();
+    const next = deferred<BayesianRecommendationReviewResponse>();
+    apiMocks.confirmBayesianRecommendationReview.mockReturnValueOnce(confirm.promise);
+    apiMocks.createBayesianRecommendationReview.mockReturnValueOnce(next.promise);
+    const selected = vi.fn();
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(), onBatchSelected: selected,
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    await runner.act(() => { void runner.output.onConfirmReview(bayesianStudy("study-a")); });
+    expect(runner.output.isConfirming).toBe(true);
+    await runner.act(() => runner.output.setCustomXi("0.2"));
+    expect(runner.output.isConfirming).toBe(false);
+    expect(runner.output.review).toBeNull();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    if (outcome === "resolve") confirm.resolve(bayesianRecommendationBatch("study-a", "review-a"));
+    else confirm.reject(new Error("old_failure"));
+    await runner.flush();
+    expect(runner.output.isRecommending).toBe(true);
+    expect(runner.output.error).toBeNull();
+    expect(runner.output.batch).toBeNull();
+    expect(selected).not.toHaveBeenCalled();
+    next.resolve(bayesianRecommendationReview("study-a", "review-b"));
+    await runner.flush();
+    expect(runner.output.review?.review_id).toBe("review-b");
+    runner.unmount();
+  });
+
+  it("discards temporary candidates without confirming and rejects stale source confirmation", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "review-a"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    const stale = bayesianStudy("study-a");
+    stale.observation_history = { ...stale.observation_history, history_revision_id: "new-history" };
+    await runner.act(() => { void runner.output.onConfirmReview(stale); });
+    expect(runner.output.error).toBe("bayesian_optimization_history_stale");
+    expect(runner.output.review).toBeNull();
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    await runner.act(() => runner.output.discardReview());
+    expect(runner.output.review).toBeNull();
+    expect(runner.output.batch).toBeNull();
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
     runner.unmount();
   });
 

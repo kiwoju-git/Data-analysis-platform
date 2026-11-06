@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "api_contract_version": 29,
+  "api_contract_version": 30,
   "metadata_schema_version": 24,
   "methods": [
     {

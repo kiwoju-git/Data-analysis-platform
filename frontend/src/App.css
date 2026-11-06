@@ -4322,6 +4322,19 @@ table {
   min-width: 320px;
 }
 
+.bayesian-review-table {
+  min-width: 840px;
+}
+
+.bayesian-review-table td:nth-child(2) {
+  min-width: 180px;
+}
+
+.bayesian-review-table td:not(:nth-child(2)) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .bayesian-reason-metrics {
   display: grid;
   grid-template-columns: repeat(2, minmax(140px, 1fr));

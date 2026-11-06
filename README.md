@@ -26,6 +26,15 @@ runtime compatibility is recorded above. See [method contract](docs/two_variance
 
 ### Noise-Aware BO and GPR
 
+The API30 source workflow separates **Review experiment candidates** from
+**Confirm these experiments**. Reviewing does not add trials; confirmation saves
+the exact ordered batch without another fit and supports safe explicit retry.
+Unconfirmed reviews are temporary (up to20 minutes/eight reviews, or until server
+restart). Existing saved recommendations remain readable. Kernel selection,
+multiresponse desirability and editable candidate tables are later stages, not
+features of this first workflow change. See the
+[implementation stages and evidence](docs/bo_jmp_workflow_stages.md).
+
 BO separates observation noise from numerical jitter and uses latent-posterior
 EI/ETI, reproducible joint-latent batch planning, executable mixed-domain search
 and explicitly registered independent repeats. Standalone GPR adds group/time

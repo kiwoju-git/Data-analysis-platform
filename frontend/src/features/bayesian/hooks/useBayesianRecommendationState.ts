@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  createBayesianRecommendationBatch,
+  createBayesianRecommendationReview,
+  confirmBayesianRecommendationReview,
   fetchBayesianRecommendation,
   fetchBayesianRecommendationBatch,
   fetchLatestBayesianRecommendation,
@@ -10,6 +11,7 @@ import {
   type BayesianExplorationProfile,
   type BayesianRecommendationBatchResponse,
   type BayesianRecommendationResponse,
+  type BayesianRecommendationReviewResponse,
   type BayesianStudyResponse,
 } from "../../../api";
 import { bayesianRecommendationBudgetBlocker } from "../../../bayesianStudyDraft";
@@ -52,15 +54,26 @@ export function useBayesianRecommendationState({
   );
   const [isRestoring, setIsRestoring] = useState(false);
   const [isRecommending, setIsRecommending] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [review, setReview] = useState<BayesianRecommendationReviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noiseDraft, setNoiseDraft] = useState<BayesianNoiseDraft>(defaultNoiseDraft);
   const [draftChanged, setDraftChanged] = useState(false);
   const restoreGuard = useRef(createLatestRequestGuard()).current;
   const createGuard = useRef(createLatestRequestGuard()).current;
+  const activeReviewId = useRef<string | null>(null);
+  const confirmingReview = useRef<string | null>(null);
+  const sourceKey = `${selectedStudyId}:${sourceHistoryKey}:${requestedBatchId}:${requestedRecommendationId}`;
+  const currentSource = useRef(sourceKey);
+  currentSource.current = sourceKey;
 
   useEffect(() => {
     createGuard.cancel();
     setIsRecommending(false);
+    setIsConfirming(false);
+    confirmingReview.current = null;
+    activeReviewId.current = null;
+    setReview(null);
     return () => createGuard.cancel();
   }, [createGuard, sourceHistoryKey]);
 
@@ -175,6 +188,10 @@ export function useBayesianRecommendationState({
     setError(null);
     setIsRestoring(false);
     setIsRecommending(false);
+    setIsConfirming(false);
+    confirmingReview.current = null;
+    activeReviewId.current = null;
+    setReview(null);
     if (selectedStudyId !== null) {
       void loadRecommendation(
         selectedStudyId,
@@ -193,7 +210,7 @@ export function useBayesianRecommendationState({
   ]);
 
   async function onRecommend(study: BayesianStudyResponse): Promise<boolean> {
-    if (study.study_id !== selectedStudyId) return false;
+    if (currentSource.current !== sourceKey || study.study_id !== selectedStudyId) return false;
     const policy = buildNoisePolicy(noiseDraft, study.factors);
     if (policy.payload === null) {
       setError("bayesian_surrogate_policy_invalid");
@@ -228,11 +245,19 @@ export function useBayesianRecommendationState({
       setError("bayesian_optimization_xi_invalid");
       return false;
     }
+    restoreGuard.cancel();
+    setIsRestoring(false);
+    const requestSource = sourceKey;
     const request = createGuard.begin();
+    const isCurrent = () => createGuard.isCurrent(request) && currentSource.current === requestSource;
+    activeReviewId.current = null;
+    setReview(null);
+    confirmingReview.current = null;
+    setIsConfirming(false);
     setIsRecommending(true);
     setError(null);
     try {
-      const created = await createBayesianRecommendationBatch(
+      const created = await createBayesianRecommendationReview(
         study.study_id,
         {
           schema_version: 2,
@@ -257,29 +282,92 @@ export function useBayesianRecommendationState({
           ...policy.payload,
         },
       );
-      if (!createGuard.isCurrent(request)) return false;
-      if (created.study_id !== study.study_id || created.source_history_revision_id !== study.observation_history.history_revision_id ||
+      if (!isCurrent()) return false;
+      if (created.study_id !== study.study_id || created.study_version_id !== study.study_version_id || created.source_history_revision_id !== study.observation_history.history_revision_id ||
         created.source_observation_history_sha256 !== study.observation_history.observation_history_sha256) {
         setError("bayesian_recommendation_study_mismatch");
         return false;
       }
-      setBatch(created);
-      setDraftChanged(false);
-      setRecommendation(null);
-      onBatchSelected(created.batch_id);
+      activeReviewId.current = created.review_id;
+      setReview(created);
       return true;
     } catch (caught) {
-      if (createGuard.isCurrent(request)) {
-        setError(bayesianErrorCode(caught));
+      if (isCurrent()) {
+        setError(reviewFailureCode(caught, "bayesian_recommendation_review_failed"));
       }
       return false;
     } finally {
-      if (createGuard.isCurrent(request)) setIsRecommending(false);
+      if (isCurrent()) setIsRecommending(false);
     }
+  }
+
+  async function onConfirmReview(study: BayesianStudyResponse): Promise<boolean> {
+    if (currentSource.current !== sourceKey || review === null || activeReviewId.current !== review.review_id || confirmingReview.current !== null || study.study_id !== selectedStudyId) return false;
+    if (review.study_id !== study.study_id || review.study_version_id !== study.study_version_id ||
+      review.source_history_revision_id !== study.observation_history.history_revision_id ||
+      review.source_observation_history_sha256 !== study.observation_history.observation_history_sha256) {
+      activeReviewId.current = null;
+      setReview(null);
+      setError("bayesian_optimization_history_stale");
+      return false;
+    }
+    const snapshot = review;
+    const requestSource = sourceKey;
+    const request = createGuard.begin();
+    const isCurrent = () => createGuard.isCurrent(request) && currentSource.current === requestSource;
+    restoreGuard.cancel();
+    setIsRestoring(false);
+    confirmingReview.current = snapshot.review_id;
+    setIsConfirming(true);
+    setError(null);
+    try {
+      const created = await confirmBayesianRecommendationReview(study.study_id, snapshot.review_id, {
+        expected_config_sha256: snapshot.config_sha256,
+      });
+      if (!isCurrent()) return false;
+      if (created.study_id !== snapshot.study_id || created.study_version_id !== snapshot.study_version_id ||
+        created.batch_id !== snapshot.review_id || created.config_sha256 !== snapshot.config_sha256 ||
+        created.source_history_revision_id !== snapshot.source_history_revision_id ||
+        created.source_observation_history_sha256 !== snapshot.source_observation_history_sha256) {
+        setError("bayesian_recommendation_study_mismatch");
+        return false;
+      }
+      setBatch(created);
+      setRecommendation(null);
+      activeReviewId.current = null;
+      setReview(null);
+      setDraftChanged(false);
+      onBatchSelected(created.batch_id);
+      return true;
+    } catch (caught) {
+      if (isCurrent()) setError(reviewFailureCode(caught, "bayesian_recommendation_confirm_failed"));
+      return false;
+    } finally {
+      if (isCurrent()) {
+        confirmingReview.current = null;
+        setIsConfirming(false);
+      }
+    }
+  }
+
+  function discardReview() {
+    createGuard.cancel();
+    confirmingReview.current = null;
+    activeReviewId.current = null;
+    setReview(null);
+    setIsRecommending(false);
+    setIsConfirming(false);
+    setError(null);
   }
 
   const onRefresh = useCallback(async () => {
     if (selectedStudyId === null) return null;
+    createGuard.cancel();
+    confirmingReview.current = null;
+    setIsConfirming(false);
+    setIsRecommending(false);
+    activeReviewId.current = null;
+    setReview(null);
     return loadRecommendation(
       selectedStudyId,
       batch?.batch_id ?? requestedBatchId,
@@ -287,6 +375,7 @@ export function useBayesianRecommendationState({
     );
   }, [
     batch?.batch_id,
+    createGuard,
     loadRecommendation,
     recommendation?.recommendation_id,
     requestedBatchId,
@@ -305,6 +394,10 @@ export function useBayesianRecommendationState({
     createGuard.cancel();
     restoreGuard.cancel();
     setIsRecommending(false);
+    setIsConfirming(false);
+    confirmingReview.current = null;
+    activeReviewId.current = null;
+    setReview(null);
     setIsRestoring(false);
     setDraftChanged(true);
     setError(null);
@@ -323,10 +416,16 @@ export function useBayesianRecommendationState({
     setError(null);
     setIsRestoring(false);
     setIsRecommending(false);
+    setIsConfirming(false);
+    confirmingReview.current = null;
+    activeReviewId.current = null;
+    setReview(null);
   }
 
   return {
     batch,
+    review,
+    discardReview,
     batchSize,
     noiseDraft,
     draftChanged,
@@ -337,9 +436,11 @@ export function useBayesianRecommendationState({
     executionMode,
     explorationProfile,
     isRecommending,
+    isConfirming,
     isRestoring,
     onExecutionModeChange,
     onRecommend,
+    onConfirmReview,
     onRefresh,
     recommendation,
     setBatchSize: (value: string) => { invalidateDraft(); setBatchSize(value); },
@@ -362,4 +463,9 @@ function resolveXi(
   return parsed !== null && parsed >= 0 && parsed <= 10
     ? parsed
     : null;
+}
+
+function reviewFailureCode(caught: unknown, fallback: string) {
+  const code = bayesianErrorCode(caught);
+  return /^bayesian_[a-z0-9_]+$/.test(code) ? code : fallback;
 }

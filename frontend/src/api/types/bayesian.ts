@@ -782,6 +782,27 @@ export interface BayesianNoiseBatchResponse extends Omit<BayesianLegacyRecommend
 }
 export type BayesianRecommendationBatchResponse = BayesianLegacyRecommendationBatchResponse | BayesianNoiseBatchResponse;
 
+export interface BayesianRecommendationReviewResponse {
+  schema_version: 1;
+  review_id: string;
+  study_id: string;
+  study_version_id: string;
+  source_history_revision_id: string;
+  source_observation_history_sha256: string;
+  config_sha256: string;
+  expires_at: string;
+  calculation: Pick<BayesianNoiseBatchResponse,
+    "batch_size" | "batch_policy" | "shared_model" | "incumbent" |
+    "observation_view" | "search_budget" | "warnings" | "limitations"> & {
+    schema_version: 2;
+    items: Array<Omit<BayesianNoiseBatchItemResponse, "item_id" | "batch_id" | "trial" | "current_trial">>;
+  };
+}
+
+export interface BayesianRecommendationReviewConfirmRequest {
+  expected_config_sha256: string;
+}
+
 export interface BayesianLatestRecommendationBatchResponse {
   study_id: string;
   study_version_id: string;

@@ -6,6 +6,7 @@ import type {
   BayesianLegacyRecommendationBatchResponse,
   BayesianRecommendationResponse,
   BayesianStudyResponse,
+  BayesianRecommendationReviewResponse,
 } from "../../api";
 import {
   bayesianRecommendationBudgetBlocker,
@@ -22,6 +23,7 @@ import { translateSystemText } from "../../i18n/translate";
 import type { AppLocale } from "../../i18n/types";
 import { BayesianNoiseSettings } from "./BayesianNoiseSettings";
 import { BayesianNoiseBatchResult } from "./BayesianNoiseBatchResult";
+import { BayesianRecommendationReview } from "./BayesianRecommendationReview";
 import { boText, buildNoisePolicy, defaultNoiseDraft, type BayesianNoiseDraft } from "./boNoisePolicy";
 
 const EXPLORATION_OPTIONS: Array<{
@@ -71,6 +73,10 @@ export function BayesianRecommendationPanel({
   noiseDraft = defaultNoiseDraft,
   onNoiseDraftChange = () => undefined,
   draftChanged = false,
+  review = null,
+  isConfirming = false,
+  onConfirmReview = () => undefined,
+  onDiscardReview = () => undefined,
 }: {
   study: BayesianStudyResponse;
   batch: BayesianRecommendationBatchResponse | null;
@@ -91,6 +97,10 @@ export function BayesianRecommendationPanel({
   noiseDraft?: BayesianNoiseDraft;
   onNoiseDraftChange?: (value: BayesianNoiseDraft) => void;
   draftChanged?: boolean;
+  review?: BayesianRecommendationReviewResponse | null;
+  isConfirming?: boolean;
+  onConfirmReview?: () => void;
+  onDiscardReview?: () => void;
 }) {
   const { locale } = useI18n();
   const parsedBatchSize =
@@ -120,9 +130,9 @@ export function BayesianRecommendationPanel({
     batchSizeInvalid ||
     customXiInvalid ||
     buildNoisePolicy(noiseDraft, study.factors).payload === null ||
-    isRecommending;
+    isRecommending || isConfirming;
   const settingsDisabled =
-    actionsDisabled || study.status !== "active" || isRecommending;
+    actionsDisabled || study.status !== "active" || isRecommending || isConfirming;
   const targetGoal = study.objective.goal_type === "match_target";
 
   return (
@@ -305,9 +315,13 @@ export function BayesianRecommendationPanel({
           disabled={disabled}
           onClick={onRecommend}
         >
-          {isRecommending ? "추천 batch 계산 중" : "추천 batch 생성"}
+          {boText(locale, isRecommending ? "실험 후보 계산 중" : "실험 후보 검토", isRecommending ? "Evaluating candidates" : "Review experiment candidates")}
         </button>
       </div>
+
+      {review !== null ? <BayesianRecommendationReview review={review} study={study}
+        disabled={actionsDisabled || study.status !== "active"} isConfirming={isConfirming}
+        onConfirm={onConfirmReview} onDiscard={onDiscardReview} /> : null}
 
       {draftChanged && batch !== null ? <p className="notice-box" role="status">{boText(locale, "설정이 변경되었습니다. 아래는 이전에 저장된 추천이며 현재 설정의 계산 결과가 아닙니다.", "Settings changed. The saved recommendation below does not represent the current draft.")}</p> : null}
       {batch !== null ? (

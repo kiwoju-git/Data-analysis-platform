@@ -4282,7 +4282,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
         raise AssertionError("Bayesian observation batch did not create one revision")
     expect(page.get_by_label("Trial 1 관측값")).to_have_count(0, timeout=20_000)
     expect(page.get_by_label("Trial 2 관측값")).to_have_count(0)
-    recommendation_button = page.get_by_role("button", name="추천 batch 생성")
+    recommendation_button = page.get_by_role("button", name="실험 후보 검토", exact=True)
     expect(recommendation_button).to_be_enabled(timeout=20_000)
     page.get_by_role("radio", name="여러 실험을 동시에 수행").check()
     page.get_by_label("한 번에 추천할 실험 수").fill("2")
@@ -4293,17 +4293,26 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     def recommend_batch() -> None:
         with page.expect_response(
             lambda response: response.request.method == "POST"
-            and response.url.endswith("/recommendation-batches"),
+            and response.url.endswith("/recommendation-reviews"),
             timeout=45_000,
         ) as requested:
             recommendation_button.click()
         response = requested.value
-        payload = response.json()
-        assert response.status == 201, {
+        review = response.json()
+        assert response.status == 200, {
             "status": response.status,
-            "code": payload.get("error", {}).get("code"),
+            "code": review.get("error", {}).get("code"),
         }
         request = response.request.post_data_json
+        expect(page.locator("#bayesian-review-title")).to_be_visible()
+        with page.expect_response(
+            lambda reply: reply.request.method == "POST"
+            and reply.url.endswith(f"/recommendation-reviews/{review['review_id']}/confirm"),
+            timeout=30_000,
+        ) as confirmed:
+            page.get_by_role("button", name="이 후보로 실험 확정", exact=True).click()
+        assert confirmed.value.status == 201, confirmed.value.text()
+        payload = confirmed.value.json()
         assert payload["result_schema_version"] == request["schema_version"] == 2
         assert payload["source_history_revision_id"] == request["expected_history_revision_id"]
         assert (
@@ -4400,7 +4409,7 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     expect(lifecycle).to_contain_text("completed")
     expect(lifecycle).to_contain_text("confirmation_complete")
     expect(page.get_by_label("전체 trial 예산")).to_be_disabled()
-    expect(page.get_by_role("button", name="추천 batch 생성")).to_be_disabled()
+    expect(page.get_by_role("button", name="실험 후보 검토", exact=True)).to_be_disabled()
 
     page.reload(wait_until="networkidle")
     restored_selector = page.get_by_label("저장된 Bayesian study")

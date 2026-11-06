@@ -50,6 +50,24 @@ class FrontendResultTypeFileContract:
 # OperationContract here in the same change so backend pytest catches route drift.
 FRONTEND_ROUTE_CONTRACTS = [
     OperationContract(
+        route_name="bayesianRecommendationReviews",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/recommendation-reviews",
+        success_status="200",
+        response_schema="BayesianRecommendationReviewResponse",
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianRecommendationReviewConfirm",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/recommendation-reviews/{review_id}/confirm",
+        success_status="201",
+        response_schema="BayesianNoiseBatchResponse",
+        parameters=frozenset({("study_id", "path"), ("review_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
         route_name="storedSourceSnapshot",
         method="post",
         path="/api/v1/reports/source-snapshot",
@@ -1966,6 +1984,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "lhs_design",
                 "bayesian_lhs_initial_design",
                 "bayesian_batch_recommendation",
+                "bayesian_recommendation_review",
                 "bayesian_objective_goal_modes",
             }
         ),
@@ -1988,6 +2007,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "lhs_design",
                 "bayesian_lhs_initial_design",
                 "bayesian_batch_recommendation",
+                "bayesian_recommendation_review",
                 "bayesian_objective_goal_modes",
             }
         ),

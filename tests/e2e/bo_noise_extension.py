@@ -189,17 +189,43 @@ def _open(page: Page, base: str, study_id: str) -> None:
 
 
 def _recommend(page: Page) -> dict:
-    button = page.get_by_role("button", name="추천 batch 생성", exact=True)
+    button = page.get_by_role("button", name="실험 후보 검토", exact=True)
     expect(button).to_be_enabled(timeout=20_000)
     with page.expect_response(
         lambda response: response.request.method == "POST"
-        and urlsplit(response.url).path.endswith("/recommendation-batches"),
+        and urlsplit(response.url).path.endswith("/recommendation-reviews"),
         timeout=90_000,
     ) as response:
         button.click()
-    assert response.value.status == 201, response.value.text()
+    assert response.value.status == 200, response.value.text()
     payload = response.value.request.post_data_json
-    result = response.value.json()
+    review = response.value.json()
+    base = response.value.url.rsplit("/recommendation-reviews", 1)[0]
+    before = page.request.get(base).json()
+    assert before["pending_trial_count"] == 0
+    assert (
+        before["observation_history"]["history_revision_id"]
+        == payload["expected_history_revision_id"]
+    )
+    expect(page.locator("#bayesian-review-title")).to_be_visible()
+    with page.expect_response(
+        lambda reply: reply.request.method == "POST"
+        and urlsplit(reply.url).path.endswith(
+            f"/recommendation-reviews/{review['review_id']}/confirm"
+        ),
+        timeout=30_000,
+    ) as confirmation:
+        page.get_by_role("button", name="이 후보로 실험 확정", exact=True).click()
+    assert confirmation.value.status == 201, confirmation.value.text()
+    result = confirmation.value.json()
+    assert result["batch_id"] == review["review_id"]
+    for saved, shown in zip(
+        result["items"], review["calculation"]["items"], strict=True
+    ):
+        assert all(saved[key] == value for key, value in shown.items())
+    after = page.request.get(base).json()
+    assert after["trial_count"] == before["trial_count"] + result["batch_size"]
+    assert after["observation_history"] == before["observation_history"]
     assert (
         payload["schema_version"] == 2 and len(payload["expected_history_sha256"]) == 64
     )
@@ -360,7 +386,9 @@ def _managed_report(page: Page, base: str, output: Path, batch: dict) -> dict:
 
 
 def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict:
-    with diagnosed_page(browser, output, "bo-noise-workflow", init_script=_INITIAL_LOCALE) as page:
+    with diagnosed_page(
+        browser, output, "bo-noise-workflow", init_script=_INITIAL_LOCALE
+    ) as page:
         ui_posts: list[str] = []
         page.on(
             "request",
@@ -498,7 +526,10 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
 
 
 def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
-    with diagnosed_page(browser, output, "bo-replicate-context", init_script=_INITIAL_LOCALE) as page:
+    verify_bo_review_context(browser, base, output / "review")
+    with diagnosed_page(
+        browser, output, "bo-replicate-context", init_script=_INITIAL_LOCALE
+    ) as page:
         study = _seed(page, base)
         _open(page, base, study["study_id"])
         page.locator("#bo-replicate-parent").select_option(
@@ -559,3 +590,91 @@ def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
                 ],
             },
         )
+
+
+def verify_bo_review_context(browser: Browser, base: str, output: Path) -> None:
+    with diagnosed_page(
+        browser, output, "bo-review-context", init_script=_INITIAL_LOCALE
+    ) as page:
+        study = _seed(page, base)
+        _open(page, base, study["study_id"])
+        posts: list[str] = []
+        page.on(
+            "request",
+            lambda request: posts.append(request.url)
+            if request.method == "POST"
+            else None,
+        )
+
+        def review_candidates() -> dict:
+            with page.expect_response(
+                lambda response: response.request.method == "POST"
+                and response.url.endswith("/recommendation-reviews"),
+                timeout=90_000,
+            ) as response:
+                page.get_by_role("button", name="실험 후보 검토", exact=True).click()
+            assert response.value.status == 200, response.value.text()
+            expect(page.locator("#bayesian-review-title")).to_be_visible()
+            after = _study(page, base, study["study_id"])
+            assert after["trials"] == study["trials"]
+            assert after["observation_history"] == study["observation_history"]
+            return response.value.json()
+
+        review_candidates()
+        page.locator("#bo-noise-mode").select_option("near_noiseless")
+        expect(page.locator("#bayesian-review-title")).to_have_count(0)
+        preview = review_candidates()
+        request_count = len(posts)
+        for locale, label in (("en", "ENG"), ("ko", "KOR")):
+            page.locator(".language-switcher button").filter(has_text=label).click()
+            expect(page.locator("html")).to_have_attribute("lang", locale)
+            for width in (1024, 1440):
+                page.set_viewport_size({"width": width, "height": 1000})
+                wait_for_layout_settled(page)
+                expect(page.locator("#bayesian-review-title")).to_be_visible()
+                assert page.evaluate(
+                    "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
+                )
+                assert page.locator(".bayesian-review-table tbody td:nth-child(4)").evaluate(
+                    "cell => getComputedStyle(cell).whiteSpace === 'nowrap'"
+                )
+                page.locator(
+                    'section[aria-labelledby="bayesian-review-title"]'
+                ).screenshot(path=str(output / f"review-{locale}-{width}.png"))
+        assert len(posts) == request_count
+        confirmed: list[dict] = []
+
+        def committed_but_disconnected(route: Route) -> None:
+            result = route.fetch()
+            assert result.status == 201, result.text()
+            confirmed.append(result.json())
+            route.fulfill(
+                status=503,
+                content_type="application/json",
+                json={"error": {"code": "synthetic_connection_lost"}},
+            )
+
+        pattern = "**/recommendation-reviews/*/confirm"
+        page.route(pattern, committed_but_disconnected)
+        confirm = page.get_by_role("button", name="이 후보로 실험 확정", exact=True)
+        confirm.click()
+        expect(confirm).to_be_enabled(timeout=30_000)
+        expect(page.locator("#bayesian-review-title")).to_be_visible()
+        assert len(confirmed) == 1 and len(posts) == request_count + 1
+        stored = _study(page, base, study["study_id"])
+        assert stored["trial_count"] == study["trial_count"] + 1
+        assert stored["observation_history"] == study["observation_history"]
+        page.unroute(pattern)
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith(f"/{preview['review_id']}/confirm")
+        ) as retry:
+            confirm.click()
+        assert retry.value.status == 201 and retry.value.json() == confirmed[0]
+        assert len(posts) == request_count + 2
+        expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+        assert _study(page, base, study["study_id"])["trials"] == stored["trials"]
+        page.reload(wait_until="domcontentloaded")
+        wait_for_app_ready(page, "ko", ROUTE)
+        expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+        assert len(posts) == request_count + 2

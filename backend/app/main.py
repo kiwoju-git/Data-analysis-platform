@@ -27,6 +27,7 @@ from app.core.request_limits import RequestBodyLimitMiddleware
 from app.core.trusted_lan import TrustedLanMiddleware
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
+from app.services.bayesian_review import BayesianReviewStore
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
@@ -60,7 +61,10 @@ def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncCont
             app.state.dataset_cell_correction_recovery = recover_dataset_cell_correction_files(
                 lease.root
             )
-            yield
+            try:
+                yield
+            finally:
+                app.state.bayesian_reviews.clear()
 
     return lifespan
 
@@ -78,6 +82,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=create_lifespan(app_settings),
     )
     app.state.settings = app_settings
+    app.state.bayesian_reviews = BayesianReviewStore()
     app.add_middleware(
         RequestBodyLimitMiddleware,
         max_request_bytes=app_settings.request_byte_limit,

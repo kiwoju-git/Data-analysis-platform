@@ -1,4 +1,4 @@
-$script:ExpectedApiContractVersion = 29
+$script:ExpectedApiContractVersion = 30
 $script:MinimumMetadataSchemaVersion = 24
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
@@ -17,6 +17,7 @@ $script:RequiredRuntimeCapabilities = @(
     "lhs_design",
     "bayesian_lhs_initial_design",
     "bayesian_batch_recommendation",
+    "bayesian_recommendation_review",
     "bayesian_objective_goal_modes"
 )
 

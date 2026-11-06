@@ -691,11 +691,23 @@ def insert_bayesian_recommendation_batch_bundle(
     expected_history_revision_id: str,
     expected_history_sha256: str,
     total_trial_budget: int,
+    allow_existing: bool = False,
 ) -> None:
     connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
     try:
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.execute("BEGIN IMMEDIATE;")
+        if allow_existing:
+            existing = connection.execute(
+                "SELECT study_version_id, config_sha256 FROM bayesian_recommendation_batches "
+                "WHERE batch_id = ?;",
+                (batch.batch_id,),
+            ).fetchone()
+            if existing is not None:
+                if existing != (batch.study_version_id, batch.config_sha256):
+                    raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+                connection.commit()
+                return
         if not _study_is_active(connection, batch.study_version_id):
             raise BayesianStorageConflict("bayesian_study_closed")
         head = connection.execute(

@@ -20,6 +20,8 @@ export {
   closeBayesianStudy,
   createBayesianRecommendation,
   createBayesianRecommendationBatch,
+  createBayesianRecommendationReview,
+  confirmBayesianRecommendationReview,
   createBayesianStudy,
   deleteBayesianStudy,
   fetchBayesianHistory,

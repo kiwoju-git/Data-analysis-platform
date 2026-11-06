@@ -12,6 +12,11 @@ the stated commit; later code must be checked independently before changing a
 status to verified. No JMP application was run and no same-input JMP output was
 provided. Public documentation is not numerical-parity evidence.
 
+The subsequent reviewed-candidate UI work is tracked separately in
+[`bo_jmp_workflow_stages.md`](bo_jmp_workflow_stages.md). Its first stage separates
+temporary candidate review from explicit trial commitment; it does not add JMP
+kernel families or multiresponse desirability.
+
 ## 1. Versions And Evidence
 
 - The JMP sources below are the versioned English **19.2** documentation. This

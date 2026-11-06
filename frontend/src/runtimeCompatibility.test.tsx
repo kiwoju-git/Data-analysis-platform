@@ -121,6 +121,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
       lhs_design: true,
       bayesian_lhs_initial_design: true,
       bayesian_batch_recommendation: true,
+      bayesian_recommendation_review: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },

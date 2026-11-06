@@ -4,6 +4,13 @@ Last updated: 2026-10-21
 
 ## Current V2 Policy
 
+The API30 UI first generates a temporary candidate review. Only the explicit
+confirmation command registers its entire ordered batch as pending experiments.
+The existing direct-create API remains supported. Review/confirmation does not
+change V2 mathematics or any saved schema; see
+[review contract and evidence](bo_jmp_workflow_stages.md). Partial selection or
+reordering is not exposed because later marginal scores depend on earlier ranks.
+
 New UI requests use schema2, method0.7.0 and
 `greedy_mc_joint_latent_improvement_v2`. Noise/latent incumbent, exact-repeat
 sufficient statistics, correlated MC planning, mixed search and version dispatch

@@ -1,6 +1,17 @@
 # Runtime Compatibility Contract
 
-## Current Gage Part Identity Contract (API29)
+## Reviewed BO Workflow (API30)
+
+API30 adds the `bayesian_recommendation_review` capability and separate
+`POST .../recommendation-reviews` / `POST .../recommendation-reviews/{id}/confirm`
+routes. The frontend reviews generated candidates before explicitly creating
+pending trials. Confirmation is idempotent and does not fit again. Unconfirmed
+reviews are bounded, expiring application memory; confirmed results use the
+unchanged method0.7.0/config2/result2/model3/item2 persistence contract.
+Metadata remains24; no SQL migration or existing artifact rewrite occurs.
+See [stages and current evidence](bo_jmp_workflow_stages.md).
+
+## Gage Part Identity Contract (API29)
 
 API29 adds Gage method0.3.1/result4/plot2. New results preserve full canonical
 part IDs and use natural digit-run order only in their plot view. Operators and

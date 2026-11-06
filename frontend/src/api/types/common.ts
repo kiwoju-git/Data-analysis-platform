@@ -21,6 +21,7 @@ export interface RuntimeCapabilities {
   lhs_design?: boolean;
   bayesian_lhs_initial_design?: boolean;
   bayesian_batch_recommendation?: boolean;
+  bayesian_recommendation_review?: boolean;
   bayesian_objective_goal_modes?: boolean;
   gaussian_process_regression?: boolean;
 }

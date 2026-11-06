@@ -12,6 +12,8 @@ import { BayesianTrialTable } from "./BayesianTrialTable";
 import { BayesianReplicatePanel } from "./BayesianReplicatePanel";
 import { useBayesianReplicateState } from "./hooks/useBayesianReplicateState";
 import { validBayesianId } from "./bayesianDisplay";
+import { bayesianReviewErrorDetails } from "./bayesianReviewErrors";
+import { boText } from "./boNoisePolicy";
 import { useBayesianRecommendationState } from "./hooks/useBayesianRecommendationState";
 import { useBayesianRetentionState } from "./hooks/useBayesianRetentionState";
 import { useBayesianStudyCatalogState } from "./hooks/useBayesianStudyCatalogState";
@@ -81,6 +83,7 @@ export function BayesianOptimizationWorkspace() {
     lifecycle.isClosing ||
     recommendation.isRestoring ||
     recommendation.isRecommending ||
+    recommendation.isConfirming ||
     replicates.isRunning ||
     retention.isChecking ||
     retention.isDeleting;
@@ -146,7 +149,12 @@ export function BayesianOptimizationWorkspace() {
 
   async function createRecommendation() {
     if (study === null) return;
-    const created = await recommendation.onRecommend(study);
+    await recommendation.onRecommend(study);
+  }
+
+  async function confirmRecommendation() {
+    if (study === null) return;
+    const created = await recommendation.onConfirmReview(study);
     if (created) await lifecycle.refreshStudy();
   }
 
@@ -250,6 +258,10 @@ export function BayesianOptimizationWorkspace() {
             customXi={recommendation.customXi}
             totalTrialBudget={recommendation.totalTrialBudget}
             isRecommending={recommendation.isRecommending}
+            isConfirming={recommendation.isConfirming}
+            review={recommendation.review?.study_id === study.study_id ? recommendation.review : null}
+            onConfirmReview={() => void confirmRecommendation()}
+            onDiscardReview={recommendation.discardReview}
             actionsDisabled={studyActionDisabled}
             onExecutionModeChange={recommendation.onExecutionModeChange}
             onBatchSizeChange={recommendation.setBatchSize}
@@ -296,13 +308,13 @@ export function BayesianOptimizationWorkspace() {
 
 function BayesianError({ code }: { code: string }) {
   const { locale } = useI18n();
-  const details = getAnalysisRunErrorDetails(code, locale);
+  const details = bayesianReviewErrorDetails(code, locale) ?? getAnalysisRunErrorDetails(code, locale);
   return (
     <div className="error-box" role="alert">
       <strong>{details.title}</strong>
       <p>{details.message}</p>
       <p>{details.action}</p>
-      <span>오류 코드: {code}</span>
+      <span>{boText(locale, "오류 코드", "Error code")}: {code}</span>
     </div>
   );
 }

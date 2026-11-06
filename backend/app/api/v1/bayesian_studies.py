@@ -35,6 +35,10 @@ from app.api.v1.schemas.bayesian_noise import (
     BayesianNoiseBatchResponse,
     BayesianNoiseSingleCreateRequest,
 )
+from app.api.v1.schemas.bayesian_review import (
+    BayesianRecommendationReviewConfirmRequest,
+    BayesianRecommendationReviewResponse,
+)
 from app.services.bayesian_recommendation_batches import (
     create_bayesian_recommendation_batch,
     get_bayesian_recommendation_batch,
@@ -48,6 +52,7 @@ from app.services.bayesian_recommendations import (
     list_bayesian_recommendations,
 )
 from app.services.bayesian_replicates import create_bayesian_replicates
+from app.services.bayesian_review import confirm_bayesian_review, create_bayesian_review
 from app.services.bayesian_studies import (
     abandon_bayesian_trial,
     bayesian_initial_design_csv,
@@ -65,6 +70,34 @@ from app.services.bayesian_studies import (
 )
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
+
+
+@router.post(
+    "/{study_id}/recommendation-reviews",
+    response_model=BayesianRecommendationReviewResponse,
+)
+def create_bayesian_review_route(
+    request: Request, study_id: UUID, body: BayesianNoiseBatchCreateRequest
+) -> BayesianRecommendationReviewResponse:
+    return create_bayesian_review(
+        request.app.state.settings, request.app.state.bayesian_reviews, study_id, body
+    )
+
+
+@router.post(
+    "/{study_id}/recommendation-reviews/{review_id}/confirm",
+    response_model=BayesianNoiseBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def confirm_bayesian_review_route(
+    request: Request,
+    study_id: UUID,
+    review_id: UUID,
+    body: BayesianRecommendationReviewConfirmRequest,
+) -> BayesianNoiseBatchResponse:
+    return confirm_bayesian_review(
+        request.app.state.settings, request.app.state.bayesian_reviews, study_id, review_id, body
+    )
 
 
 @router.post(
