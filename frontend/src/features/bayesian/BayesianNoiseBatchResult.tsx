@@ -1,15 +1,17 @@
-import type { BayesianNoiseBatchResponse } from "../../api";
+import type { BayesianCurrentBatchResponse, BayesianFactorResponse } from "../../api";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { formatMeasurement } from "../../statisticalNumberFormat";
 import { boText } from "./boNoisePolicy";
+import { BayesianSurrogateSummary } from "./BayesianSurrogateSummary";
 
-export function BayesianNoiseBatchResult({ batch, study }: { batch: BayesianNoiseBatchResponse; study?: { objective: { unit: string | null } } }) {
+export function BayesianNoiseBatchResult({ batch, study }: { batch: BayesianCurrentBatchResponse; study?: { objective: { unit: string | null }; factors?: BayesianFactorResponse[] } }) {
   const { locale } = useI18n();
   const text = (ko: string, en: string) => boText(locale, ko, en), number = (value: number | null) => formatMeasurement(value, locale);
   const unit = study?.objective.unit ?? text("반응 단위", "response units");
   const stateLabels = { pending: text("실험 대기", "Awaiting experiments"), partially_completed: text("일부 완료", "Partially completed"), completed: text("전체 완료", "All completed"), abandoned: text("전체 포기", "All abandoned"), closed_mixed: text("완료 및 포기", "Completed and abandoned") };
   return <section aria-labelledby="bayesian-batch-result-title" aria-label={text("노이즈 인지 추천 결과", "Noise-aware recommendation results")}>
     <div className="panel-heading"><h4 id="bayesian-batch-result-title">{text("추천 batch 결과", "Recommendation batch results")}</h4><span className="status-pill">{stateLabels[batch.batch_state]}</span></div>
+    <BayesianSurrogateSummary model={batch.shared_model} factors={study?.factors} />
     <div className="table-wrap"><table className="result-table"><tbody>
       <tr><th>{text("실제 관측 N / 고유 조건 / 학습 N", "Raw N / unique conditions / training N")}</th><td>{batch.observation_view.raw_observation_count} / {batch.observation_view.unique_condition_count} / {batch.observation_view.effective_training_count}</td></tr>
       <tr><th>{text("관측 최선값", "Best observed value")}</th><td>{number(batch.incumbent.best_observed_objective)} ({unit})</td></tr>

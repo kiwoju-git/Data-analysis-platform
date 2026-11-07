@@ -406,17 +406,17 @@ def _batch_snapshot(
     config = parsed(record.config_json)
     request: Any
     response: Any
-    if record.result_schema_version == 2:
+    if record.result_schema_version in {2, 3}:
         from app.api.v1.schemas.bayesian_noise import (
-            BayesianNoiseBatchCreateRequest,
-            BayesianNoiseBatchResponse,
+            parse_current_batch_request,
+            parse_current_batch_response,
         )
         from app.services.bayesian_studies import get_bayesian_study
 
         # Validate the saved graph, never regenerate the recommendation for export.
         get_bayesian_study(settings, source.study_id)
-        request = BayesianNoiseBatchCreateRequest.model_validate(config["request"])
-        response = BayesianNoiseBatchResponse.model_validate(parsed(record.result_json))
+        request = parse_current_batch_request(config["request"])
+        response = parse_current_batch_response(parsed(record.result_json))
         completed_count = response.shared_model.raw_observation_count
     else:
         request = BayesianRecommendationBatchCreateRequest.model_validate(config["request"])

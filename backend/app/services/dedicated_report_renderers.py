@@ -129,7 +129,7 @@ DEFINITIONS = {
         ("source", "definition", "history"),
         ("observations", "history_plot", "attachment", "noise_summary", "warnings"),
         (1,),
-        renderer_version="1.2.0",
+        renderer_version="1.3.0",
     ),
     "doe_prediction": _definition(
         "doe.factorial_prediction",

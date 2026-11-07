@@ -36,7 +36,8 @@ expiry/oldest-entry eviction cannot delete an already committed result.
 
 ## Following Stages (Not Implemented Here)
 
-1. Versioned numeric kernel choices, with independent posterior/gradient checks.
+1. Versioned numeric kernel choices are now tracked in
+   [Stage 2](bo_kernel_alignment.md), including current-run evidence.
 2. Multiresponse goal/desirability contracts and immutable observation mappings.
 3. Persistent candidate-set revisions, imported candidates, manual selection,
    profiler and explicitly named augmentation policies.

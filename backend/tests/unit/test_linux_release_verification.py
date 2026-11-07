@@ -749,6 +749,7 @@ def valid_bo_receipt() -> dict:
         "synthetic": True,
         "status": "succeeded",
         "q1_target_ui": True,
+        "numeric_kernel_choices_ui": True,
         "joint_batch_ui": True,
         "replicate_ui": True,
         "individual_observations_ui": True,
@@ -808,7 +809,14 @@ def valid_bo_context_receipt() -> dict:
 
 
 @pytest.mark.parametrize(
-    "key", ["q1_target_ui", "replicate_ui", "restore_ui", "exact_aggregation_ui"]
+    "key",
+    [
+        "q1_target_ui",
+        "numeric_kernel_choices_ui",
+        "replicate_ui",
+        "restore_ui",
+        "exact_aggregation_ui",
+    ],
 )
 def test_bo_archive_receipt_requires_visible_workflow_evidence(key):
     receipt = valid_bo_receipt()

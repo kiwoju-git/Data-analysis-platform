@@ -29,6 +29,7 @@ def calculate_noise_aware_batch(payload: dict[str, Any]) -> dict[str, Any]:
     )
     from app.statistics.bo_acquisition import build_acquisition_context
     from app.statistics.bo_batch_acquisition import BoBatchAcquisition
+    from app.statistics.bo_kernels import BoKernelSpec
     from app.statistics.bo_mixed_search import search_mixed_acquisition
     from app.statistics.bo_observation_groups import (
         BoObservationGroupsError,
@@ -37,6 +38,18 @@ def calculate_noise_aware_batch(payload: dict[str, Any]) -> dict[str, Any]:
     from app.statistics.bo_surrogate import BoSurrogatePolicy, fit_bo_surrogate
 
     started = time.perf_counter()
+    request_version = payload.get("schema_version", 2)
+    kernel_spec = None
+    if request_version == 3:
+        raw_kernel = payload.get("kernel")
+        if not isinstance(raw_kernel, dict) or set(raw_kernel) != {"kind"}:
+            raise BayesianOptimizationError("bayesian_surrogate_kernel_invalid")
+        try:
+            kernel_spec = BoKernelSpec(**raw_kernel)
+        except (TypeError, ValueError) as exc:
+            raise BayesianOptimizationError("bayesian_surrogate_kernel_invalid") from exc
+    elif request_version != 2 or "kernel" in payload:
+        raise BayesianOptimizationError("bayesian_surrogate_kernel_invalid")
     factors = _validated_factors(payload.get("factors"))
     constraints = _validated_constraints(payload.get("constraints"), factors)
     excluded = _validated_excluded_points(payload.get("excluded_normalized"), factors)
@@ -97,6 +110,7 @@ def calculate_noise_aware_batch(payload: dict[str, Any]) -> dict[str, Any]:
         group_member_indices=tuple(group.member_indices for group in view.groups)
         if view.mode == "exact_replicates"
         else None,
+        kernel_spec=kernel_spec,
     )
     context, incumbent = build_acquisition_context(
         model,
@@ -210,8 +224,10 @@ def calculate_noise_aware_batch(payload: dict[str, Any]) -> dict[str, Any]:
         "objective_goal_type": objective["goal_type"],
         "target_scaled": context.target_scaled,
     }
+    if kernel_spec is not None:
+        shared_model["factor_ids"] = [factor["factor_id"] for factor in factors]
     return {
-        "schema_version": RESULT_SCHEMA_VERSION,
+        "schema_version": request_version,
         "batch_policy": POLICY_VERSION,
         "batch_size": options["batch_size"],
         "shared_model": shared_model,

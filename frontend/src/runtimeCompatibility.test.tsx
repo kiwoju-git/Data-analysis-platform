@@ -102,7 +102,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: EXPECTED_API_CONTRACT_VERSION,
-    metadata_schema_version: 24,
+    metadata_schema_version: 25,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -122,6 +122,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
       bayesian_lhs_initial_design: true,
       bayesian_batch_recommendation: true,
       bayesian_recommendation_review: true,
+      bayesian_numeric_kernels: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },

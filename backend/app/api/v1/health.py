@@ -38,6 +38,7 @@ class RuntimeCapabilities(BaseModel):
     bayesian_lhs_initial_design: bool
     bayesian_batch_recommendation: bool
     bayesian_recommendation_review: bool
+    bayesian_numeric_kernels: bool
     bayesian_objective_goal_modes: bool
 
 

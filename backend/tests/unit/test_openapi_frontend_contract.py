@@ -63,7 +63,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/recommendation-reviews/{review_id}/confirm",
         success_status="201",
-        response_schema="BayesianNoiseBatchResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianNoiseBatchResponse", "BayesianKernelBatchResponse"}
+        ),
         parameters=frozenset({("study_id", "path"), ("review_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -848,7 +851,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="201",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianRecommendationResponse", "BayesianNoiseBatchResponse"}
+            {
+                "BayesianRecommendationResponse",
+                "BayesianNoiseBatchResponse",
+                "BayesianKernelBatchResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
@@ -884,7 +891,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="201",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"}
+            {
+                "BayesianRecommendationBatchResponse",
+                "BayesianNoiseBatchResponse",
+                "BayesianKernelBatchResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
@@ -912,7 +923,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"}
+            {
+                "BayesianRecommendationBatchResponse",
+                "BayesianNoiseBatchResponse",
+                "BayesianKernelBatchResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
     ),
@@ -1985,6 +2000,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "bayesian_lhs_initial_design",
                 "bayesian_batch_recommendation",
                 "bayesian_recommendation_review",
+                "bayesian_numeric_kernels",
                 "bayesian_objective_goal_modes",
             }
         ),
@@ -2008,6 +2024,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "bayesian_lhs_initial_design",
                 "bayesian_batch_recommendation",
                 "bayesian_recommendation_review",
+                "bayesian_numeric_kernels",
                 "bayesian_objective_goal_modes",
             }
         ),
@@ -3571,7 +3588,13 @@ def test_bayesian_versioned_response_and_replicate_contracts(
     openapi_schema: dict[str, Any],
 ) -> None:
     schemas = openapi_schema["components"]["schemas"]
-    batches = frozenset({"BayesianRecommendationBatchResponse", "BayesianNoiseBatchResponse"})
+    batches = frozenset(
+        {
+            "BayesianRecommendationBatchResponse",
+            "BayesianNoiseBatchResponse",
+            "BayesianKernelBatchResponse",
+        }
+    )
     trials = frozenset({"BayesianTrialResponse", "BayesianReplicateTrialResponse"})
     assert (
         _schema_any_of_ref_names(
@@ -3582,7 +3605,7 @@ def test_bayesian_versioned_response_and_replicate_contracts(
     latest = schemas["BayesianAnyLatestBatchResponse"]["properties"]["item"]
     assert _schema_any_of_ref_names(latest) == batches
     assert {"type": "null"} in latest["anyOf"]
-    assert len(latest["anyOf"]) == 3
+    assert len(latest["anyOf"]) == 4
     assert (
         _schema_any_of_ref_names(
             schemas["BayesianTrialListResponse"]["properties"]["items"]["items"]
@@ -3605,6 +3628,26 @@ def test_bayesian_versioned_response_and_replicate_contracts(
     ):
         assert legacy[field_name]["const"] == old
         assert current[field_name]["const"] == new
+    kernels = schemas["BayesianKernelBatchResponse"]["properties"]
+    assert kernels["method_version"]["const"] == "0.8.0"
+    for field_name, version in (
+        ("config_schema_version", 3),
+        ("result_schema_version", 3),
+        ("model_schema_version", 4),
+        ("item_schema_version", 2),
+    ):
+        assert kernels[field_name]["const"] == version
+    kernel_request = schemas["BayesianKernelBatchCreateRequest"]
+    assert "kernel" in kernel_request["required"]
+    assert kernel_request["properties"]["schema_version"]["const"] == 3
+    assert schemas["BayesianNoiseBatchCreateRequest"]["properties"]["schema_version"]["const"] == 2
+    assert "kernel" not in schemas["BayesianNoiseBatchCreateRequest"]["properties"]
+    assert set(schemas["BayesianKernelRequest"]["properties"]["kind"]["enum"]) == {
+        "matern_5_2",
+        "matern_3_2",
+        "gaussian",
+        "exponential",
+    }
     assert "replicate_of_trial_id" not in schemas["BayesianTrialResponse"]["properties"]
     replicate = schemas["BayesianReplicateTrialResponse"]
     assert replicate["properties"]["origin"]["const"] == "replicate"

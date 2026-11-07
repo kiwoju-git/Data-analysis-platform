@@ -17,11 +17,16 @@ from app.api.v1.schemas.bayesian import (
     BayesianTrialResponse,
 )
 from app.api.v1.schemas.bayesian_noise import (
-    BayesianNoiseBatchCreateRequest,
+    BayesianCurrentBatchRequest,
+    BayesianCurrentBatchResponse,
+    BayesianCurrentCalculation,
+    BayesianCurrentSingleRequest,
+    BayesianKernelBatchCreateRequest,
+    BayesianKernelCalculation,
     BayesianNoiseBatchItem,
-    BayesianNoiseBatchResponse,
-    BayesianNoiseCalculation,
-    BayesianNoiseSingleCreateRequest,
+    parse_current_batch_request,
+    parse_current_batch_response,
+    parse_current_calculation,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -63,8 +68,8 @@ def _sha(value: Any) -> str:
 
 
 def create_noise_single(
-    settings: Settings, study_id: UUID, body: BayesianNoiseSingleCreateRequest
-) -> BayesianNoiseBatchResponse:
+    settings: Settings, study_id: UUID, body: BayesianCurrentSingleRequest
+) -> BayesianCurrentBatchResponse:
     from app.services.bayesian_studies import get_bayesian_study
 
     study = get_bayesian_study(settings, study_id)
@@ -79,7 +84,7 @@ def create_noise_single(
         search[new] = search.pop(old)
     search["batch_policy"] = POLICY
     goal = study.objective.goal_type or study.objective.direction
-    request = BayesianNoiseBatchCreateRequest.model_validate(
+    request = parse_current_batch_request(
         {
             **body.model_dump(mode="json", exclude={"search"}),
             "search": search,
@@ -96,9 +101,14 @@ def create_noise_single(
 
 
 def worker_payload(
-    study: Any, body: BayesianNoiseBatchCreateRequest, completed: list[Any]
+    study: Any, body: BayesianCurrentBatchRequest, completed: list[Any]
 ) -> dict[str, Any]:
     return {
+        **(
+            {"schema_version": 3, "kernel": body.kernel.model_dump(mode="json")}
+            if isinstance(body, BayesianKernelBatchCreateRequest)
+            else {}
+        ),
         "factors": [
             {
                 "factor_id": f.factor_id,
@@ -136,15 +146,15 @@ def worker_payload(
 
 
 def create_noise_batch(
-    settings: Settings, study_id: UUID, body: BayesianNoiseBatchCreateRequest
-) -> BayesianNoiseBatchResponse:
+    settings: Settings, study_id: UUID, body: BayesianCurrentBatchRequest
+) -> BayesianCurrentBatchResponse:
     study, payload = validated_noise_source(settings, study_id, body)
     calculated = calculate_noise_recommendation(payload, body)
     return commit_noise_batch(settings, study, body, calculated)
 
 
 def validated_noise_source(
-    settings: Settings, study_id: UUID, body: BayesianNoiseBatchCreateRequest
+    settings: Settings, study_id: UUID, body: BayesianCurrentBatchRequest
 ) -> tuple[Any, dict[str, Any]]:
     from app.services.bayesian_studies import get_bayesian_study
 
@@ -176,10 +186,10 @@ def validated_noise_source(
 
 
 def calculate_noise_recommendation(
-    payload: dict[str, Any], body: BayesianNoiseBatchCreateRequest
-) -> BayesianNoiseCalculation:
+    payload: dict[str, Any], body: BayesianCurrentBatchRequest
+) -> BayesianCurrentCalculation:
     try:
-        calculated = BayesianNoiseCalculation.model_validate(
+        calculated = parse_current_calculation(
             _run_worker(payload, timeout_ms=body.search.time_budget_ms + 20_000)
         )
     except ValidationError as exc:
@@ -188,10 +198,10 @@ def calculate_noise_recommendation(
     return calculated
 
 
-def noise_config(study: Any, body: BayesianNoiseBatchCreateRequest) -> dict[str, Any]:
+def noise_config(study: Any, body: BayesianCurrentBatchRequest) -> dict[str, Any]:
     history = study.observation_history
     return {
-        "schema_version": 2,
+        "schema_version": body.schema_version,
         "study_id": str(study.study_id),
         "study_version_id": str(study.study_version_id),
         "source_history_revision_id": str(history.history_revision_id),
@@ -204,11 +214,11 @@ def noise_config(study: Any, body: BayesianNoiseBatchCreateRequest) -> dict[str,
 def commit_noise_batch(
     settings: Settings,
     study: Any,
-    body: BayesianNoiseBatchCreateRequest,
-    calculated: BayesianNoiseCalculation,
+    body: BayesianCurrentBatchRequest,
+    calculated: BayesianCurrentCalculation,
     *,
     reviewed_batch_id: UUID | None = None,
-) -> BayesianNoiseBatchResponse:
+) -> BayesianCurrentBatchResponse:
     history = study.observation_history
     batch_id = reviewed_batch_id or uuid4()
     created_at = utc_now()
@@ -274,10 +284,10 @@ def commit_noise_batch(
     }
     versions = {
         "method_id": METHOD,
-        "method_version": VERSION,
-        "config_schema_version": 2,
-        "result_schema_version": 2,
-        "model_schema_version": 3,
+        "method_version": "0.8.0" if body.schema_version == 3 else VERSION,
+        "config_schema_version": body.schema_version,
+        "result_schema_version": body.schema_version,
+        "model_schema_version": body.schema_version + 1,
         "item_schema_version": 2,
     }
     config = noise_config(study, body)
@@ -294,7 +304,7 @@ def commit_noise_batch(
         "package_versions": calculated.shared_model.package_versions,
         "created_at": created_at,
     }
-    response = BayesianNoiseBatchResponse.model_validate(
+    response = parse_current_batch_response(
         {
             **calculated.model_dump(mode="json", exclude={"schema_version", "items"}),
             **identity,
@@ -319,10 +329,10 @@ def commit_noise_batch(
         source_history_revision_id=str(history.history_revision_id),
         source_observation_history_sha256=history.observation_history_sha256,
         method_id=METHOD,
-        method_version=VERSION,
-        config_schema_version=2,
-        result_schema_version=2,
-        model_schema_version=3,
+        method_version=response.method_version,
+        config_schema_version=response.config_schema_version,
+        result_schema_version=response.result_schema_version,
+        model_schema_version=response.model_schema_version,
         item_schema_version=2,
         batch_size=body.batch_size,
         batch_policy=POLICY,
@@ -363,7 +373,7 @@ def commit_noise_batch(
 
 
 def validate_calculation(
-    result: BayesianNoiseCalculation, payload: dict[str, Any], body: BayesianNoiseBatchCreateRequest
+    result: BayesianCurrentCalculation, payload: dict[str, Any], body: BayesianCurrentBatchRequest
 ) -> None:
     from app.statistics.bo_observation_groups import (
         BoObservationGroupsError,
@@ -377,6 +387,22 @@ def validate_calculation(
     except BoObservationGroupsError as exc:
         raise _error() from exc
     model = result.shared_model
+    if result.schema_version != body.schema_version:
+        raise _error()
+    if isinstance(body, BayesianKernelBatchCreateRequest):
+        if not isinstance(result, BayesianKernelCalculation):
+            raise _error()
+        kernel = result.shared_model.signal_kernel
+        if (
+            kernel.family != body.kernel.kind
+            or result.shared_model.factor_ids != [f["factor_id"] for f in payload["factors"]]
+            or kernel.initial_length_scales != [1.0] * len(payload["factors"])
+            or kernel.amplitude_bounds != (1e-3, 1e3)
+            or kernel.length_scale_bounds != (1e-2, 1e2)
+            or not 1e-3 * (1 - 1e-12) <= kernel.amplitude <= 1e3 * (1 + 1e-12)
+            or any(not 1e-2 * (1 - 1e-12) <= v <= 1e2 * (1 + 1e-12) for v in kernel.length_scales)
+        ):
+            raise _error()
     goal = payload["objective"]["goal_type"]
     direction = -1.0 if goal == "minimize" else 1.0
     if (
@@ -575,7 +601,7 @@ def validate_noise_record(
     trials: list[Any],
     history: Any,
     record: BayesianRecommendationBatchRecord,
-) -> BayesianNoiseBatchResponse:
+) -> BayesianCurrentBatchResponse:
     try:
         if (
             hashlib.sha256(record.config_json.encode()).hexdigest() != record.config_sha256
@@ -583,8 +609,8 @@ def validate_noise_record(
         ):
             raise _error()
         config = json.loads(record.config_json)
-        body = BayesianNoiseBatchCreateRequest.model_validate(config["request"])
-        response = BayesianNoiseBatchResponse.model_validate_json(record.result_json)
+        body = parse_current_batch_request(config["request"])
+        response = parse_current_batch_response(json.loads(record.result_json))
         immutable = response.model_dump(mode="json", exclude={"is_latest", "batch_state"})
         immutable["result_sha256"] = "0" * 64
         identity = {
@@ -595,17 +621,24 @@ def validate_noise_record(
             "source_observation_history_sha256": record.source_observation_history_sha256,
         }
         if (
-            config != {"schema_version": 2, **identity, "request": body.model_dump(mode="json")}
+            config
+            != {
+                "schema_version": body.schema_version,
+                **identity,
+                "request": body.model_dump(mode="json"),
+            }
             or _sha(immutable) != response.result_sha256
             or record.method_id != METHOD
-            or record.method_version != VERSION
+            or record.method_version != ("0.8.0" if body.schema_version == 3 else VERSION)
             or (
                 record.config_schema_version,
                 record.result_schema_version,
                 record.model_schema_version,
                 record.item_schema_version,
             )
-            != (2, 2, 3, 2)
+            != (body.schema_version, body.schema_version, body.schema_version + 1, 2)
+            or response.result_schema_version != body.schema_version
+            or response.provenance.result_schema_version != body.schema_version
             or record.batch_policy != POLICY
             or record.batch_id != str(response.batch_id)
             or record.batch_size != response.batch_size
@@ -668,9 +701,9 @@ def validate_noise_record(
                 if t.trial_number < earliest_number
             ],
         }
-        calculated = BayesianNoiseCalculation.model_validate(
+        calculated = parse_current_calculation(
             {
-                "schema_version": 2,
+                "schema_version": body.schema_version,
                 **response.model_dump(
                     mode="json",
                     include={

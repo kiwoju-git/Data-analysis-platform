@@ -26,14 +26,22 @@ runtime compatibility is recorded above. See [method contract](docs/two_variance
 
 ### Noise-Aware BO and GPR
 
-The API30 source workflow separates **Review experiment candidates** from
+The API31 source workflow separates **Review experiment candidates** from
 **Confirm these experiments**. Reviewing does not add trials; confirmation saves
 the exact ordered batch without another fit and supports safe explicit retry.
 Unconfirmed reviews are temporary (up to20 minutes/eight reviews, or until server
-restart). Existing saved recommendations remain readable. Kernel selection,
-multiresponse desirability and editable candidate tables are later stages, not
-features of this first workflow change. See the
+restart). Numeric BO now selects Gaussian, Matern5/2 (default), Matern3/2 or
+Exponential. The selected family and fitted parameters remain attached to the
+review, committed result and report. This matches JMP19.2's numeric option names,
+not a verified match to its fitted results. Multiresponse desirability and editable
+candidate tables remain later stages. See the
 [implementation stages and evidence](docs/bo_jmp_workflow_stages.md).
+
+API31/metadata25 extends the existing batch table's version constraint for
+method0.8.0/config3/result3/model4. Back up an existing workspace offline before
+upgrade; old code cannot open metadata25. Legacy recommendation JSON/hashes are
+preserved, not recalculated. See [kernel contract and current evidence](docs/bo_kernel_alignment.md).
+No new Linux Release is published by this stage.
 
 BO separates observation noise from numerical jitter and uses latent-posterior
 EI/ETI, reproducible joint-latent batch planning, executable mixed-domain search

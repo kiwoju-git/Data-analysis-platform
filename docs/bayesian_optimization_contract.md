@@ -1,18 +1,20 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-10-21
+Last updated: 2026-11-07
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.7.0`. New studies use study schema `4`; readers retain study schemas `1`,
+`0.8.0`. New studies use study schema `4`; readers retain study schemas `1`,
 `2`, and `3` and their recorded method versions without rewriting checksums.
 Legacy definition verification reconstructs the schema-specific factor and
 initial-design field set; schema-4 defaults are never injected into a schema-1
 through schema-3 checksum payload. The application stores an immutable bounded study and
-observation history, fits a Matérn 5/2 Gaussian Process to explicit completed
-trials, and creates either one sequential candidate or a synchronous batch of
-two through eight pending confirmation trials. It never runs the user's
+observation history, fits the selected numeric Gaussian Process to explicit
+completed trials, and reviews either one sequential candidate or a synchronous
+batch of two through eight. Only explicit confirmation creates pending trials.
+Matérn5/2 remains the default; Gaussian, Matérn3/2 and Exponential are available
+under the [versioned kernel contract](bo_kernel_alignment.md). It never runs the user's
 objective.
 
 No generic analysis-run execution API is provided. `POST /api/v1/analysis-runs`
@@ -22,8 +24,9 @@ study lifecycle. A recommendation is not an observation and is not a claim of
 a guaranteed global optimum.
 
 User guidance describes the current executable behavior directly: completed
-manual observations are used to fit the Matérn-5/2 Gaussian Process and
-Expected Improvement proposes the next confirmation experiment. It must not
+manual observations are used to fit the selected Gaussian Process and latent
+Expected Improvement (EI) or Expected Target Improvement (ETI) proposes the
+next confirmation experiment. It must not
 refer to this method as planning-only, and it must always say that the proposal
 is not an observed value, does not run the experiment, and does not guarantee a
 global optimum.
@@ -44,6 +47,8 @@ Current routes are:
 - `POST/GET .../{study_id}/recommendation-batches`;
 - `GET .../{study_id}/recommendation-batches/latest`;
 - `GET .../{study_id}/recommendation-batches/{batch_id}`.
+- `POST .../{study_id}/recommendation-reviews`;
+- `POST .../{study_id}/recommendation-reviews/{review_id}/confirm`.
 
 The frontend route uses the DOE module's dynamically loaded thin
 `BayesianOptimizationPanel` compatibility export over

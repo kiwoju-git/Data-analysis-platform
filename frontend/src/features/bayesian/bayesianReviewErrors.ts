@@ -4,6 +4,11 @@ import { boText } from "./boNoisePolicy";
 export function bayesianReviewErrorDetails(code: string, locale: AppLocale) {
   const text = (ko: string, en: string) => boText(locale, ko, en);
   const messages: Record<string, { title: string; message: string; action: string }> = {
+    bayesian_kernel_invalid: {
+      title: text("커널 설정을 확인하세요", "Check the kernel setting"),
+      message: text("지원하지 않는 신호 커널입니다.", "The signal kernel is not supported."),
+      action: text("목록에서 커널을 선택한 뒤 후보를 다시 검토하세요.", "Choose a kernel from the list and review new candidates."),
+    },
     bayesian_review_expired: {
       title: text("후보 검토가 만료되었습니다", "Candidate review expired"),
       message: text("임시 후보가 만료되었거나 서버가 재시작되었습니다.", "The temporary review expired or the server restarted."),

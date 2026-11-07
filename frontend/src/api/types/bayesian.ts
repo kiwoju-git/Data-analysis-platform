@@ -690,6 +690,17 @@ export interface BayesianNoiseBatchCreateRequest extends Omit<BayesianRecommenda
   observation_policy: BayesianObservationPolicyRequest;
   batch_options: { posterior_sample_count: number; min_batch_distance_normalized: number };
 }
+export type BayesianKernelKind = "matern_5_2" | "matern_3_2" | "gaussian" | "exponential";
+export interface BayesianKernelBatchCreateRequest extends Omit<BayesianNoiseBatchCreateRequest, "schema_version"> {
+  schema_version: 3;
+  kernel: { kind: BayesianKernelKind };
+}
+export interface BayesianSignalKernelParameters {
+  amplitude: number;
+  length_scales: number[];
+  amplitude_bounds: [number, number];
+  length_scale_bounds: [number, number];
+}
 export interface BayesianNoiseBatchItemResponse {
   item_id: string;
   batch_id: string;
@@ -733,6 +744,7 @@ export interface BayesianNoiseBatchResponse extends Omit<BayesianLegacyRecommend
   shared_model: {
     schema_version: 3;
     policy_version: "bo_noise_latent_v2";
+    signal_kernel: BayesianSignalKernelParameters & { kind: "constant_times_matern_5_2_ard" };
     noise: { mode: BayesianSurrogatePolicyRequest["noise_mode"]; initial_variance_scaled: number;
       bounds_scaled: [number, number] | null; fixed_sd_raw: number | null; fitted_variance_scaled: number };
     observation_noise_sd_raw: number;
@@ -780,7 +792,38 @@ export interface BayesianNoiseBatchResponse extends Omit<BayesianLegacyRecommend
       config_schema_version: 2; result_schema_version: 2; model_schema_version: 3; item_schema_version: 2;
     };
 }
-export type BayesianRecommendationBatchResponse = BayesianLegacyRecommendationBatchResponse | BayesianNoiseBatchResponse;
+export interface BayesianKernelBatchResponse extends Omit<BayesianNoiseBatchResponse,
+  "config_schema_version" | "result_schema_version" | "model_schema_version" | "shared_model" | "provenance"> {
+  config_schema_version: 3;
+  result_schema_version: 3;
+  model_schema_version: 4;
+  shared_model: Omit<BayesianNoiseBatchResponse["shared_model"], "schema_version" | "policy_version" | "signal_kernel"> & {
+    schema_version: 4;
+    policy_version: "bo_noise_latent_kernels_v3";
+    factor_ids: string[];
+    signal_kernel: BayesianSignalKernelParameters & {
+      kind: "constant_times_radial_ard";
+      family: BayesianKernelKind;
+      convention: "radial_scaled_euclidean_v1";
+      coordinate_system: "factor_bounds_normalized_0_1";
+      initial_amplitude: 1;
+      initial_length_scales: number[];
+    };
+  };
+  provenance: Omit<BayesianNoiseBatchResponse["provenance"],
+    "config_schema_version" | "result_schema_version" | "model_schema_version"> & {
+    config_schema_version: 3; result_schema_version: 3; model_schema_version: 4;
+  };
+}
+export type BayesianCurrentBatchResponse = BayesianNoiseBatchResponse | BayesianKernelBatchResponse;
+export type BayesianRecommendationBatchResponse = BayesianLegacyRecommendationBatchResponse | BayesianCurrentBatchResponse;
+
+type BayesianReviewCalculation<T extends BayesianCurrentBatchResponse> = Pick<T,
+  "batch_size" | "batch_policy" | "shared_model" | "incumbent" |
+  "observation_view" | "search_budget" | "warnings" | "limitations"> & {
+  schema_version: T["result_schema_version"];
+  items: Array<Omit<BayesianNoiseBatchItemResponse, "item_id" | "batch_id" | "trial" | "current_trial">>;
+};
 
 export interface BayesianRecommendationReviewResponse {
   schema_version: 1;
@@ -791,12 +834,7 @@ export interface BayesianRecommendationReviewResponse {
   source_observation_history_sha256: string;
   config_sha256: string;
   expires_at: string;
-  calculation: Pick<BayesianNoiseBatchResponse,
-    "batch_size" | "batch_policy" | "shared_model" | "incumbent" |
-    "observation_view" | "search_budget" | "warnings" | "limitations"> & {
-    schema_version: 2;
-    items: Array<Omit<BayesianNoiseBatchItemResponse, "item_id" | "batch_id" | "trial" | "current_trial">>;
-  };
+  calculation: BayesianReviewCalculation<BayesianNoiseBatchResponse> | BayesianReviewCalculation<BayesianKernelBatchResponse>;
 }
 
 export interface BayesianRecommendationReviewConfirmRequest {

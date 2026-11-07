@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-SCHEMA_VERSION: Final = 24
+SCHEMA_VERSION: Final = 25
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -1707,6 +1707,60 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
                 REFERENCES bayesian_observation_history_revisions(
                     study_version_id, history_revision_id) ON DELETE CASCADE
         );
+        """,
+    ),
+    Migration(
+        version=25,
+        name="bayesian_numeric_kernel_contract",
+        requires_foreign_keys_off=True,
+        sql="""
+        BEGIN IMMEDIATE;
+        CREATE TABLE bayesian_recommendation_batches_v25 (
+            batch_id TEXT PRIMARY KEY,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            source_history_revision_id TEXT NOT NULL
+                REFERENCES bayesian_observation_history_revisions(history_revision_id)
+                ON DELETE RESTRICT,
+            source_observation_history_sha256 TEXT NOT NULL
+                CHECK (length(source_observation_history_sha256)=64),
+            method_id TEXT NOT NULL,
+            method_version TEXT NOT NULL,
+            batch_size INTEGER NOT NULL CHECK (batch_size BETWEEN 1 AND 8),
+            batch_policy TEXT NOT NULL,
+            config_schema_version INTEGER NOT NULL,
+            result_schema_version INTEGER NOT NULL,
+            model_schema_version INTEGER NOT NULL,
+            item_schema_version INTEGER NOT NULL,
+            config_json TEXT NOT NULL,
+            config_sha256 TEXT NOT NULL CHECK (length(config_sha256)=64),
+            result_json TEXT NOT NULL,
+            result_sha256 TEXT NOT NULL CHECK (length(result_sha256)=64),
+            created_at TEXT NOT NULL,
+            app_version TEXT NOT NULL,
+            CHECK (
+                (batch_policy='greedy_posterior_mean_fantasy_ei_v1'
+                 AND config_schema_version=1 AND result_schema_version=1
+                 AND model_schema_version=2 AND item_schema_version=1)
+                OR
+                (batch_policy='greedy_mc_joint_latent_improvement_v2'
+                 AND config_schema_version=2 AND result_schema_version=2
+                 AND model_schema_version=3 AND item_schema_version=2)
+                OR
+                (batch_policy='greedy_mc_joint_latent_improvement_v2'
+                 AND config_schema_version=3 AND result_schema_version=3
+                 AND model_schema_version=4 AND item_schema_version=2)
+            )
+        );
+        INSERT INTO bayesian_recommendation_batches_v25
+            SELECT * FROM bayesian_recommendation_batches;
+        DROP TABLE bayesian_recommendation_batches;
+        ALTER TABLE bayesian_recommendation_batches_v25 RENAME TO bayesian_recommendation_batches;
+        CREATE INDEX idx_bayesian_recommendation_batches_version_created
+            ON bayesian_recommendation_batches(study_version_id, created_at, batch_id);
+        CREATE UNIQUE INDEX uq_bayesian_batch_report_owner
+            ON bayesian_recommendation_batches(
+                study_version_id,source_history_revision_id,batch_id);
         """,
     ),
 )

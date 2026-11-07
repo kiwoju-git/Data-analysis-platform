@@ -31,9 +31,9 @@ from app.api.v1.schemas.bayesian_noise import (
     BayesianAnyBatchListResponse,
     BayesianAnyBatchResponse,
     BayesianAnyLatestBatchResponse,
-    BayesianNoiseBatchCreateRequest,
-    BayesianNoiseBatchResponse,
-    BayesianNoiseSingleCreateRequest,
+    BayesianCurrentBatchRequest,
+    BayesianCurrentBatchResponse,
+    BayesianCurrentSingleRequest,
 )
 from app.api.v1.schemas.bayesian_review import (
     BayesianRecommendationReviewConfirmRequest,
@@ -77,7 +77,7 @@ router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
     response_model=BayesianRecommendationReviewResponse,
 )
 def create_bayesian_review_route(
-    request: Request, study_id: UUID, body: BayesianNoiseBatchCreateRequest
+    request: Request, study_id: UUID, body: BayesianCurrentBatchRequest
 ) -> BayesianRecommendationReviewResponse:
     return create_bayesian_review(
         request.app.state.settings, request.app.state.bayesian_reviews, study_id, body
@@ -86,7 +86,7 @@ def create_bayesian_review_route(
 
 @router.post(
     "/{study_id}/recommendation-reviews/{review_id}/confirm",
-    response_model=BayesianNoiseBatchResponse,
+    response_model=BayesianCurrentBatchResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def confirm_bayesian_review_route(
@@ -94,7 +94,7 @@ def confirm_bayesian_review_route(
     study_id: UUID,
     review_id: UUID,
     body: BayesianRecommendationReviewConfirmRequest,
-) -> BayesianNoiseBatchResponse:
+) -> BayesianCurrentBatchResponse:
     return confirm_bayesian_review(
         request.app.state.settings, request.app.state.bayesian_reviews, study_id, review_id, body
     )
@@ -265,15 +265,15 @@ def get_bayesian_history_route(
 
 @router.post(
     "/{study_id}/recommendations",
-    response_model=BayesianRecommendationResponse | BayesianNoiseBatchResponse,
+    response_model=BayesianRecommendationResponse | BayesianCurrentBatchResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_recommendation_route(
     request: Request,
     study_id: UUID,
-    body: BayesianRecommendationCreateRequest | BayesianNoiseSingleCreateRequest,
-) -> BayesianRecommendationResponse | BayesianNoiseBatchResponse:
-    if isinstance(body, BayesianNoiseSingleCreateRequest):
+    body: BayesianRecommendationCreateRequest | BayesianCurrentSingleRequest,
+) -> BayesianRecommendationResponse | BayesianCurrentBatchResponse:
+    if isinstance(body, BayesianCurrentSingleRequest):
         from app.services.bayesian_noise_recommendations import create_noise_single
 
         return create_noise_single(request.app.state.settings, study_id, body)
@@ -336,7 +336,7 @@ def get_bayesian_recommendation_route(
 def create_bayesian_recommendation_batch_route(
     request: Request,
     study_id: UUID,
-    body: BayesianRecommendationBatchCreateRequest | BayesianNoiseBatchCreateRequest,
+    body: BayesianRecommendationBatchCreateRequest | BayesianCurrentBatchRequest,
 ) -> BayesianAnyBatchResponse:
     return create_bayesian_recommendation_batch(
         request.app.state.settings,

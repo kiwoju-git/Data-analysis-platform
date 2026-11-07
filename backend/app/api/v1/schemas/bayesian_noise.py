@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import Any, Final, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, TypeAdapter, model_validator
 
 from app.api.v1.schemas.bayesian import (
     BayesianBatchAcquisitionRequest,
@@ -83,8 +83,7 @@ class BayesianNoiseBatchSearchRequest(_StrictModel):
     batch_policy: Literal["greedy_mc_joint_latent_improvement_v2"] = NOISE_BATCH_POLICY
 
 
-class BayesianNoiseBatchCreateRequest(_StrictModel):
-    schema_version: Literal[2]
+class _NoiseBatchRequestFields(_StrictModel):
     expected_history_revision_id: UUID
     expected_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     execution_mode: BayesianExecutionMode = "sequential_single"
@@ -102,7 +101,7 @@ class BayesianNoiseBatchCreateRequest(_StrictModel):
     )
 
     @model_validator(mode="after")
-    def validate_batch(self) -> BayesianNoiseBatchCreateRequest:
+    def validate_batch(self) -> _NoiseBatchRequestFields:
         if self.execution_mode == "sequential_single" and self.batch_size != 1:
             raise ValueError("sequential_single requires one experiment")
         if self.execution_mode == "parallel_batch" and self.batch_size < 2:
@@ -115,8 +114,20 @@ class BayesianNoiseBatchCreateRequest(_StrictModel):
         return self
 
 
-class BayesianNoiseSingleCreateRequest(_StrictModel):
+class BayesianNoiseBatchCreateRequest(_NoiseBatchRequestFields):
     schema_version: Literal[2]
+
+
+class BayesianKernelRequest(_StrictModel):
+    kind: Literal["matern_5_2", "matern_3_2", "gaussian", "exponential"]
+
+
+class BayesianKernelBatchCreateRequest(_NoiseBatchRequestFields):
+    schema_version: Literal[3]
+    kernel: BayesianKernelRequest
+
+
+class _NoiseSingleRequestFields(_StrictModel):
     expected_history_revision_id: UUID
     expected_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     search: BayesianRecommendationSearchRequest = Field(
@@ -133,12 +144,33 @@ class BayesianNoiseSingleCreateRequest(_StrictModel):
     )
 
 
-class BayesianSignalKernel(_StrictModel):
-    kind: Literal["constant_times_matern_5_2_ard"]
+class BayesianNoiseSingleCreateRequest(_NoiseSingleRequestFields):
+    schema_version: Literal[2]
+
+
+class BayesianKernelSingleCreateRequest(_NoiseSingleRequestFields):
+    schema_version: Literal[3]
+    kernel: BayesianKernelRequest
+
+
+class _SignalKernelFields(_StrictModel):
     amplitude: FiniteFloat = Field(gt=0)
     length_scales: list[FiniteFloat] = Field(min_length=1, max_length=10)
     amplitude_bounds: tuple[FiniteFloat, FiniteFloat]
     length_scale_bounds: tuple[FiniteFloat, FiniteFloat]
+
+
+class BayesianSignalKernel(_SignalKernelFields):
+    kind: Literal["constant_times_matern_5_2_ard"]
+
+
+class BayesianSelectedSignalKernel(_SignalKernelFields):
+    kind: Literal["constant_times_radial_ard"]
+    family: Literal["matern_5_2", "matern_3_2", "gaussian", "exponential"]
+    convention: Literal["radial_scaled_euclidean_v1"]
+    coordinate_system: Literal["factor_bounds_normalized_0_1"]
+    initial_amplitude: FiniteFloat = Field(ge=1, le=1)
+    initial_length_scales: list[FiniteFloat] = Field(min_length=1, max_length=10)
 
 
 class BayesianFittedNoise(_StrictModel):
@@ -185,10 +217,7 @@ class BayesianNoiseOptimizer(_StrictModel):
     starts: list[BayesianOptimizerStart]
 
 
-class BayesianNoiseSharedModel(_StrictModel):
-    schema_version: Literal[3]
-    policy_version: Literal["bo_noise_latent_v2"]
-    signal_kernel: BayesianSignalKernel
+class _NoiseSharedModelFields(_StrictModel):
     noise: BayesianFittedNoise
     observation_noise_sd_raw: FiniteFloat = Field(ge=0)
     jitter: FiniteFloat = Field(ge=1e-12, le=1e-3)
@@ -202,6 +231,19 @@ class BayesianNoiseSharedModel(_StrictModel):
     package_versions: dict[str, str]
     objective_goal_type: Literal["maximize", "minimize", "match_target"]
     target_scaled: FiniteFloat | None
+
+
+class BayesianNoiseSharedModel(_NoiseSharedModelFields):
+    schema_version: Literal[3]
+    policy_version: Literal["bo_noise_latent_v2"]
+    signal_kernel: BayesianSignalKernel
+
+
+class BayesianKernelSharedModel(_NoiseSharedModelFields):
+    schema_version: Literal[4]
+    policy_version: Literal["bo_noise_latent_kernels_v3"]
+    signal_kernel: BayesianSelectedSignalKernel
+    factor_ids: list[str] = Field(min_length=1, max_length=10)
 
 
 class BayesianLatentIncumbent(_StrictModel):
@@ -348,17 +390,25 @@ class BayesianNoiseCalculatedItem(_StrictModel):
     constraint_evaluations: list[BayesianConstraintEvaluationResponse]
 
 
-class BayesianNoiseCalculation(_StrictModel):
-    schema_version: Literal[2]
+class _NoiseCalculationFields(_StrictModel):
     batch_policy: Literal["greedy_mc_joint_latent_improvement_v2"]
     batch_size: int = Field(ge=1, le=8)
-    shared_model: BayesianNoiseSharedModel
     incumbent: BayesianLatentIncumbent
     observation_view: BayesianObservationViewSummary
     items: list[BayesianNoiseCalculatedItem]
     search_budget: BayesianNoiseSearchBudget
     warnings: list[str]
     limitations: list[str]
+
+
+class BayesianNoiseCalculation(_NoiseCalculationFields):
+    schema_version: Literal[2]
+    shared_model: BayesianNoiseSharedModel
+
+
+class BayesianKernelCalculation(_NoiseCalculationFields):
+    schema_version: Literal[3]
+    shared_model: BayesianKernelSharedModel
 
 
 class BayesianNoiseBatchItem(BayesianNoiseCalculatedItem):
@@ -368,7 +418,7 @@ class BayesianNoiseBatchItem(BayesianNoiseCalculatedItem):
     current_trial: BayesianRecommendationCurrentTrialResponse
 
 
-class BayesianNoiseBatchProvenance(_StrictModel):
+class _NoiseProvenanceFields(_StrictModel):
     study_id: UUID
     study_version_id: UUID
     batch_id: UUID
@@ -376,10 +426,6 @@ class BayesianNoiseBatchProvenance(_StrictModel):
     source_observation_history_sha256: str
     definition_sha256: str
     method_id: Literal["doe.bayesian_optimization"]
-    method_version: Literal["0.7.0"]
-    config_schema_version: Literal[2]
-    result_schema_version: Literal[2]
-    model_schema_version: Literal[3]
     item_schema_version: Literal[2]
     app_version: str
     python_version: str
@@ -389,7 +435,21 @@ class BayesianNoiseBatchProvenance(_StrictModel):
     created_at: str
 
 
-class BayesianNoiseBatchResponse(_StrictModel):
+class BayesianNoiseBatchProvenance(_NoiseProvenanceFields):
+    method_version: Literal["0.7.0"]
+    config_schema_version: Literal[2]
+    result_schema_version: Literal[2]
+    model_schema_version: Literal[3]
+
+
+class BayesianKernelBatchProvenance(_NoiseProvenanceFields):
+    method_version: Literal["0.8.0"]
+    config_schema_version: Literal[3]
+    result_schema_version: Literal[3]
+    model_schema_version: Literal[4]
+
+
+class _NoiseBatchResponseFields(_StrictModel):
     batch_id: UUID
     study_id: UUID
     study_version_id: UUID
@@ -397,16 +457,11 @@ class BayesianNoiseBatchResponse(_StrictModel):
     source_observation_history_sha256: str
     definition_sha256: str
     method_id: Literal["doe.bayesian_optimization"]
-    method_version: Literal["0.7.0"]
-    config_schema_version: Literal[2]
-    result_schema_version: Literal[2]
-    model_schema_version: Literal[3]
     item_schema_version: Literal[2]
     batch_policy: Literal["greedy_mc_joint_latent_improvement_v2"]
     execution_mode: BayesianExecutionMode
     batch_size: int = Field(ge=1, le=8)
     acquisition: BayesianBatchAcquisitionRequest
-    shared_model: BayesianNoiseSharedModel
     incumbent: BayesianLatentIncumbent
     observation_view: BayesianObservationViewSummary
     search_budget: BayesianNoiseSearchBudget
@@ -415,7 +470,6 @@ class BayesianNoiseBatchResponse(_StrictModel):
     limitations: list[str]
     config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     result_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    provenance: BayesianNoiseBatchProvenance
     created_at: str
     is_latest: bool = False
     batch_state: Literal[
@@ -424,7 +478,51 @@ class BayesianNoiseBatchResponse(_StrictModel):
     requested_total_trial_budget: int = Field(ge=2, le=200)
 
 
-BayesianAnyBatchResponse = BayesianRecommendationBatchResponse | BayesianNoiseBatchResponse
+class BayesianNoiseBatchResponse(_NoiseBatchResponseFields):
+    method_version: Literal["0.7.0"]
+    config_schema_version: Literal[2]
+    result_schema_version: Literal[2]
+    model_schema_version: Literal[3]
+    shared_model: BayesianNoiseSharedModel
+    provenance: BayesianNoiseBatchProvenance
+
+
+class BayesianKernelBatchResponse(_NoiseBatchResponseFields):
+    method_version: Literal["0.8.0"]
+    config_schema_version: Literal[3]
+    result_schema_version: Literal[3]
+    model_schema_version: Literal[4]
+    shared_model: BayesianKernelSharedModel
+    provenance: BayesianKernelBatchProvenance
+
+
+BayesianCurrentBatchRequest = BayesianNoiseBatchCreateRequest | BayesianKernelBatchCreateRequest
+BayesianCurrentSingleRequest = BayesianNoiseSingleCreateRequest | BayesianKernelSingleCreateRequest
+BayesianCurrentCalculation = BayesianNoiseCalculation | BayesianKernelCalculation
+BayesianCurrentBatchResponse = BayesianNoiseBatchResponse | BayesianKernelBatchResponse
+BayesianAnyBatchResponse = BayesianRecommendationBatchResponse | BayesianCurrentBatchResponse
+
+_REQUEST_ADAPTER: TypeAdapter[BayesianCurrentBatchRequest] = TypeAdapter(
+    BayesianCurrentBatchRequest
+)
+_CALCULATION_ADAPTER: TypeAdapter[BayesianCurrentCalculation] = TypeAdapter(
+    BayesianCurrentCalculation
+)
+_RESPONSE_ADAPTER: TypeAdapter[BayesianCurrentBatchResponse] = TypeAdapter(
+    BayesianCurrentBatchResponse
+)
+
+
+def parse_current_batch_request(value: Any) -> BayesianCurrentBatchRequest:
+    return _REQUEST_ADAPTER.validate_python(value)
+
+
+def parse_current_calculation(value: Any) -> BayesianCurrentCalculation:
+    return _CALCULATION_ADAPTER.validate_python(value)
+
+
+def parse_current_batch_response(value: Any) -> BayesianCurrentBatchResponse:
+    return _RESPONSE_ADAPTER.validate_python(value)
 
 
 class BayesianAnyBatchListResponse(_StrictModel):

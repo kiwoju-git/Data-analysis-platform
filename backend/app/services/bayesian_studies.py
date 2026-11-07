@@ -114,7 +114,7 @@ BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0"}
+    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0", "0.8.0"}
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
@@ -1837,7 +1837,7 @@ def _validate_recommendation_batches(
     pending_batch_count = 0
     total_items = 0
     for batch in batches:
-        if batch.result_schema_version == 2:
+        if batch.result_schema_version in {2, 3}:
             from app.services.bayesian_noise_recommendations import validate_noise_record
 
             response_v2 = validate_noise_record(

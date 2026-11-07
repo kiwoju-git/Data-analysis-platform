@@ -1,4 +1,4 @@
-"""Synthetic, visible BO V2 journeys shared by native CI and the exact archive."""
+"""Synthetic BO noise/kernel journeys shared by native CI and the exact archive."""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ _RECEIPT_CHECKS = (
     "same_request_id_payload",
     "no_duplicate_trials",
     "history_unchanged",
+    "numeric_kernel_choices_ui",
 )
 
 
@@ -188,6 +189,30 @@ def _open(page: Page, base: str, study_id: str) -> None:
     expect(page.locator("#bo-noise-mode")).to_be_enabled(timeout=20_000)
 
 
+def _verify_kernel_summary(
+    page: Page, model: dict, *, section: str = "bayesian-review-title"
+) -> None:
+    summary = page.locator(
+        f'section[aria-labelledby="{section}"] .bayesian-surrogate-summary'
+    )
+    expect(summary).to_have_count(1)
+    details = summary.locator("details")
+    if details.get_attribute("open") is None:
+        details.locator("summary").click()
+    expect(summary.locator("code")).to_have_text("radial_scaled_euclidean_v1")
+    rows = summary.locator("tbody tr")
+    signal = model["signal_kernel"]
+    expect(rows).to_have_count(3 + len(signal["length_scales"]))
+    for index, value in [
+        (0, signal["amplitude"]),
+        *enumerate(signal["length_scales"], 3),
+    ]:
+        cell = rows.nth(index).locator("td")
+        expect(cell).to_be_visible()
+        displayed = float(cell.inner_text().replace(",", ""))
+        assert math.isclose(displayed, value, rel_tol=1e-6, abs_tol=1e-12)
+
+
 def _recommend(page: Page) -> dict:
     button = page.get_by_role("button", name="실험 후보 검토", exact=True)
     expect(button).to_be_enabled(timeout=20_000)
@@ -208,6 +233,7 @@ def _recommend(page: Page) -> dict:
         == payload["expected_history_revision_id"]
     )
     expect(page.locator("#bayesian-review-title")).to_be_visible()
+    _verify_kernel_summary(page, review["calculation"]["shared_model"])
     with page.expect_response(
         lambda reply: reply.request.method == "POST"
         and urlsplit(reply.url).path.endswith(
@@ -227,12 +253,22 @@ def _recommend(page: Page) -> dict:
     assert after["trial_count"] == before["trial_count"] + result["batch_size"]
     assert after["observation_history"] == before["observation_history"]
     assert (
-        payload["schema_version"] == 2 and len(payload["expected_history_sha256"]) == 64
+        payload["schema_version"] == 3 and len(payload["expected_history_sha256"]) == 64
     )
-    assert result["result_schema_version"] == 2
+    assert result["result_schema_version"] == 3
+    assert result["shared_model"]["schema_version"] == 4
+    assert (
+        result["shared_model"]["signal_kernel"]["family"] == payload["kernel"]["kind"]
+    )
+    expect(page.locator("#bayesian-kernel-kind")).to_have_value(
+        payload["kernel"]["kind"]
+    )
     assert result["batch_policy"] == "greedy_mc_joint_latent_improvement_v2"
     assert result["acquisition"]["kind"] == "expected_target_improvement"
     expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+    _verify_kernel_summary(
+        page, result["shared_model"], section="bayesian-batch-result-title"
+    )
     for item in result["items"]:
         assert (
             item["trial"]["state"] == "pending"
@@ -288,7 +324,29 @@ def verify_bo_report_html(page: Page, path: Path, payload: dict) -> None:
     expect(section).to_contain_text("9 / 7 / 7")
     attachment = payload["attachment"]
     factors = payload["definition"]["factors"]
-    table = section.locator("table").nth(1)
+    table = section.locator("table").filter(
+        has=page.get_by_role("columnheader", name="Batch rank", exact=True)
+    )
+    if attachment["result_schema_version"] == 3:
+        expect(section).to_contain_text("radial_scaled_euclidean_v1")
+        expect(section).to_contain_text("not verified JMP numerical parity")
+        kernel = attachment["shared_model"]["signal_kernel"]
+        table_lengths = section.locator("table").filter(
+            has=page.get_by_role(
+                "columnheader",
+                name="Fitted length scale (normalized coordinates)",
+                exact=True,
+            )
+        )
+        for i, length in enumerate(kernel["length_scales"]):
+            displayed = float(
+                table_lengths.locator("tbody tr")
+                .nth(i)
+                .locator("td")
+                .nth(1)
+                .inner_text()
+            )
+            assert math.isclose(displayed, length, rel_tol=1e-9, abs_tol=1e-15)
     expect(table.locator("tbody tr")).to_have_count(len(attachment["items"]))
     for row_index, item in enumerate(attachment["items"]):
         values = (
@@ -400,6 +458,8 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
         original = _digest(study["trials"])
         _open(page, base, study["study_id"])
         expect(page.locator("#bo-noise-mode")).to_have_value("estimate")
+        expect(page.locator("#bayesian-kernel-kind")).to_have_value("matern_5_2")
+        page.locator("#bayesian-kernel-kind").select_option("gaussian")
         first = _recommend(page)
         assert (
             first["batch_size"] == 1
@@ -410,6 +470,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             'input[name="bayesian-execution-mode"][value="parallel_batch"]'
         ).check()
         page.locator("#bayesian-recommendation-batch-size").fill("2")
+        page.locator("#bayesian-kernel-kind").select_option("matern_3_2")
         batch = _recommend(page)
         assert batch["batch_size"] == 2
         assert batch["items"][1]["planning"]["effective_sample_count"] == 64
@@ -434,6 +495,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
         )
         _observe_visible(page, replicates)
         page.locator("#bo-observation-policy").select_option("exact_replicates")
+        page.locator("#bayesian-kernel-kind").select_option("exponential")
         page.locator(
             'input[name="bayesian-execution-mode"][value="sequential_single"]'
         ).check()
@@ -464,6 +526,9 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
             for width in (1024, 1440):
                 page.set_viewport_size({"width": width, "height": 1000})
                 expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+                expect(page.locator("#bayesian-kernel-kind")).to_have_value(
+                    "exponential"
+                )
                 layout_geometry.append({"locale": locale, **_settled_layout(page)})
                 assert (
                     page.evaluate(
@@ -477,6 +542,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
         page.reload(wait_until="domcontentloaded")
         wait_for_app_ready(page, "ko", ROUTE)
         expect(page.locator("#bo-observation-policy")).to_have_value("exact_replicates")
+        expect(page.locator("#bayesian-kernel-kind")).to_have_value("exponential")
         expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
         assert len(ui_posts) == posts_before_display_changes
         saved = page.request.get(
@@ -494,6 +560,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
                 "status": "succeeded",
                 "study_id": study["study_id"],
                 "q1_target_ui": True,
+                "numeric_kernel_choices_ui": True,
                 "joint_batch_ui": True,
                 "replicate_ui": True,
                 "individual_observations_ui": True,
@@ -620,10 +687,22 @@ def verify_bo_review_context(browser: Browser, base: str, output: Path) -> None:
             assert after["observation_history"] == study["observation_history"]
             return response.value.json()
 
-        review_candidates()
+        initial = review_candidates()
+        assert (
+            initial["calculation"]["shared_model"]["signal_kernel"]["family"]
+            == "matern_5_2"
+        )
+        count_before_kernel_change = len(posts)
+        page.locator("#bayesian-kernel-kind").select_option("gaussian")
+        expect(page.locator("#bayesian-review-title")).to_have_count(0)
+        assert len(posts) == count_before_kernel_change
         page.locator("#bo-noise-mode").select_option("near_noiseless")
         expect(page.locator("#bayesian-review-title")).to_have_count(0)
         preview = review_candidates()
+        assert (
+            preview["calculation"]["shared_model"]["signal_kernel"]["family"]
+            == "gaussian"
+        )
         request_count = len(posts)
         for locale, label in (("en", "ENG"), ("ko", "KOR")):
             page.locator(".language-switcher button").filter(has_text=label).click()
@@ -632,12 +711,14 @@ def verify_bo_review_context(browser: Browser, base: str, output: Path) -> None:
                 page.set_viewport_size({"width": width, "height": 1000})
                 wait_for_layout_settled(page)
                 expect(page.locator("#bayesian-review-title")).to_be_visible()
+                expect(page.locator("#bayesian-kernel-kind")).to_have_value("gaussian")
+                _verify_kernel_summary(page, preview["calculation"]["shared_model"])
                 assert page.evaluate(
                     "document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"
                 )
-                assert page.locator(".bayesian-review-table tbody td:nth-child(4)").evaluate(
-                    "cell => getComputedStyle(cell).whiteSpace === 'nowrap'"
-                )
+                assert page.locator(
+                    ".bayesian-review-table tbody td:nth-child(4)"
+                ).evaluate("cell => getComputedStyle(cell).whiteSpace === 'nowrap'")
                 page.locator(
                     'section[aria-labelledby="bayesian-review-title"]'
                 ).screenshot(path=str(output / f"review-{locale}-{width}.png"))

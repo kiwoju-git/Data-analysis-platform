@@ -1,5 +1,6 @@
 """Bounded local review of an ordered batch; confirmation never runs a fit."""
 
+import json
 from collections import OrderedDict
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -10,8 +11,9 @@ from time import monotonic
 from uuid import UUID, uuid4
 
 from app.api.v1.schemas.bayesian_noise import (
-    BayesianNoiseBatchCreateRequest,
-    BayesianNoiseBatchResponse,
+    BayesianCurrentBatchRequest,
+    BayesianCurrentBatchResponse,
+    parse_current_batch_request,
 )
 from app.api.v1.schemas.bayesian_review import (
     BayesianRecommendationReviewConfirmRequest,
@@ -62,7 +64,7 @@ class BayesianReviewStore:
             self._fit_slot.release()
 
     def put(
-        self, body: BayesianNoiseBatchCreateRequest, review: BayesianRecommendationReviewResponse
+        self, body: BayesianCurrentBatchRequest, review: BayesianRecommendationReviewResponse
     ) -> None:
         entry = _ReviewEntry(
             body.model_dump_json(), review.model_dump_json(), self._clock() + REVIEW_TTL_SECONDS
@@ -77,14 +79,14 @@ class BayesianReviewStore:
 
     def get(
         self, review_id: UUID
-    ) -> tuple[BayesianNoiseBatchCreateRequest, BayesianRecommendationReviewResponse]:
+    ) -> tuple[BayesianCurrentBatchRequest, BayesianRecommendationReviewResponse]:
         with self._lock:
             self._prune()
             entry = self._entries.get(review_id)
         if entry is None:
             raise _error("bayesian_review_expired")
         return (
-            BayesianNoiseBatchCreateRequest.model_validate_json(entry.request_json),
+            parse_current_batch_request(json.loads(entry.request_json)),
             BayesianRecommendationReviewResponse.model_validate_json(entry.response_json),
         )
 
@@ -106,7 +108,7 @@ def create_bayesian_review(
     settings: Settings,
     store: BayesianReviewStore,
     study_id: UUID,
-    body: BayesianNoiseBatchCreateRequest,
+    body: BayesianCurrentBatchRequest,
 ) -> BayesianRecommendationReviewResponse:
     with store.calculation_slot():
         study, payload = validated_noise_source(settings, study_id, body)
@@ -133,14 +135,14 @@ def create_bayesian_review(
 
 def _committed_review(
     settings: Settings, study_id: UUID, review_id: UUID, expected_hash: str
-) -> BayesianNoiseBatchResponse | None:
+) -> BayesianCurrentBatchResponse | None:
     record = get_bayesian_recommendation_batch_record(settings.workspace_root, str(review_id))
     if record is None:
         return None
-    if record.config_sha256 != expected_hash or record.result_schema_version != 2:
+    if record.config_sha256 != expected_hash or record.result_schema_version not in {2, 3}:
         raise _error("bayesian_review_mismatch")
     result = get_bayesian_recommendation_batch(settings, study_id, review_id)
-    if not isinstance(result, BayesianNoiseBatchResponse):
+    if not isinstance(result, BayesianCurrentBatchResponse):
         raise _error("bayesian_review_mismatch")
     return result
 
@@ -151,7 +153,7 @@ def confirm_bayesian_review(
     study_id: UUID,
     review_id: UUID,
     body: BayesianRecommendationReviewConfirmRequest,
-) -> BayesianNoiseBatchResponse:
+) -> BayesianCurrentBatchResponse:
     existing = _committed_review(settings, study_id, review_id, body.expected_config_sha256)
     if existing is not None:
         return existing

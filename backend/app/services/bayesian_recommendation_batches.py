@@ -26,7 +26,7 @@ from app.api.v1.schemas.bayesian_noise import (
     BayesianAnyBatchListResponse,
     BayesianAnyBatchResponse,
     BayesianAnyLatestBatchResponse,
-    BayesianNoiseBatchCreateRequest,
+    BayesianCurrentBatchRequest,
 )
 from app.core.config import Settings
 from app.core.errors import ApiError
@@ -66,9 +66,9 @@ WORKER_STARTUP_ALLOWANCE_MS: Final = 20_000
 def create_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
-    body: BayesianRecommendationBatchCreateRequest | BayesianNoiseBatchCreateRequest,
+    body: BayesianRecommendationBatchCreateRequest | BayesianCurrentBatchRequest,
 ) -> BayesianAnyBatchResponse:
-    if isinstance(body, BayesianNoiseBatchCreateRequest):
+    if isinstance(body, BayesianCurrentBatchRequest):
         from app.services.bayesian_noise_recommendations import create_noise_batch
 
         return create_noise_batch(settings, study_id, body)
@@ -424,11 +424,11 @@ def _validated_response(
     *,
     is_latest: bool,
 ) -> BayesianAnyBatchResponse:
-    if record.result_schema_version == 2:
-        from app.api.v1.schemas.bayesian_noise import BayesianNoiseBatchResponse
+    if record.result_schema_version in {2, 3}:
+        from app.api.v1.schemas.bayesian_noise import parse_current_batch_response
 
         # get_bayesian_study has already verified the complete immutable graph.
-        response_v2 = BayesianNoiseBatchResponse.model_validate_json(record.result_json)
+        response_v2 = parse_current_batch_response(json.loads(record.result_json))
         current = {str(trial.trial_id): trial for trial in study.trials}
         current_items_v2 = [
             item.model_copy(

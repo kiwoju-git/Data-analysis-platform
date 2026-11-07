@@ -1,20 +1,25 @@
 # Bayesian Batch Recommendation Contract
 
-Last updated: 2026-10-21
+Last updated: 2026-11-07
 
 ## Current V2 Policy
 
-The API30 UI first generates a temporary candidate review. Only the explicit
+The API31 UI first generates a temporary candidate review. Only the explicit
 confirmation command registers its entire ordered batch as pending experiments.
 The existing direct-create API remains supported. Review/confirmation does not
 change V2 mathematics or any saved schema; see
 [review contract and evidence](bo_jmp_workflow_stages.md). Partial selection or
 reordering is not exposed because later marginal scores depend on earlier ranks.
 
-New UI requests use schema2, method0.7.0 and
+New UI requests use schema3, method0.8.0 and an explicit numeric kernel selection.
+Legacy schema2/method0.7.0 retains its fixed Matern5/2 meaning and original hashes.
+Both use
 `greedy_mc_joint_latent_improvement_v2`. Noise/latent incumbent, exact-repeat
 sufficient statistics, correlated MC planning, mixed search and version dispatch
 are specified in [BO/GPR extension](bo_gpr_noise_validation_extension.md).
+Kernel/result dispatch and metadata25 migration are specified in
+[numeric kernel alignment](bo_kernel_alignment.md). The acquisition policy itself
+is not changed by choosing a kernel family.
 Default posterior sample count is64 (allowed16..256); q1 is analytic.
 All q1..q8 requests share one fit/core. The optional normalized batch distance
 defaults to0 and is separate from duplicate tolerance. Infeasible or over-budget

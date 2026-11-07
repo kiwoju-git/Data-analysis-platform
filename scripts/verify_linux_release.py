@@ -456,6 +456,7 @@ def require_gp_extension_receipt(receipt: object) -> None:
 def require_bo_noise_receipts(workflow: object, context: object) -> None:
     required_workflow = (
         "q1_target_ui",
+        "numeric_kernel_choices_ui",
         "joint_batch_ui",
         "replicate_ui",
         "individual_observations_ui",

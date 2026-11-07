@@ -1,5 +1,14 @@
 # Runtime Compatibility Contract
 
+## Numeric BO Kernels (API31)
+
+API31 requires `bayesian_numeric_kernels`. Current frontend/Windows launch require
+metadata25, which extends only the existing BO batch SQL version CHECK to admit
+config3/result3/model4/item2. Old JSON payloads and hashes remain unchanged.
+The backup reader accepts schemas20..25; restoring a24 archive does not migrate
+it until the new app is explicitly started. Old code cannot open schema25.
+See [kernel contract and migration evidence](bo_kernel_alignment.md).
+
 ## Reviewed BO Workflow (API30)
 
 API30 adds the `bayesian_recommendation_review` capability and separate
@@ -52,7 +61,7 @@ replicate creation, GPR validation metadata, mixed predictors, one-step lag,
 resource profiles and saved applied surface views. Metadata24 performs the real
 BO trial parent/idempotency and V1/V2 batch constraint migration. Windows startup
 and frontend require API26/metadata24; Linux launch reads the same constants.
-The current backup reader accepts exact schemas20..24 without migrating the
+The API26 backup reader accepts exact schemas20..24 without migrating the
 archive. Startup acquires the workspace lease before applying pending migrations.
 Older application versions cannot open metadata24; code revert alone is not a
 workspace downgrade. Keep a verified pre-upgrade offline backup.
@@ -193,8 +202,8 @@ source.
 `GET /api/v1/runtime-info` returns a typed, `Cache-Control: no-store` response:
 
 - service and app version;
-- `api_contract_version` (currently `27`);
-- the actual metadata schema constant (currently `24`);
+- `api_contract_version` (currently `31`);
+- the actual metadata schema constant (currently `25`);
 - configured build commit or `unknown`;
 - boolean capabilities for asset management, dataset/model metadata and
   deletion, dedicated Predict/Response Optimizer, Bayesian Optimization, and
@@ -214,7 +223,7 @@ regularized prediction and model-kind optimizer metadata. Metadata schema 19
 and existing artifact ownership remain sufficient; no migration or stored
 checksum rewrite is performed. Exact frontend/backend matching is required.
 
-The frontend expects API contract `27`, schema 24 or later, and every required
+The frontend expects API contract `31`, schema25 or later, and every required
 capability before it renders the workspace or method catalog. A missing route,
 old contract, malformed response, missing capability, or known build-commit
 mismatch blocks the app and provides retry and restart instructions. Management

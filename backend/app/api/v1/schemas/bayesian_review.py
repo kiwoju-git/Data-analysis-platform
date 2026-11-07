@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.v1.schemas.bayesian_noise import BayesianNoiseCalculation
+from app.api.v1.schemas.bayesian_noise import BayesianCurrentCalculation
 
 
 class BayesianRecommendationReviewResponse(BaseModel):
@@ -18,7 +18,7 @@ class BayesianRecommendationReviewResponse(BaseModel):
     source_observation_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     config_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     expires_at: str
-    calculation: BayesianNoiseCalculation
+    calculation: BayesianCurrentCalculation
 
 
 class BayesianRecommendationReviewConfirmRequest(BaseModel):

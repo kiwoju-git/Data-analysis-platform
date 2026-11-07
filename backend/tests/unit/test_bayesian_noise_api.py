@@ -319,7 +319,7 @@ def test_new_batch_does_not_rewrite_legacy_snapshot(tmp_path):
         assert '"schema_version":2' not in before[0]
 
 
-@pytest.mark.parametrize("study_version", ["0.6.0", "0.7.0"])
+@pytest.mark.parametrize("study_version", ["0.6.0", "0.7.0", "0.8.0"])
 def test_current_and_legacy_study_use_versioned_recommendations_and_close(
     tmp_path, monkeypatch, study_version
 ):
@@ -328,15 +328,17 @@ def test_current_and_legacy_study_use_versioned_recommendations_and_close(
     from app.analyses import registry
 
     method_id = "doe.bayesian_optimization"
-    assert registry.METHOD_VERSIONS[method_id] == "0.7.0"
+    assert registry.METHOD_VERSIONS[method_id] == "0.8.0"
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         with monkeypatch.context() as legacy:
-            if study_version == "0.6.0":
-                legacy.setitem(registry.METHOD_VERSIONS, method_id, "0.6.0")
+            if study_version != "0.8.0":
+                legacy.setitem(registry.METHOD_VERSIONS, method_id, study_version)
                 legacy.setitem(
                     registry.METHOD_BY_ID,
                     method_id,
-                    registry.METHOD_BY_ID[method_id].model_copy(update={"method_version": "0.6.0"}),
+                    registry.METHOD_BY_ID[method_id].model_copy(
+                        update={"method_version": study_version}
+                    ),
                 )
             study = _completed_study(client)
         assert study["method_version"] == study_version
@@ -347,16 +349,18 @@ def test_current_and_legacy_study_use_versioned_recommendations_and_close(
                 "SELECT * FROM bayesian_study_versions WHERE study_version_id=?",
                 (study["study_version_id"],),
             ).fetchone()
-        for request_version, expected_method in [(1, "0.6.0"), (2, "0.7.0")]:
+        for request_version, expected_method in [(1, "0.6.0"), (2, "0.7.0"), (3, "0.8.0")]:
             request = (
                 _noise_request(study)
-                if request_version == 2
+                if request_version in {2, 3}
                 else _batch_request(
                     study["observation_history"]["history_revision_id"],
                     batch_size=1,
                     kind="expected_improvement",
                 )
             )
+            if request_version == 3:
+                request.update(schema_version=3, kernel={"kind": "matern_3_2"})
             created = client.post(f"{path}/recommendation-batches", json=request)
             assert created.status_code == 201, created.json()
             result = created.json()

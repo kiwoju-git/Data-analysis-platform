@@ -17,6 +17,11 @@ The subsequent reviewed-candidate UI work is tracked separately in
 temporary candidate review from explicit trial commitment; it does not add JMP
 kernel families or multiresponse desirability.
 
+The subsequent [numeric kernel stage](bo_kernel_alignment.md) adds Gaussian,
+Matern5/2, Matern3/2 and Exponential choices while preserving the reviewed batch
+flow. Its formula, parameterization and current-run evidence are separate from
+this historical research ledger. It does not add multiresponse desirability.
+
 ## 1. Versions And Evidence
 
 - The JMP sources below are the versioned English **19.2** documentation. This

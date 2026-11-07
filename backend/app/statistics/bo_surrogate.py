@@ -9,6 +9,7 @@ from importlib.metadata import version
 from typing import Any, Literal
 
 from app.statistics.bayesian_optimization import BayesianOptimizationError
+from app.statistics.bo_kernels import BoKernelSpec, kernel_family, signal_kernel
 
 POLICY_VERSION = "bo_noise_latent_v2"
 MODEL_SCHEMA_VERSION = 3
@@ -58,7 +59,6 @@ def split_signal_noise(kernel: Any) -> tuple[Any, float]:
     import numpy as np
     from sklearn.gaussian_process.kernels import (  # type: ignore[import-untyped]
         ConstantKernel,
-        Matern,
         Product,
         Sum,
         WhiteKernel,
@@ -72,12 +72,11 @@ def split_signal_noise(kernel: Any) -> tuple[Any, float]:
     if (
         not isinstance(signal, Product)
         or not isinstance(signal.k1, ConstantKernel)
-        or not isinstance(signal.k2, Matern)
-        or signal.k2.nu != 2.5
         or not math.isfinite(noise)
         or noise < 0
     ):
         raise ValueError("bayesian_surrogate_kernel_invalid")
+    kernel_family(signal.k2)
     lengths = np.atleast_1d(signal.k2.length_scale)
     if (
         not math.isfinite(float(signal.k1.constant_value))
@@ -89,17 +88,18 @@ def split_signal_noise(kernel: Any) -> tuple[Any, float]:
     return signal, noise
 
 
-def _kernel(predictor_count: int, policy: BoSurrogatePolicy, scale: float) -> Any:
-    import numpy as np
+def _kernel(
+    predictor_count: int,
+    policy: BoSurrogatePolicy,
+    scale: float,
+    *,
+    kernel_spec: BoKernelSpec | None = None,
+) -> Any:
     from sklearn.gaussian_process.kernels import (  # type: ignore[import-untyped]
-        ConstantKernel,
-        Matern,
         WhiteKernel,
     )
 
-    signal = ConstantKernel(1.0, (1e-3, 1e3)) * Matern(
-        np.ones(predictor_count), (1e-2, 1e2), nu=2.5
-    )
+    signal = signal_kernel(predictor_count, kernel_spec or BoKernelSpec())
     if policy.noise_mode == "near_noiseless":
         return signal
     if policy.noise_mode == "fixed":
@@ -211,6 +211,7 @@ class BoSurrogate:
     fit_elapsed_ms: float
     raw_observation_count: int
     group_counts: tuple[int, ...]
+    kernel_spec: BoKernelSpec | None = None
 
     @property
     def covariance_roundoff_scale(self) -> float:
@@ -286,7 +287,7 @@ class BoSurrogate:
         import numpy as np
 
         signal, noise = split_signal_noise(self.kernel)
-        return {
+        result: dict[str, Any] = {
             "schema_version": MODEL_SCHEMA_VERSION,
             "policy_version": POLICY_VERSION,
             "signal_kernel": {
@@ -329,6 +330,17 @@ class BoSurrogate:
                 for name in ("numpy", "scipy", "scikit-learn", "joblib", "threadpoolctl")
             },
         }
+        if self.kernel_spec is not None:
+            result.update(schema_version=4, policy_version="bo_noise_latent_kernels_v3")
+            result["signal_kernel"].update(
+                kind="constant_times_radial_ard",
+                family=kernel_family(signal.k2),
+                convention="radial_scaled_euclidean_v1",
+                coordinate_system="factor_bounds_normalized_0_1",
+                initial_amplitude=1.0,
+                initial_length_scales=[1.0] * self.x_train.shape[1],
+            )
+        return result
 
 
 def fit_bo_surrogate(
@@ -341,6 +353,7 @@ def fit_bo_surrogate(
     goal_type: Literal["maximize", "minimize", "match_target"] = "maximize",
     optimize: bool = True,
     group_member_indices: tuple[tuple[int, ...], ...] | None = None,
+    kernel_spec: BoKernelSpec | None = None,
 ) -> BoSurrogate:
     import numpy as np
     from scipy.optimize import minimize  # type: ignore[import-untyped]
@@ -394,7 +407,7 @@ def fit_bo_surrogate(
     jitter = float(search["jitter"])
     if not math.isfinite(jitter) or not 1e-12 <= jitter <= 1e-3:
         raise BayesianOptimizationError("bayesian_surrogate_noise_invalid")
-    kernel = _kernel(points.shape[1], policy, scale)
+    kernel = _kernel(points.shape[1], policy, scale, kernel_spec=kernel_spec)
     evaluations = 0
     traces: list[dict[str, Any]] = []
 
@@ -491,4 +504,5 @@ def fit_bo_surrogate(
         (time.perf_counter() - started) * 1000,
         raw_count,
         tuple(int(count) for count in counts) if counts is not None else (1,) * raw_count,
+        kernel_spec,
     )

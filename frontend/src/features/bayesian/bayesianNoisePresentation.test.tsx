@@ -40,7 +40,8 @@ describe("BO V2 presentation", () => {
 function fixture(): BayesianNoiseBatchResponse {
   return {
     result_schema_version: 2, batch_state: "pending", source_history_revision_id: "synthetic-history",
-    shared_model: { observation_noise_sd_raw: 1e-6, noise: { mode: "estimate", fitted_variance_scaled: 1e-2, bounds_scaled: [1e-6, 1] }, jitter: 1e-8,
+    shared_model: { schema_version: 3, signal_kernel: { kind: "constant_times_matern_5_2_ard", amplitude: 1.25, length_scales: [0.5], amplitude_bounds: [1e-3, 1e3], length_scale_bounds: [1e-2, 1e2] },
+      observation_noise_sd_raw: 1e-6, noise: { mode: "estimate", fitted_variance_scaled: 1e-2, bounds_scaled: [1e-6, 1] }, jitter: 1e-8,
       optimizer: { name: "L-BFGS-B", evaluations: 20, restarts: 1, starts: [{ success: true, termination_reason: "converged" }] } },
     incumbent: { best_observed_objective: 4e-6, latent_incumbent_value_raw: 3e-6, latent_incumbent_distance_raw: null, xi_standardized: 0.01 },
     observation_view: { mode: "nearby_diagnostics", raw_observation_count: 3, unique_condition_count: 2, effective_training_count: 3,

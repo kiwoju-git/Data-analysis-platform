@@ -120,12 +120,14 @@ def expected_target_improvement(
 
 def _noise_aware_payload(payload: dict[str, Any]) -> bool:
     search = payload.get("search")
-    if payload.get("schema_version") == 2 or (
+    if payload.get("schema_version") in {2, 3} or (
         isinstance(search, dict)
         and search.get("batch_policy") == "greedy_mc_joint_latent_improvement_v2"
     ):
         return True
-    if any(key in payload for key in ("surrogate", "observation_policy", "batch_options")):
+    if any(
+        key in payload for key in ("surrogate", "observation_policy", "batch_options", "kernel")
+    ):
         raise BayesianOptimizationError("bayesian_optimization_search_options_invalid")
     return False
 

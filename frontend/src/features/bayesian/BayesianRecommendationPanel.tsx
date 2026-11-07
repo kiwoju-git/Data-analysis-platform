@@ -1,6 +1,7 @@
 import type {
   BayesianExecutionMode,
   BayesianExplorationProfile,
+  BayesianKernelKind,
   BayesianRecommendationBatchItemResponse,
   BayesianRecommendationBatchResponse,
   BayesianLegacyRecommendationBatchResponse,
@@ -25,6 +26,7 @@ import { BayesianNoiseSettings } from "./BayesianNoiseSettings";
 import { BayesianNoiseBatchResult } from "./BayesianNoiseBatchResult";
 import { BayesianRecommendationReview } from "./BayesianRecommendationReview";
 import { boText, buildNoisePolicy, defaultNoiseDraft, type BayesianNoiseDraft } from "./boNoisePolicy";
+import { BO_KERNEL_OPTIONS, DEFAULT_BO_KERNEL } from "./boKernelPolicy";
 
 const EXPLORATION_OPTIONS: Array<{
   value: BayesianExplorationProfile;
@@ -77,6 +79,8 @@ export function BayesianRecommendationPanel({
   isConfirming = false,
   onConfirmReview = () => undefined,
   onDiscardReview = () => undefined,
+  kernelKind = DEFAULT_BO_KERNEL,
+  onKernelKindChange = () => undefined,
 }: {
   study: BayesianStudyResponse;
   batch: BayesianRecommendationBatchResponse | null;
@@ -101,6 +105,8 @@ export function BayesianRecommendationPanel({
   isConfirming?: boolean;
   onConfirmReview?: () => void;
   onDiscardReview?: () => void;
+  kernelKind?: BayesianKernelKind | null;
+  onKernelKindChange?: (value: string) => void;
 }) {
   const { locale } = useI18n();
   const parsedBatchSize =
@@ -129,6 +135,7 @@ export function BayesianRecommendationPanel({
     budgetBlocker !== null ||
     batchSizeInvalid ||
     customXiInvalid ||
+    kernelKind === null ||
     buildNoisePolicy(noiseDraft, study.factors).payload === null ||
     isRecommending || isConfirming;
   const settingsDisabled =
@@ -148,6 +155,13 @@ export function BayesianRecommendationPanel({
       </div>
 
       <div className="bayesian-recommendation-settings">
+        <DoeSettingsTable ariaLabel={boText(locale, "BO 커널 설정", "BO kernel settings")} fields={[{
+          key: "kernel", label: boText(locale, "연속형 신호 커널", "Continuous signal kernel"), controlId: "bayesian-kernel-kind",
+          control: <select id="bayesian-kernel-kind" value={kernelKind ?? ""} disabled={settingsDisabled}
+            aria-invalid={kernelKind === null} onChange={event => onKernelKindChange(event.currentTarget.value)}>
+            {BO_KERNEL_OPTIONS.map(option => <option key={option.kind} value={option.kind}>{option.label}</option>)}
+          </select>,
+        }]} />
         <BayesianNoiseSettings study={study} draft={noiseDraft} disabled={settingsDisabled} onChange={onNoiseDraftChange} />
         <DoeSettingsTable
           ariaLabel="Bayesian 다음 실험 추천 설정"
@@ -325,7 +339,7 @@ export function BayesianRecommendationPanel({
 
       {draftChanged && batch !== null ? <p className="notice-box" role="status">{boText(locale, "설정이 변경되었습니다. 아래는 이전에 저장된 추천이며 현재 설정의 계산 결과가 아닙니다.", "Settings changed. The saved recommendation below does not represent the current draft.")}</p> : null}
       {batch !== null ? (
-        batch.result_schema_version === 2 ? <BayesianNoiseBatchResult batch={batch} study={study} /> : <BayesianBatchResult batch={batch} />
+        batch.result_schema_version === 2 || batch.result_schema_version === 3 ? <BayesianNoiseBatchResult batch={batch} study={study} /> : <BayesianBatchResult batch={batch} />
       ) : recommendation !== null ? (
         <LegacyRecommendationResult recommendation={recommendation} />
       ) : null}

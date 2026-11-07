@@ -25,7 +25,7 @@ def test_backend_frontend_and_windows_launcher_require_same_api_contract() -> No
     assert frontend == launcher == API_CONTRACT_VERSION
 
 
-def test_frontend_and_windows_launcher_keep_metadata24_minimum() -> None:
+def test_frontend_and_windows_launcher_require_metadata25_kernel_contract() -> None:
     root = Path(__file__).resolve().parents[3]
     frontend = _declared_integer(
         root / "frontend/src/runtimeCompatibility.ts",
@@ -35,4 +35,4 @@ def test_frontend_and_windows_launcher_keep_metadata24_minimum() -> None:
         root / "scripts/dev_runtime_helpers.ps1",
         r"^\$script:MinimumMetadataSchemaVersion = (\d+)$",
     )
-    assert frontend == launcher == 24
+    assert frontend == launcher == 25

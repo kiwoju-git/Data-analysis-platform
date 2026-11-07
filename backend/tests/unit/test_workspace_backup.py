@@ -100,7 +100,7 @@ def test_backup_restore_preserves_owned_bytes_and_db_rows(tmp_path: Path) -> Non
         )
 
 
-@pytest.mark.parametrize("legacy_schema", [20, 21, 22, 23])
+@pytest.mark.parametrize("legacy_schema", [20, 21, 22, 23, 24])
 def test_legacy_backup_restores_without_migration_then_upgrades(
     tmp_path: Path, legacy_schema: int
 ) -> None:

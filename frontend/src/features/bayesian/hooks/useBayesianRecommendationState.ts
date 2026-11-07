@@ -9,6 +9,7 @@ import {
   fetchLatestBayesianRecommendationBatch,
   type BayesianExecutionMode,
   type BayesianExplorationProfile,
+  type BayesianKernelKind,
   type BayesianRecommendationBatchResponse,
   type BayesianRecommendationResponse,
   type BayesianRecommendationReviewResponse,
@@ -21,6 +22,7 @@ import {
   defaultBayesianBatchSearch,
 } from "../bayesianDisplay";
 import { buildNoisePolicy, defaultNoiseDraft, strictBoNumber, type BayesianNoiseDraft } from "../boNoisePolicy";
+import { DEFAULT_BO_KERNEL, parseBoKernelKind, savedBoKernelKind } from "../boKernelPolicy";
 
 const ignoreSelection = () => undefined;
 
@@ -58,10 +60,13 @@ export function useBayesianRecommendationState({
   const [review, setReview] = useState<BayesianRecommendationReviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noiseDraft, setNoiseDraft] = useState<BayesianNoiseDraft>(defaultNoiseDraft);
+  const [kernelKind, setKernelKind] = useState<BayesianKernelKind | null>(DEFAULT_BO_KERNEL);
   const [draftChanged, setDraftChanged] = useState(false);
   const restoreGuard = useRef(createLatestRequestGuard()).current;
   const createGuard = useRef(createLatestRequestGuard()).current;
   const activeReviewId = useRef<string | null>(null);
+  const draftRevision = useRef(0);
+  const renderedDraftRevision = draftRevision.current;
   const confirmingReview = useRef<string | null>(null);
   const sourceKey = `${selectedStudyId}:${sourceHistoryKey}:${requestedBatchId}:${requestedRecommendationId}`;
   const currentSource = useRef(sourceKey);
@@ -101,6 +106,7 @@ export function useBayesianRecommendationState({
           }
           setBatch(null);
           setRecommendation(restored);
+          setKernelKind(DEFAULT_BO_KERNEL);
           if (restored.requested_total_trial_budget !== null) {
             setTotalTrialBudget(
               String(restored.requested_total_trial_budget),
@@ -135,7 +141,10 @@ export function useBayesianRecommendationState({
             String(restoredBatch.requested_total_trial_budget),
           );
           if (batchId === null) onBatchSelected(restoredBatch.batch_id);
-          if (restoredBatch.result_schema_version === 2) {
+          if (restoredBatch.result_schema_version === 2 || restoredBatch.result_schema_version === 3) {
+            const restoredKernel = savedBoKernelKind(restoredBatch.shared_model);
+            setKernelKind(restoredKernel);
+            if (restoredKernel === null) setError("bayesian_kernel_invalid");
             const noise = restoredBatch.shared_model.noise;
             setNoiseDraft({ ...defaultNoiseDraft, noiseMode: noise.mode,
               noiseInitial: noise.mode === "estimate" ? String(noise.initial_variance_scaled) : defaultNoiseDraft.noiseInitial,
@@ -147,7 +156,7 @@ export function useBayesianRecommendationState({
               sampleCount: String(restoredBatch.items[0]?.planning.requested_sample_count ?? 64),
               minBatchDistance: String(restoredBatch.search_budget.min_batch_distance_normalized),
             });
-          }
+          } else setKernelKind(DEFAULT_BO_KERNEL);
           setDraftChanged(false);
           return restoredBatch;
         }
@@ -158,6 +167,7 @@ export function useBayesianRecommendationState({
         if (!restoreGuard.isCurrent(request)) return null;
         setBatch(null);
         setRecommendation(restoredLegacy);
+        setKernelKind(DEFAULT_BO_KERNEL);
         if (restoredLegacy !== null) {
           onRecommendationSelected(restoredLegacy.recommendation_id);
         }
@@ -192,6 +202,7 @@ export function useBayesianRecommendationState({
     confirmingReview.current = null;
     activeReviewId.current = null;
     setReview(null);
+    setKernelKind(DEFAULT_BO_KERNEL);
     if (selectedStudyId !== null) {
       void loadRecommendation(
         selectedStudyId,
@@ -210,7 +221,11 @@ export function useBayesianRecommendationState({
   ]);
 
   async function onRecommend(study: BayesianStudyResponse): Promise<boolean> {
-    if (currentSource.current !== sourceKey || study.study_id !== selectedStudyId) return false;
+    if (draftRevision.current !== renderedDraftRevision || currentSource.current !== sourceKey || study.study_id !== selectedStudyId) return false;
+    if (kernelKind === null) {
+      setError("bayesian_kernel_invalid");
+      return false;
+    }
     const policy = buildNoisePolicy(noiseDraft, study.factors);
     if (policy.payload === null) {
       setError("bayesian_surrogate_policy_invalid");
@@ -260,7 +275,8 @@ export function useBayesianRecommendationState({
       const created = await createBayesianRecommendationReview(
         study.study_id,
         {
-          schema_version: 2,
+          schema_version: 3,
+          kernel: { kind: kernelKind },
           expected_history_revision_id:
             study.observation_history.history_revision_id,
           expected_history_sha256: study.observation_history.observation_history_sha256,
@@ -286,6 +302,13 @@ export function useBayesianRecommendationState({
       if (created.study_id !== study.study_id || created.study_version_id !== study.study_version_id || created.source_history_revision_id !== study.observation_history.history_revision_id ||
         created.source_observation_history_sha256 !== study.observation_history.observation_history_sha256) {
         setError("bayesian_recommendation_study_mismatch");
+        return false;
+      }
+      if (created.calculation.schema_version !== 3 ||
+        created.calculation.shared_model.signal_kernel.family !== kernelKind ||
+        created.calculation.shared_model.factor_ids.length !== study.factors.length ||
+        created.calculation.shared_model.factor_ids.some((id, index) => id !== study.factors[index].factor_id)) {
+        setError("bayesian_review_mismatch");
         return false;
       }
       activeReviewId.current = created.review_id;
@@ -391,6 +414,7 @@ export function useBayesianRecommendationState({
   }
 
   function invalidateDraft() {
+    draftRevision.current += 1;
     createGuard.cancel();
     restoreGuard.cancel();
     setIsRecommending(false);
@@ -406,6 +430,13 @@ export function useBayesianRecommendationState({
   function onNoiseDraftChange(value: BayesianNoiseDraft) {
     invalidateDraft();
     setNoiseDraft(value);
+  }
+
+  function onKernelKindChange(value: string) {
+    invalidateDraft();
+    const parsed = parseBoKernelKind(value);
+    setKernelKind(parsed);
+    if (parsed === null) setError("bayesian_kernel_invalid");
   }
 
   function clearRecommendation() {
@@ -428,6 +459,8 @@ export function useBayesianRecommendationState({
     discardReview,
     batchSize,
     noiseDraft,
+    kernelKind,
+    onKernelKindChange,
     draftChanged,
     onNoiseDraftChange,
     clearRecommendation,

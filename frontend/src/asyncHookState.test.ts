@@ -1210,7 +1210,7 @@ function bayesianRecommendationBatch(
   } as BayesianRecommendationBatchResponse;
 }
 
-function bayesianRecommendationReview(studyId: string, reviewId: string): BayesianRecommendationReviewResponse {
+function bayesianRecommendationReview(studyId: string, reviewId: string, kernel: "matern_5_2" | "matern_3_2" | "gaussian" | "exponential" = "matern_5_2"): BayesianRecommendationReviewResponse {
   return {
     schema_version: 1,
     review_id: reviewId,
@@ -1220,7 +1220,9 @@ function bayesianRecommendationReview(studyId: string, reviewId: string): Bayesi
     source_observation_history_sha256: "b".repeat(64),
     config_sha256: "c".repeat(64),
     expires_at: "2026-11-07T10:20:00Z",
-    calculation: { batch_size: 4, items: [] },
+    calculation: { schema_version: 3, batch_size: 4, items: [], shared_model: {
+      schema_version: 4, signal_kernel: { family: kernel }, factor_ids: ["x"],
+    } },
   } as unknown as BayesianRecommendationReviewResponse;
 }
 
@@ -1278,8 +1280,8 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 30,
-    metadata_schema_version: 24,
+    api_contract_version: 31,
+    metadata_schema_version: 25,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -1299,6 +1301,7 @@ function runtimeInfo(
       bayesian_lhs_initial_design: true,
       bayesian_batch_recommendation: true,
       bayesian_recommendation_review: true,
+      bayesian_numeric_kernels: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },
@@ -4058,7 +4061,8 @@ describe("async workbench hooks", () => {
       throw new Error("expected_batch_request");
     }
     expect(request).toMatchObject({
-      schema_version: 2,
+      schema_version: 3,
+      kernel: { kind: "matern_5_2" },
       expected_history_sha256: "b".repeat(64),
       surrogate: { noise_mode: "estimate", lower_noise_variance_scaled: 1e-6 },
       observation_policy: { mode: "retain_raw" },
@@ -4140,6 +4144,109 @@ describe("async workbench hooks", () => {
     expect(runner.output.batch).toBeNull();
     expect(runner.output.isRecommending).toBe(false);
     expect(apiMocks.createBayesianRecommendation).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it.each(["resolve", "reject"])("blocks a stale kernel review %s without clearing a newer request", async outcome => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    const old = deferred<BayesianRecommendationReviewResponse>();
+    const next = deferred<BayesianRecommendationReviewResponse>();
+    apiMocks.createBayesianRecommendationReview.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    await runner.act(() => runner.output.onKernelKindChange("gaussian"));
+    expect(runner.output.isRecommending).toBe(false);
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    if (outcome === "resolve") old.resolve(bayesianRecommendationReview("study-a", "old"));
+    else old.reject(new Error("old_kernel_failed"));
+    await runner.flush();
+    expect(runner.output.isRecommending).toBe(true);
+    expect(runner.output.error).toBeNull();
+    next.resolve(bayesianRecommendationReview("study-a", "new", "gaussian"));
+    await runner.flush();
+    expect(runner.output.review?.review_id).toBe("new");
+    expect(runner.output.kernelKind).toBe("gaussian");
+    expect(apiMocks.createBayesianRecommendationReview.mock.calls[1][1]).toMatchObject({ schema_version: 3, kernel: { kind: "gaussian" } });
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("invalidates a reviewed kernel and captured callbacks immediately, and rejects unknown kernels", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "review"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    const confirm = runner.output.onConfirmReview, generate = runner.output.onRecommend;
+    let confirmation: Promise<boolean> | undefined, generation: Promise<boolean> | undefined;
+    await runner.act(() => {
+      runner.output.onKernelKindChange("exponential");
+      confirmation = confirm(bayesianStudy("study-a"));
+      generation = generate(bayesianStudy("study-a"));
+    });
+    expect(await confirmation).toBe(false);
+    expect(await generation).toBe(false);
+    expect(runner.output.review).toBeNull();
+    expect(runner.output.draftChanged).toBe(true);
+    await runner.act(() => runner.output.onKernelKindChange("unknown"));
+    expect(runner.output.kernelKind).toBeNull();
+    expect(await runner.output.onRecommend(bayesianStudy("study-a"))).toBe(false);
+    await runner.flush();
+    expect(runner.output.error).toBe("bayesian_kernel_invalid");
+    expect(apiMocks.createBayesianRecommendationReview).toHaveBeenCalledTimes(1);
+    expect(apiMocks.confirmBayesianRecommendationReview).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+
+  it("rejects a review calculated with a different kernel than its request snapshot", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    apiMocks.createBayesianRecommendationReview.mockResolvedValue(bayesianRecommendationReview("study-a", "wrong", "gaussian"));
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: "study-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn(),
+    });
+    await runner.flush();
+    await runner.act(() => { void runner.output.onRecommend(bayesianStudy("study-a")); });
+    expect(runner.output.review).toBeNull();
+    expect(runner.output.error).toBe("bayesian_review_mismatch");
+    runner.unmount();
+  });
+
+  it.each([2, 3] as const)("restores schema %s kernel settings without rewriting saved data or reacting to locale", async schema => {
+    const stored = {
+      ...bayesianRecommendationBatch("study-a", "saved"), result_schema_version: schema,
+      shared_model: {
+        schema_version: schema === 3 ? 4 : 3,
+        signal_kernel: schema === 3 ? { family: "matern_3_2" } : { kind: "constant_times_matern_5_2_ard" },
+        noise: { mode: "fixed", fixed_sd_raw: 0.2, initial_variance_scaled: 0.04, bounds_scaled: null },
+      },
+      observation_view: { mode: "retain_raw", nearby_diagnostics: { units: "actual", tolerances: null } },
+      search_budget: { min_batch_distance_normalized: 0 }, items: [],
+    } as unknown as BayesianRecommendationBatchResponse;
+    const before = JSON.stringify(stored);
+    apiMocks.fetchBayesianRecommendationBatch.mockResolvedValue(stored);
+    const props = { selectedStudyId: "study-a", requestedBatchId: "saved", requestedRecommendationId: null, onRecommendationSelected: vi.fn() };
+    const runner = new HookRunner(useBayesianRecommendationState, props);
+    await runner.flush();
+    expect(runner.output.kernelKind).toBe(schema === 3 ? "matern_3_2" : "matern_5_2");
+    expect(runner.output.noiseDraft.fixedNoiseSd).toBe("0.2");
+    await runner.act(() => runner.output.onKernelKindChange("exponential"));
+    for (const locale of ["en", "ko"] as const) {
+      setCurrentLocale(locale);
+      runner.update({ ...props });
+      await runner.flush();
+      expect(runner.output.kernelKind).toBe("exponential");
+      expect(runner.output.noiseDraft.fixedNoiseSd).toBe("0.2");
+      expect(runner.output.batch?.batch_id).toBe("saved");
+      expect(runner.output.draftChanged).toBe(true);
+    }
+    expect(apiMocks.fetchBayesianRecommendationBatch).toHaveBeenCalledTimes(1);
+    expect(apiMocks.createBayesianRecommendationReview).not.toHaveBeenCalled();
+    expect(JSON.stringify(stored)).toBe(before);
     runner.unmount();
   });
 

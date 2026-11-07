@@ -15,7 +15,7 @@ def bo_noise_report_section(
         return report_text(locale, en=en, ko=ko)
 
     title = text("Noise-aware Recommendation", "관측 노이즈 기반 추천")
-    if not isinstance(attachment, dict) or attachment.get("result_schema_version") != 2:
+    if not isinstance(attachment, dict) or attachment.get("result_schema_version") not in {2, 3}:
         return ReportSection(
             "noise_summary", title, "not_applicable", reason="legacy_or_no_attachment"
         )
@@ -73,6 +73,64 @@ def bo_noise_report_section(
             [text("Batch policy", "배치 정책"), attachment["batch_policy"]],
         ],
     )
+    if model["schema_version"] == 4:
+        kernel = model["signal_kernel"]
+        family = {
+            "gaussian": "Gaussian",
+            "matern_5_2": "Matern 5/2",
+            "matern_3_2": "Matern 3/2",
+            "exponential": "Exponential",
+        }[kernel["family"]]
+        markup += report_table(
+            [text("Kernel setting", "커널 설정"), text("Stored value", "저장값")],
+            [
+                [text("Continuous correlation", "연속형 상관 커널"), family],
+                [
+                    text("Signal variance (scaled response)", "신호 분산 (표준화 반응)"),
+                    kernel["amplitude"],
+                ],
+                [text("Covariance convention", "공분산 규칙"), kernel["convention"]],
+                [text("Coordinates", "좌표"), kernel["coordinate_system"]],
+                [text("Initial signal variance", "초기 신호 분산"), kernel["initial_amplitude"]],
+                [text("Signal variance bounds", "신호 분산 경계"), kernel["amplitude_bounds"]],
+                [text("Length-scale bounds", "길이 척도 경계"), kernel["length_scale_bounds"]],
+            ],
+        )
+        names = {factor["factor_id"]: factor["name"] for factor in factors}
+        markup += report_table(
+            [
+                text("Factor", "요인"),
+                text(
+                    "Fitted length scale (normalized coordinates)", "적합 길이 척도 (정규화 좌표)"
+                ),
+                text("Initial length scale", "초기 길이 척도"),
+            ],
+            [
+                [names[factor_id], length, initial]
+                for factor_id, length, initial in zip(
+                    model["factor_ids"],
+                    kernel["length_scales"],
+                    kernel["initial_length_scales"],
+                    strict=True,
+                )
+            ],
+        )
+        markup += (
+            "<p>"
+            + escape(
+                text(
+                    "Numeric BO kernel families follow JMP 19.2 option names. "
+                    "This radial scaled-Euclidean implementation, normalization and optimizer "
+                    "are product policies, not verified JMP numerical parity. "
+                    "Length scales are not JMP theta parameters.",
+                    "숫자형 BO 커널 종류는 JMP 19.2 선택지를 참고합니다. "
+                    "방사형 척도 유클리드 규칙, "
+                    "정규화와 최적화는 제품 정책이며 JMP 수치 일치는 검증하지 않았습니다. "
+                    "길이 척도는 JMP theta 파라미터가 아닙니다.",
+                )
+            )
+            + "</p>"
+        )
     headers = [text("Batch rank", "배치 순서")]
     headers += [
         str(factor["name"]) + (f" ({factor['unit']})" if factor.get("unit") else "")

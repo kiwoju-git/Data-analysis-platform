@@ -272,6 +272,8 @@ export function BayesianOptimizationWorkspace() {
             onBudgetChange={recommendation.setTotalTrialBudget}
             onRecommend={() => void createRecommendation()}
             noiseDraft={recommendation.noiseDraft}
+            kernelKind={recommendation.kernelKind}
+            onKernelKindChange={recommendation.onKernelKindChange}
             onNoiseDraftChange={recommendation.onNoiseDraftChange}
             draftChanged={recommendation.draftChanged}
           />

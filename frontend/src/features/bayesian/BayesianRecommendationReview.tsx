@@ -3,6 +3,7 @@ import type { BayesianRecommendationReviewResponse, BayesianStudyResponse } from
 import { useI18n } from "../../i18n/LocaleProvider";
 import { formatMeasurement } from "../../statisticalNumberFormat";
 import { boText } from "./boNoisePolicy";
+import { BayesianSurrogateSummary } from "./BayesianSurrogateSummary";
 
 export function BayesianRecommendationReview({
   review, study, disabled, isConfirming, onConfirm, onDiscard,
@@ -34,6 +35,7 @@ export function BayesianRecommendationReview({
           "Unconfirmed candidates last up to 20 minutes and may expire earlier on restart or when the review cache is full.")}
         {unit ? ` ${text("반응 단위", "Response unit")}: ${unit}` : null}
       </p>
+      <BayesianSurrogateSummary model={calculation.shared_model} factors={study.factors} />
       <div className="table-wrap">
         <table className="result-table bayesian-review-table">
           <thead><tr>
