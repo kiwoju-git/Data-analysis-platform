@@ -147,6 +147,16 @@ this stage. Selecting one of these families does not make EI/ETI JMP's acquisiti
   lifecycle rerun passed creation, observations, three recommendations, abandon,
   budget, refresh, close and deletion. Production calculations are unchanged.
   Native aggregate/archive validation must run again on the resulting commit.
+- The first Windows CI finished later with3322 passed/3 skipped/8 failed.
+  Five failures matched the already corrected cross-platform fixtures; three
+  more were Windows-only PowerShell startup tests still accepting metadata24.
+  They now reject24, accept25 and require the numeric-kernel capability.
+  Local red reproduced those three assertions plus two missing-worktree-venv
+  setup failures. Reusing the existing locked environment at the expected
+  development path resolved setup without changing the startup scripts.
+  The complete startup/runtime subset then passed20 tests in56.05s on Windows;
+  Ruff lint/format passed. The prior CI is not counted as a Windows pass.
+  A new full CI is required after this test-only correction.
 
 Focused PowerShell checks (use the locked environment from bootstrap):
 
