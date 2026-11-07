@@ -128,6 +128,17 @@ this stage. Selecting one of these families does not make EI/ETI JMP's acquisiti
   are required on this branch before main integration. Their commit-specific
   run URLs/results are recorded in the PR and final handoff, not inferred from
   the successful baseline main run.
+- First PR CI42316912601: Linux3.12 and Python3.11 each reported3312 passed,
+  16 skipped,5 failed. Failures were two stale current-registry expectations in
+  the legacy tutorial tests (the recorded algorithm stays0.6.0), two incomplete
+  mocked HTML payload/locator fixtures, and the explicit statistical-module
+  sklearn allowlist missing `bo_kernels`. No production numerical failure was
+  reported in these runs. Tests now distinguish old/new HTML contracts and the
+  new lazy statistical import; the startup no-sklearn assertion remains intact.
+  Full CI must rerun; the first failed run is retained as evidence, not a pass.
+- The three affected tutorial/HTML-fixture/dependency-boundary test files passed
+  all36 tests locally in30.41s after the corrections; Ruff lint/format passed.
+  Recorded tutorial input files and numerical output were not regenerated.
 
 Focused PowerShell checks (use the locked environment from bootstrap):
 

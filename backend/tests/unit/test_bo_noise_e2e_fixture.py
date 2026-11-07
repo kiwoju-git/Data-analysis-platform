@@ -190,7 +190,10 @@ def test_bo_layout_receipt_only_keeps_finite_bounds(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("changed_cell", [False, True])
-def test_bo_offline_html_fixture_reads_visible_table_values(monkeypatch, tmp_path, changed_cell):
+@pytest.mark.parametrize("schema_version", [2, 3])
+def test_bo_offline_html_fixture_reads_visible_table_values(
+    monkeypatch, tmp_path, changed_cell, schema_version
+):
     root = Path(__file__).resolve().parents[3]
     monkeypatch.syspath_prepend(str(root / "tests/e2e"))
     fixture = importlib.import_module("bo_noise_extension")
@@ -205,10 +208,20 @@ def test_bo_offline_html_fixture_reads_visible_table_values(monkeypatch, tmp_pat
         "acquisition_value_standardized": 0.003,
         "acquisition_value_raw": 0.001,
     }
-    payload = {"definition": {"factors": [{"factor_id": "x"}]}, "attachment": {"items": [item]}}
+    payload = {
+        "definition": {"factors": [{"factor_id": "x"}]},
+        "attachment": {
+            "result_schema_version": schema_version,
+            "items": [item],
+            "shared_model": {"signal_kernel": {"length_scales": [1.25]}},
+        },
+    }
     page, section, table, rows, cells = (Mock() for _ in range(5))
     page.locator.side_effect = [Mock(), section]
-    section.locator.return_value.nth.return_value = table
+    lengths_table = Mock()
+    section.locator.return_value.filter.side_effect = [table, lengths_table]
+    length_cells = lengths_table.locator.return_value.nth.return_value.locator.return_value
+    length_cells.nth.return_value.inner_text.return_value = "1.25"
     table.locator.return_value = rows
     rows.nth.return_value.locator.return_value = cells
     shown = ["1", "0.5", "1.5", "0" if changed_cell else "1e-6", "2e-6", "0.003", "0.001"]
@@ -223,4 +236,7 @@ def test_bo_offline_html_fixture_reads_visible_table_values(monkeypatch, tmp_pat
         checks.to_have_attribute.assert_any_call("data-report-section-status", "rendered")
         checks.to_contain_text.assert_any_call("New-observation predictive SD (mg)")
         checks.to_have_count.assert_called_once_with(1)
+        page.get_by_role.assert_any_call("columnheader", name="Batch rank", exact=True)
+        if schema_version == 3:
+            checks.to_contain_text.assert_any_call("radial_scaled_euclidean_v1")
     page.goto.assert_called_once()
