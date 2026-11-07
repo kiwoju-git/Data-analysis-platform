@@ -139,6 +139,14 @@ this stage. Selecting one of these families does not make EI/ETI JMP's acquisiti
 - The three affected tutorial/HTML-fixture/dependency-boundary test files passed
   all36 tests locally in30.41s after the corrections; Ruff lint/format passed.
   Recorded tutorial input files and numerical output were not regenerated.
+- Second PR CI42318187185 passed3319 backend tests (16 conditional skips) on
+  Linux3.12/Python3.11 and1124 frontend tests. Linux E2E then reached the older
+  comprehensive BO lifecycle driver, whose new-UI assertion still expected
+  schema2. A focused built-UI run reproduced that exact assertion; it now checks
+  request/result3, model4 and requested/stored family equality. The full focused
+  lifecycle rerun passed creation, observations, three recommendations, abandon,
+  budget, refresh, close and deletion. Production calculations are unchanged.
+  Native aggregate/archive validation must run again on the resulting commit.
 
 Focused PowerShell checks (use the locked environment from bootstrap):
 

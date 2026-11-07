@@ -4313,7 +4313,12 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
             page.get_by_role("button", name="이 후보로 실험 확정", exact=True).click()
         assert confirmed.value.status == 201, confirmed.value.text()
         payload = confirmed.value.json()
-        assert payload["result_schema_version"] == request["schema_version"] == 2
+        assert payload["result_schema_version"] == request["schema_version"] == 3, {
+            "request_schema": request["schema_version"],
+            "result_schema": payload["result_schema_version"],
+        }
+        assert payload["shared_model"]["schema_version"] == 4
+        assert payload["shared_model"]["signal_kernel"]["family"] == request["kernel"]["kind"]
         assert payload["source_history_revision_id"] == request["expected_history_revision_id"]
         assert (
             payload["source_observation_history_sha256"] == request["expected_history_sha256"]
