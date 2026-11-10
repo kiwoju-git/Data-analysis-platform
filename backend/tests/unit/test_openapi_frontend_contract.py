@@ -747,7 +747,8 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="get",
         path="/api/v1/bayesian-studies/{study_id}",
         success_status="200",
-        response_schema="BayesianStudyResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset({"BayesianStudyResponse", "MixedStudyResponse"}),
         parameters=frozenset({("study_id", "path")}),
     ),
     OperationContract(
@@ -763,7 +764,8 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/close",
         success_status="200",
-        response_schema="BayesianStudyCloseResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset({"BayesianStudyCloseResponse", "MixedStudyCloseResponse"}),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -789,7 +791,8 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="get",
         path="/api/v1/bayesian-studies/{study_id}/trials",
         success_status="200",
-        response_schema="BayesianTrialListResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset({"BayesianTrialListResponse", "MixedTrialListResponse"}),
         parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
     ),
     OperationContract(
@@ -806,7 +809,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="put",
         path="/api/v1/bayesian-studies/{study_id}/observations/batch",
         success_status="200",
-        response_schema="BayesianObservationBatchCreateResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianObservationBatchCreateResponse", "MixedObservationBatchResponse"}
+        ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -815,7 +821,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/replicates",
         success_status="201",
-        response_schema="BayesianReplicateCreateResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianReplicateCreateResponse", "MixedReplicateCreateResponse"}
+        ),
         parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -824,7 +833,10 @@ FRONTEND_ROUTE_CONTRACTS = [
         method="post",
         path="/api/v1/bayesian-studies/{study_id}/trials/{trial_id}/abandon",
         success_status="200",
-        response_schema="BayesianTrialTransitionResponse",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {"BayesianTrialTransitionResponse", "MixedTrialTransitionResponse"}
+        ),
         parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -931,6 +943,9 @@ FRONTEND_ROUTE_CONTRACTS = [
                 "DesirabilityOrderedBatchResponse",
                 "DesirabilityFitBatchResponse",
                 "DesirabilityCurveBatchResponse",
+                "PlanningBatchResponse",
+                "AugmentationBatchResponse",
+                "MixedBatchResponse",
             }
         ),
         parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
@@ -3773,6 +3788,9 @@ def test_bayesian_versioned_response_and_replicate_contracts(
             "DesirabilityOrderedBatchResponse",
             "DesirabilityFitBatchResponse",
             "DesirabilityCurveBatchResponse",
+            "PlanningBatchResponse",
+            "AugmentationBatchResponse",
+            "MixedBatchResponse",
         }
     )
     trials = frozenset(

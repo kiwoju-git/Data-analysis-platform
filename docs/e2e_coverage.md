@@ -859,7 +859,7 @@ browser critical path.
 - `verify Report Center request context` (full flow)
 - `verify RSM response validation and source ownership`
 - `verify explicit replicate retry ownership`
-- `verify stored multiresponse history without UI writes` (API-seeded restoration;
+- `verify multiresponse and saved-model BO workflows` (API-seeded restoration;
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)
 - `verify API translation boundary with synthetic inputs` (full flow)

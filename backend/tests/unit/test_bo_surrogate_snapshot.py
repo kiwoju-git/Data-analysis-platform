@@ -159,6 +159,16 @@ def test_two_observation_gaussian_has_hand_checkable_midpoint():
     assert result.predictive_variance_scaled[0] == pytest.approx(variance + 1, abs=1e-15)
 
 
+def test_restore_preserves_cholesky_triangular_solver_layout():
+    model, targets, _, _ = _fixture()
+    payload = dump_bo_surrogate(model, training_targets_scaled=targets)
+    restored = load_bo_surrogate(payload)
+    assert model.lower.flags.f_contiguous
+    # SciPy selects a different LAPACK transpose path for C-order factors.
+    assert restored.lower.flags.f_contiguous
+    np.testing.assert_array_equal(restored.lower, model.lower)
+
+
 @pytest.mark.parametrize("goal", ["maximize", "minimize", "match_target"])
 def test_snapshot_retains_direction_normalization_and_legacy_metadata(goal):
     model, targets, _, _ = _fixture(None, goal=goal)

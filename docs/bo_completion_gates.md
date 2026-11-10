@@ -209,6 +209,28 @@ security, GP resource checks and offline archive verification. Its final status
 must be read from the resulting commit/PR checks, not inferred from this
 pre-commit local ledger. CI archive artifacts are not GitHub Release publication.
 
+### First Remote Integration Run
+
+PR6 / run42751902549 tested source3e925bf. Ubuntu Python3.11 and3.12 each
+reported24 failed/4,266 passed/26 skipped. The failures are retained as evidence,
+not counted as a successful gate. Twenty-one were stale current-registry,
+response-union, deletion-impact or E2E-step expectations; their corrections keep
+explicit old algorithm versions and exact legacy hashes. Three numeric planning
+API tests failed stored-model self-validation and require a native rerun.
+
+Independent source review identified a fitted/restored Cholesky memory-layout
+difference: SciPy's fitted factor is column-major, while JSON restore made it
+row-major and selected a different triangular-solve path. A new local regression
+failed before the restore layout was preserved and passed after. Stored array
+values, hashes, fitting policy and validation tolerances are unchanged. A direct
+synthetic public-fit/JSON-roundtrip test now exposes the precise validation
+boundary without logging user data or weakening safe API error redaction. The
+native numerical failure is not considered resolved until its rerun passes.
+
+Dependency-security and both native GP resource jobs passed in this first run.
+Linux archive verification was skipped because its upstream product gates failed;
+that skip is not an archive pass. Main integration remains gated on final CI.
+
 The owner explicitly requested all of these remaining gates, not only a release
 of the current target-curve checkpoint. Do not mark this plan complete while
 candidate/profiler/augmentation/category work is still missing.

@@ -70,6 +70,46 @@ def _database_rows(root):
         }
 
 
+def test_public_numeric_fit_snapshot_round_trip(tmp_path, monkeypatch):
+    """Expose synthetic fit/restore failures before the worker's safe API redaction."""
+    import json
+    from uuid import UUID
+
+    from threadpoolctl import threadpool_limits
+
+    from app.api.v1.schemas.bo_planning import PlanningModelCreateRequest
+    from app.services import bo_planning
+    from app.statistics import bo_planning_model as planning
+
+    settings = Settings(workspace_root=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        study = completed(client)
+        stored = bo_planning.get_bayesian_study(settings, UUID(study["study_id"]))
+        body = PlanningModelCreateRequest.model_validate(fit_request(study))
+        request = bo_planning._calculation_request(
+            stored.factors,
+            stored.objective,
+            stored.constraints,
+            [bo_planning._vector_observation(trial) for trial in stored.trials],
+            bo_planning._excluded(stored),
+            body.fit,
+        ).worker_payload()
+    original = planning._same_incumbent
+
+    def checked_incumbent(actual, expected):
+        # Recursive assertions identify the first differing synthetic leaf.
+        assert original(actual, expected), (actual, expected)
+        return True
+
+    monkeypatch.setattr(planning, "_same_incumbent", checked_incumbent)
+    with threadpool_limits(limits=1):
+        snapshot = planning.fit_planning_model(request)
+        before = json.dumps(snapshot, sort_keys=True, allow_nan=False)
+        restored = planning.restore_planning_model(json.loads(before))
+    assert restored.request.worker_payload() == request
+    assert json.dumps(snapshot, sort_keys=True, allow_nan=False) == before
+
+
 def test_real_planning_manual_batch_restore_backup_and_report(tmp_path, monkeypatch):
     settings = Settings(workspace_root=tmp_path / "workspace")
     with TestClient(create_app(settings)) as client:

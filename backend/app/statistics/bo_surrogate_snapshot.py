@@ -341,7 +341,9 @@ def load_bo_surrogate(
     ):
         raise _invalid()
     points = np.array(training.x_normalized, dtype=float)
-    lower = np.array(state.factorization.lower, dtype=float)
+    # Match SciPy's fitted Cholesky layout so restore uses the same triangular
+    # solve path, rather than a transposed LAPACK path with different roundoff.
+    lower = np.array(state.factorization.lower, dtype=float, order="F")
     alpha = np.array(state.factorization.alpha, dtype=float)
     targets = np.array(training.targets_scaled, dtype=float)
     if (
