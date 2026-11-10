@@ -26,7 +26,7 @@ runtime compatibility is recorded above. See [method contract](docs/two_variance
 
 ### Noise-Aware BO and GPR
 
-The current source contract is **API39 / metadata32 / BO method0.15.0**.
+The current source contract is **API42 / metadata33 / BO method0.16.0**.
 It retains numeric single/multiresponse review and confirmation, and adds
 source-locked reusable models, immutable candidate-table revisions, ordered
 manual selection, conditional Profiler views and separate augmentation policies.
@@ -36,11 +36,16 @@ See the [completion gates and executed checks](docs/bo_completion_gates.md),
 [candidate/Profiler contract](docs/bo_candidate_planning_contract.md),
 [augmentation policies](docs/bo_augmentation_contract.md) and
 [mixed-factor integration](docs/bo_mixed_factor_integration.md).
+Saved numeric and mixed models also provide conditional row-LOO diagnostics and
+explicit Auto strategy advice. Applying advice does not create trials; reviewed
+and confirmed Auto selections retain their exact threshold, scores and source
+evidence for reopen and managed HTML. See the [saved-evidence contract](docs/bo_auto_evidence_contract.md)
+and [final validation ledger](docs/bo_final_validation_20261111.md).
 The workflow follows documented JMP options where established; it is not a
 claim of identical JMP fitting, desirability curves or recommendation values.
 Linux publication is deferred. The Linux download below remains an older build,
 not a distribution of these source changes. Back up offline before upgrading;
-code rollback alone cannot open a metadata32 workspace with an older binary.
+code rollback alone cannot open a metadata33 workspace with an older binary.
 
 The following paragraphs record earlier gates. The API31 source workflow separated
 **Review experiment candidates** from

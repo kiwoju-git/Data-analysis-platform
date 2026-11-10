@@ -12,7 +12,7 @@ from app.api.v1.schemas.bo_mixed_workflow import (
     MixedIncumbent,
     MixedResponseModel,
     MixedSelectionCalculation,
-    MixedSelectionRequest,
+    MixedSelectionInput,
 )
 from app.api.v1.schemas.bo_planning import Sha256
 
@@ -47,10 +47,10 @@ class MixedBatchItem(_Model):
 
 class MixedBatchResponse(_Model):
     method_id: Literal["doe.bayesian_optimization"] = "doe.bayesian_optimization"
-    method_version: Literal["0.15.0"] = "0.15.0"
-    config_schema_version: Literal[10] = 10
-    result_schema_version: Literal[10] = 10
-    model_schema_version: Literal[10] = 10
+    method_version: Literal["0.15.0", "0.16.0"] = "0.15.0"
+    config_schema_version: Literal[10, 12] = 10
+    result_schema_version: Literal[10, 12] = 10
+    model_schema_version: Literal[10, 12] = 10
     item_schema_version: Literal[5] = 5
     batch_size: int = Field(ge=1, le=8, strict=True)
     batch_policy: Literal["source_owned_mixed_planning_v1"] = "source_owned_mixed_planning_v1"
@@ -66,7 +66,7 @@ class MixedBatchResponse(_Model):
     incumbent: MixedIncumbent | None
     observation_view: dict[str, JsonValue] | None
     warnings: list[str] = Field(max_length=128)
-    selection_request: MixedSelectionRequest
+    selection_request: MixedSelectionInput
     calculation: MixedSelectionCalculation
     items: list[MixedBatchItem] = Field(min_length=1, max_length=8)
     config_sha256: Sha256
@@ -81,6 +81,25 @@ class MixedBatchResponse(_Model):
 
     @model_validator(mode="after")
     def complete_bundle(self) -> "MixedBatchResponse":
+        expected = (
+            ("0.16.0", 12, 12, 12, 4)
+            if self.selection_request.schema_version == 5
+            else (
+                "0.15.0",
+                10,
+                10,
+                10,
+                2 if self.selection_request.kind == "manual_ordered" else 3,
+            )
+        )
+        if (
+            self.method_version,
+            self.config_schema_version,
+            self.result_schema_version,
+            self.model_schema_version,
+            self.calculation.schema_version,
+        ) != expected:
+            raise ValueError("bayesian_planning_result_invalid")
         rows = (
             self.calculation.items
             if self.calculation.schema_version == 2

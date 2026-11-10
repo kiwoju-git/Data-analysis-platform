@@ -55,6 +55,17 @@ describe("runtime compatibility", () => {
       missingCapabilities: ["bayesian_fit_quality"],
     });
     expect(
+      evaluateRuntimeCompatibility(
+        runtimeInfo({
+          capabilities: { ...runtimeInfo().capabilities, bayesian_auto_strategy_advice: false },
+        }),
+      ),
+    ).toMatchObject({
+      compatible: false,
+      code: "runtime_capability_missing",
+      missingCapabilities: ["bayesian_auto_strategy_advice"],
+    });
+    expect(
       evaluateRuntimeCompatibility(runtimeInfo({ build_commit: "backend-build" }), "frontend-build"),
     ).toMatchObject({ compatible: false, code: "runtime_build_commit_mismatch" });
   });
@@ -147,6 +158,8 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
       bayesian_persistent_planning: true,
       bayesian_augmentation: true,
       bayesian_mixed_factor_planning: true,
+      bayesian_auto_strategy_advice: true,
+      bayesian_auto_selection_evidence: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },

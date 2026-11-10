@@ -1,4 +1,14 @@
 import type { CandidatePage, CandidateRevisionCreateRequest, CandidateRow, EvaluatedCandidateRow, PlanningBatchResponse, PlanningModelDetail } from "./boPlanning";
+import type { AutoStrategyView } from "../boAutoStrategy";
+
+export interface AutoEvidenceRequest {
+  schema_version: 1; routing_model_id: string; expected_model_sha256: string;
+  r_squared_threshold: number; expected_decision_sha256: string;
+}
+export interface AutoStrategyEvidence {
+  schema_version: 1; diagnostic: Omit<AutoStrategyView["diagnostic"], "source_is_current">;
+  decision: AutoStrategyView["decision"]; decision_sha256: string;
+}
 
 export interface AugmentationSourceRequest {
   expected_study_version_id: string; expected_definition_sha256: string;
@@ -9,12 +19,15 @@ export interface CandidateRevisionCreateRequestV2 extends Omit<CandidateRevision
 }
 export type AugmentationPolicy = "greedy_incremental_maxpro_v1" | "greedy_mixed_maximin_v1" |
   "refine_ei_then_desirability_sd_v1" | "confirm_mean_then_competitive_sd_v1" | "refine_ei_alternating_desirability_response_sd_v2";
-export interface AugmentationSelectionRequest extends AugmentationSourceRequest {
-  schema_version: 2; request_id: string; candidate_revision_id: string; expected_rows_sha256: string;
+interface AugmentationSelectionFields extends AugmentationSourceRequest {
+  request_id: string; candidate_revision_id: string; expected_rows_sha256: string;
   model_id: string | null; expected_model_sha256: string | null; policy: AugmentationPolicy;
   batch_size: number; total_trial_budget: number; duplicate_tolerance: number; min_batch_distance_normalized: number;
   max_evaluations: number; max_moment_evaluations: number; time_budget_ms: number;
 }
+export type AugmentationSelectionRequest = AugmentationSelectionFields & (
+  { schema_version: 2; auto_strategy?: never } | { schema_version: 4; auto_strategy: AutoEvidenceRequest }
+);
 export interface AugmentationStep {
   rank: number; row_id: string; criterion: string; score: number; score_scale: "natural_log" | "original";
   optimization_direction: "minimize" | "maximize"; nearest_existing_distance: number;
@@ -37,12 +50,15 @@ export interface AugmentationTrace {
     schedule: "first_ei_then_alternating_desirability_sd_response_sd" };
 }
 export interface AugmentationPredictedRow extends Omit<EvaluatedCandidateRow, "acquisition"> { acquisition: EvaluatedCandidateRow["acquisition"] | null }
-export interface AugmentationCalculation {
-  schema_version: 1; augmentation: AugmentationTrace; selected_rows: (CandidateRow | AugmentationPredictedRow)[];
+interface AugmentationCalculationFields {
+  augmentation: AugmentationTrace; selected_rows: (CandidateRow | AugmentationPredictedRow)[];
   source_row_count: number; prediction_evaluations: number; max_moment_evaluations: number; time_budget_ms: number; model_refit: false;
 }
+export type AugmentationCalculation = AugmentationCalculationFields & (
+  { schema_version: 1; auto_evidence?: never } | { schema_version: 2; auto_evidence: AutoStrategyEvidence }
+);
 export interface AugmentationSelectionResponse {
-  schema_version: 2; selection_id: string; study_id: string; study_version_id: string;
+  schema_version: 2 | 4; selection_id: string; study_id: string; study_version_id: string;
   model_id: string | null; candidate_revision_id: string; config_sha256: string; result_sha256: string;
   request: AugmentationSelectionRequest; calculation: AugmentationCalculation; created_at: string;
   source_is_current: boolean; confirmed_batch_id: string | null;
@@ -50,7 +66,7 @@ export interface AugmentationSelectionResponse {
 export interface AugmentationBatchResponse extends Omit<PlanningBatchResponse,
   "method_version" | "config_schema_version" | "result_schema_version" | "model_schema_version" | "batch_policy" |
   "calculation" | "source" | "response_models" | "incumbent" | "observation_view" | "warnings"> {
-  method_version: "0.14.0"; config_schema_version: 9; result_schema_version: 9; model_schema_version: 9;
+  method_version: "0.14.0" | "0.16.0"; config_schema_version: 9 | 11; result_schema_version: 9 | 11; model_schema_version: 9 | 11;
   batch_policy: "source_owned_augmentation_v1"; calculation: AugmentationCalculation; selection_request: AugmentationSelectionRequest;
   source: Omit<PlanningBatchResponse["source"], "model_id" | "model_sha256"> & { model_id: string | null; model_sha256: string | null };
   model: PlanningModelDetail | null;

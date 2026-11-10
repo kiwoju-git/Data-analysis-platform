@@ -1,8 +1,35 @@
 # Runtime Compatibility Contract
 
-## Augmentation and Mixed Planning (API39)
+## Saved Numeric and Mixed Auto Evidence (API42)
 
-Current frontend and Windows launcher require API39/metadata32, including
+Current frontend and Windows launcher require API42/metadata33 and
+`bayesian_auto_selection_evidence`. Numeric selection4/calculation2/batch11 and
+mixed selection5/calculation4/batch12 store server-verified conditional LOO routing
+evidence; legacy selection2/batch9 and mixed selection3/batch10 remain readable.
+Migration33 extends actual SQL CHECKs
+without rewriting stored JSON/hash inputs. See `bo_auto_evidence_contract.md`.
+Code rollback does not downgrade metadata33 or make new artifacts readable by
+older code. Execution evidence is recorded in `bo_final_validation_20261111.md`.
+
+## Conditional BO Auto Advice (API41)
+
+The previous checkpoint's frontend and Windows launcher required API41/metadata32. The
+`bayesian_auto_strategy_advice` capability exposes read-only conditional LOO
+strategy advice on numeric and mixed saved models. Applying a suggestion is a
+draft edit, not a saved Auto artifact or automatic confirmation. Existing model,
+selection and batch schemas are unchanged. See `bo_auto_strategy_contract.md`.
+
+## Conditional BO LOO (API40, Historical)
+
+The preceding API40/metadata32 checkpoint added source-locked
+numeric/mixed planning model LOO endpoints with a read-only diagnostic and local
+JSON download. Existing model/result/method schemas and checksums are unchanged;
+no migration or Auto augmentation routing is introduced. See
+[conditional LOO contract](bo_loo_diagnostic_contract.md).
+
+## Augmentation and Mixed Planning (API39, Historical)
+
+That gate's frontend and Windows launcher required API39/metadata32, including
 `bayesian_augmentation` and `bayesian_mixed_factor_planning`. Mixed studies use
 definition7/history2; explicit typed-factor planning uses snapshot2, candidate3,
 selection3 and batch10/item5 (method0.15.0). Numeric augmentation batches use

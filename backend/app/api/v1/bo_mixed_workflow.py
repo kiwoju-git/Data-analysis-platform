@@ -5,6 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas import bo_mixed_workflow as dto
+from app.api.v1.schemas.bo_auto_strategy import AutoStrategyRequest, AutoStrategyView
+from app.api.v1.schemas.bo_loo import LooRequest, LooView
 from app.api.v1.schemas.bo_mixed_batch import MixedBatchResponse
 from app.api.v1.schemas.bo_planning import PlanningConfirmRequest
 from app.api.v1.schemas.reports import ReportSourceDescriptor
@@ -14,6 +16,24 @@ from app.services import bo_mixed_models as models
 from app.services import bo_mixed_selections as selections
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
+
+
+@router.post(
+    "/{study_id}/mixed-planning-models/{model_id}/auto-strategy", response_model=AutoStrategyView
+)
+def auto_strategy(
+    request: Request, study_id: UUID, model_id: UUID, body: AutoStrategyRequest
+) -> AutoStrategyView:
+    from app.services.bo_auto_strategy import get_auto_strategy
+
+    return get_auto_strategy(request.app.state.settings, study_id, model_id, body, mixed=True)
+
+
+@router.post("/{study_id}/mixed-planning-models/{model_id}/loo", response_model=LooView)
+def model_loo(request: Request, study_id: UUID, model_id: UUID, body: LooRequest) -> LooView:
+    from app.services.bo_loo import get_loo_view
+
+    return get_loo_view(request.app.state.settings, study_id, model_id, body, mixed=True)
 
 
 @router.post(
@@ -84,7 +104,7 @@ def list_candidates(request: Request, study_id: UUID) -> dto.MixedCandidateList:
     status_code=status.HTTP_201_CREATED,
 )
 def create_selection(
-    request: Request, study_id: UUID, body: dto.MixedSelectionRequest
+    request: Request, study_id: UUID, body: dto.MixedSelectionInput
 ) -> dto.MixedSelectionResponse:
     return selections.create_mixed_selection(request.app.state.settings, study_id, body)
 

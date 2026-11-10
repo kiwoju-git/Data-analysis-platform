@@ -65,9 +65,9 @@ export function PlanningSavedBatchReport({ batch }: { batch: PlanningBatchRespon
     running.current = true; const token = guard.begin();
     setState({ key, busy: true, error: null, report: null });
     try {
-      const descriptor = await (batch.result_schema_version === 10 ? fetchMixedBatchReportSource : batch.result_schema_version === 9 ? fetchAugmentationReportSource : fetchPlanningBatchReportSource)(batch.study_id, batch.batch_id);
+      const descriptor = await (batch.batch_policy === "source_owned_mixed_planning_v1" ? fetchMixedBatchReportSource : batch.result_schema_version === 9 || batch.result_schema_version === 11 ? fetchAugmentationReportSource : fetchPlanningBatchReportSource)(batch.study_id, batch.batch_id);
       if (!guard.current(token)) return;
-      if (!(batch.result_schema_version === 10 ? validMixedReportSource(descriptor, batch) : batch.result_schema_version === 9 ? validAugmentationReportSource(descriptor, batch) : validPlanningBatchReportSource(descriptor, batch))) throw new Error("bayesian_planning_report_source_mismatch");
+      if (!(batch.batch_policy === "source_owned_mixed_planning_v1" ? validMixedReportSource(descriptor, batch) : batch.batch_policy === "source_owned_augmentation_v1" ? validAugmentationReportSource(descriptor, batch) : validPlanningBatchReportSource(descriptor, batch))) throw new Error("bayesian_planning_report_source_mismatch");
       const capability = await fetchStoredReportCapability(descriptor.source, locale);
       if (!guard.current(token)) return;
       if (!isStoredReportCapability(capability) || capability.source_ref_sha256 !== descriptor.source_ref_sha256 || reportSourceKey(capability.source) !== reportSourceKey(descriptor.source) || capability.locale !== locale) throw new Error("bayesian_planning_report_source_mismatch");
@@ -91,7 +91,7 @@ export function PlanningSavedBatchReport({ batch }: { batch: PlanningBatchRespon
       if (guard.current(token)) setState({ key, busy: false, report, error: caught instanceof Error && /^[a-z][a-z0-9_]+$/.test(caught.message) ? caught.message : "managed_report_download_failed" });
     } finally { if (guard.current(token)) running.current = false; }
   }
-  return <section aria-label={text.createReport}><p>{batch.result_schema_version === 9 ? augmentationMessages(locale).reportMeaning : text.reportMeaning}</p><div className="bo-planning-actions">
+  return <section aria-label={text.createReport}><p>{batch.result_schema_version === 9 || batch.result_schema_version === 11 ? augmentationMessages(locale).reportMeaning : text.reportMeaning}</p><div className="bo-planning-actions">
     <button type="button" className="secondary-button" disabled={current.busy} onClick={() => void create()}><FileText size={16} aria-hidden="true" />{text.createReport}</button>
     {current.report && <><button type="button" className="secondary-button" disabled={current.busy} onClick={() => void download()}><Download size={16} aria-hidden="true" />{text.downloadReport}</button><a href={`/reports?source_kind=bayesian_history_revision&report_id=${encodeURIComponent(current.report.export_id)}`}>{text.openReport}</a></>}
     </div>{current.busy && <p role="status">{text.busy}</p>}{current.error && <div role="alert" className="notice-box notice-warning"><p>{current.error === "bayesian_planning_report_unavailable" ? text.reportUnavailable : text.error}</p><code>{current.error}</code></div>}

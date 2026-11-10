@@ -354,3 +354,154 @@ Those layer tests alone do not establish complete GPR save/restore, CV, surface 
 coverage. The integrated GPR and release status belongs in
 [`bo_gpr_noise_validation_extension.md`](bo_gpr_noise_validation_extension.md), not in the historical
 research checklist. No actual JMP output was obtained during these implementation checks.
+
+## 9. Current Option Audit (2026-11-10)
+
+This audit starts from main `52f567091aab347f29aec5b8e1f7b6c052b88e3d`.
+Earlier sections are historical gates, not a current list of missing features.
+Persistent candidate tables/import, ordered manual selection, source-locked
+Profiler, separate augmentation, nominal/ordinal kernels and Gaussian target
+curves are already implemented. Their contracts and remaining non-claims are
+in [the completion gates](bo_completion_gates.md).
+
+| Setting | Current status / action | Alignment boundary |
+| --- | --- | --- |
+| Continuous kernel | Existing Gaussian, Matern 5/2, Matern 3/2, Exponential preserved | Same named choices do not establish equal fitted covariance/optimizer |
+| Measurement noise | Existing estimate/fixed SD/near-noiseless preserved | Do not tune defaults to make a private example match; jitter is not measurement noise |
+| Xi | Existing editable improvement margin, default 0.01, zero permitted | Not the JMP augmentation R-squared threshold |
+| Candidate table rows | Existing explicit 1..10000; numeric planning default min(1000 * factor count, 10000) | A stored candidate table is distinct from the acquisition search pool |
+| Acquisition seed pool | Previously hardcoded to 32; now editable 32..4096 | Feasibility/novelty can remove points; discrete search adds assignments; not the JMP candidate table |
+| Local search | Previously hardcoded to 0 starts / 50 iterations; now editable 0..16 / 1..500 | Explicit smooth continuous refinement within the existing search, not recovered JMP internals |
+| GP optimizer iterations | Previously hardcoded to 60; now editable 1..200 | Distinct from acquisition iterations and total fit evaluations |
+| Total acquisition evaluations | Legacy q1 previously hardcoded to 256; now editable, default preserved | Batch/fit/curve/planning retains default 1024; no silent budget expansion |
+| Auto augmentation | Not yet a verified JMP-equivalent automatic routing policy | Response-specific BO LOO diagnostics and explicit routing contract are a subsequent gate |
+| Maximize/minimize three-control curve | Product DS-linear preserved | Workshop tail rules are not sufficiently specified to invent a matching formula |
+| Historical X/Y study import / mixture domain | Still separate extensions | Candidate-row import does not implement observed-history import or mixture pseudocomponents |
+
+The official [launch options](https://www.jmp.com/support/help/en/19.2/jmp/launch-the-bayesian-optimization-platform.shtml)
+were rechecked: the default candidate-table size is min(1000 * factor count,
+10000), and 0.25 is the model-based augmentation R-squared threshold. Neither
+implies an EI xi value or permission to enlarge this product's search budget.
+The new controls expose existing backend request fields only. No statistical
+method, API contract, result schema or metadata migration is changed.
+
+Acceptance: exact string-to-integer validation, request snapshots for schemas
+4/5/6/7 and planning, preserved defaults, explicit insufficient-budget errors,
+and stale response rejection when search settings change. Shared worker time,
+evaluation and moment limits remain authoritative; larger pools do not promise
+a completed search or a global optimum.
+
+The independent review found a hidden-budget interaction: legacy q1 showed
+256 while the planning fit path still used its separate 1024 default. An
+explicit budget edit now updates both paths, including subsequent fit-mode
+changes. Untouched defaults remain compatible. Regression: pool 2048 / explicit
+budget 4096 must build both requests; incomplete numeric drafts stay strings.
+
+Original search settings already reside in checksum-validated immutable config
+JSON. Tests inspect that persisted request and verify restart does not rewrite
+it. The saved recommendation response does not expose the entire original
+request: next-review draft controls are not represented as restored settings.
+No missing historical setting is inferred from current defaults. HTML continues
+to read stored calculations without fitting; this change does not add a new
+search-settings report section.
+
+Verification ledger (this change, not earlier CI):
+- Source-confirmed: fixed UI pool/start/iteration values and distinct budget branches.
+- Reproduced: 15 new draft tests failed before wiring; existing 30 passed.
+- Fixed: explicit UI controls, strict parsing, both budget paths and unchanged defaults.
+- Local numerical limitation: the synthetic q2 estimate-noise fixture with pool
+  64, one local start, 5 local iterations and 80 GP iterations reached
+  `bayesian_desirability_beta_precision_unsupported` on Windows/Python3.10.
+  The first API run recorded 1 failure / 30 passes. No tolerance or computation
+  was changed to hide it. The original q2 lifecycle remains tested; explicit
+  settings use a real q1 success fixture. A separate worker-error injection test
+  checks 409/code/no-commit without requiring every CPU's optimized GP to reach
+  the same numerical boundary. This is not an all-options q2 success claim.
+- Final frontend run: 153 files / 1378 tests passed with `--maxWorkers=1`.
+  Full lint passed with 12 pre-existing React refresh warnings; changed-file
+  lint passed without warnings. TypeScript/build passed (existing chunk-size
+  warnings). Localization checker verified 3005 source strings / 4685 keys.
+- Backend static checks: ruff check/format (587 files), mypy (318 modules),
+  capability metadata tests (11), capability matrix sync and 18 tutorial blocks
+  passed. The final focused run passed 28 tests: 4 fit-policy API lifecycle/error
+  tests and 24 deterministic acquisition tests (3 existing deprecation warnings).
+- Built UI: Chromium149.0.7827.55, Windows10 / Python3.10.11 / Node24.17.0.
+  Legacy q1 and fit-quality + Gaussian-curve q1 journeys passed: exact request
+  fields, invalid input without POST, pool64 -> 65 stale response guard,
+  confirm-response loss / same-ID retry, observed response entry, exact result
+  restore, KO/EN at1024/1440, no fit on locale/resize, managed report download
+  and offline HTML. Page errors were empty. A separate server restart restored
+  the same result SHA-256 without writes. The final legacy run also checked
+  pool2048 / explicit budget4096 leaves the planning-model button enabled.
+- Independent agent: read-only option/source review found the hidden planning
+  budget issue above, then rechecked its fix and the accessible-name change.
+  The agent did not execute numerical or browser tests.
+- Browser finding: validation errors inside a wrapping label changed the input's
+  accessible name. The visible label now owns `aria-labelledby`; the error
+  remains a separate `aria-describedby` message. The first built-app run failed
+  that exact-label check; the rebuilt q1 journey and server-restart restore passed.
+- Full backend command was started with single-thread BLAS limits, then
+  interrupted during the early integration tests because of local runtime cost.
+  It is **not a full-backend pass**; the untouched backend calculation layer is
+  not recertified by this frontend change. A later full native/CI run remains
+  required before main/release integration.
+- Unverified: live JMP runtime parity; Linux archive and remote CI for this local change.
+  Private workshop data, screenshots and derived values are not included here.
+
+Reproduction commands (repository root; synthetic workspace only):
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path backend).Path
+$env:OMP_NUM_THREADS = '1'
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:MKL_NUM_THREADS = '1'
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_bo_fit_quality_api.py backend/tests/unit/test_bo_desirability_acquisition.py -q
+npm --prefix frontend run test -- --run --maxWorkers=1
+npm --prefix frontend run lint
+npm --prefix frontend run build
+.\.venv\Scripts\python.exe tests/e2e/bo_desirability_review.py --base-url http://127.0.0.1:8681 --output "$env:TEMP\bo-search-q1"
+.\.venv\Scripts\python.exe tests/e2e/bo_desirability_review.py --base-url http://127.0.0.1:8681 --output "$env:TEMP\bo-search-curve" --fit-quality --curve-policy
+```
+
+The browser commands require a built-UI server using a separate synthetic
+workspace; they create synthetic studies and reports. This checkpoint remains
+local on `fix/bo-search-option-alignment`, without a new commit, push or Release.
+The exposed settings permit an explicit comparison configuration; no new claim
+of closer JMP numerical outputs is inferred from UI wiring alone.
+
+## 10. Conditional LOO Diagnostic (Local API40 Checkpoint)
+
+The next saved-model diagnostic is implemented for numeric and mixed planning
+sources. It retains full-fit parameters, evaluates individual raw trials even
+after exact-repeat compression, and exposes response-wise R2/RMSE, actual versus
+predicted values and an exact-source JSON download. It does not change BO fits,
+desirability, recommendation search or automatic augmentation routing. Full-refit
+CV, managed LOO reports and actual JMP LOO numerical parity remain separate gates.
+See [definition, compatibility and execution evidence](bo_loo_diagnostic_contract.md).
+
+## 11. Conditional LOO Strategy Advice (Local API41)
+
+Numeric and mixed saved models can now suggest an augmentation strategy using
+all response-wise conditional LOO scores and an editable default0.25 threshold.
+Any low response suggests exploration; all-pass Refine and mixed maximin are
+explicit product policies. Confirm remains manual because its exact automatic
+switching rule was not established. Unavailable R2 blocks advice.
+
+Advice requires explicit application and the existing review/confirmation flow.
+It neither refits nor rewrites a model or history. Exact-source JSON is a local
+download, not a managed Auto artifact. See [policy and evidence](bo_auto_strategy_contract.md).
+This extends the preceding diagnostic gate; it does not establish JMP numeric
+parity or claim to persist an Auto decision in the existing selection schema.
+
+## 12. Persisted Auto Evidence (API42 Follow-up)
+
+Numeric and mixed Auto selections now have separate versioned request/result
+contracts retaining the exact routing model, conditional LOO scores, threshold
+and decision hash through confirmation, reopen and managed HTML. The server
+verifies advice rather than trusting browser-provided metrics. Old manual and
+automatic selections remain unchanged. Model-free maximin/MaxPro retains a null
+prediction model; a routing model is separate provenance, not candidate knowledge.
+
+This completes the Auto-evidence lifecycle, not live JMP numerical parity or an
+undocumented automatic Confirm rule. See [the final evidence ledger](bo_final_validation_20261111.md)
+and [the saved-evidence contract](bo_auto_evidence_contract.md).

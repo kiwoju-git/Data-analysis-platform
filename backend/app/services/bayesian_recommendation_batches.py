@@ -436,7 +436,7 @@ def _validated_response(
     *,
     is_latest: bool,
 ) -> BayesianAnyBatchResponse:
-    if record.result_schema_version == 10:
+    if record.result_schema_version in {10, 12}:
         from app.api.v1.schemas.bo_mixed_batch import MixedBatchResponse
 
         saved_mixed = MixedBatchResponse.model_validate_json(record.result_json)
@@ -452,7 +452,7 @@ def _validated_response(
                 "batch_state": _batch_state(mixed_items),
             }
         )
-    if record.result_schema_version in {8, 9}:
+    if record.result_schema_version in {8, 9, 11}:
         from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
         from app.api.v1.schemas.bo_planning_batch import PlanningBatchResponse
 

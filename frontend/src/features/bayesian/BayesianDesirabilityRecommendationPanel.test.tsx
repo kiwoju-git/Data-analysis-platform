@@ -41,7 +41,25 @@ describe("multiresponse q1 presentation", () => {
     expect(html.match(/value="gaussian"/g)).toHaveLength(2); expect(html.match(/value="exponential"/g)).toHaveLength(2);
     expect(html).toContain("Experiments in this batch (1-8)"); expect(html).not.toContain("parallel_batch"); expect(html).toContain("DS-linear");
     expect(html).toContain("2–2000"); expect(html).toContain("1000–60000");
+    expect(html).toContain("Seeded candidate pool per step (32-4096)");
+    expect(html).toContain("Local search starts per step (0-16)");
+    expect(html).toContain("Iterations per local search (1-500)");
+    expect(html).toContain("Iterations per GP optimizer start (1-200)");
+    expect(html).toContain("Total acquisition evaluation budget (32-160000)");
+    expect(html).toMatch(/id="[^"]+-q1CandidateBudget"[^>]*value="256"/);
     expect(html).not.toContain("JMP numerical equivalence or exact noisy EI. Predictions are measurements");
+  });
+  it.each(["en", "ko"] as const)("keeps search validation visible and attached to its input in %s", locale => {
+    setCurrentLocale(locale); const { study } = desirabilityFixture();
+    const draft = { ...defaultDesirabilityDraft(study), candidateCount: "1000", q1CandidateBudget: "256" };
+    const state: DesirabilityRecommendationState = { draft, edit: vi.fn(), review: null, saved: null,
+      requestReview: vi.fn(), confirm: vi.fn(), discard: vi.fn(), refresh: vi.fn(), error: "bayesian_desirability_settings_invalid",
+      errors: { q1CandidateBudget: "searchBudget" }, isReviewing: false, isConfirming: false, isRestoring: false, mayHaveCommitted: false };
+    const html = renderToStaticMarkup(<BayesianDesirabilityRecommendationPanel study={study} state={state} disabled={false} onConfirm={vi.fn()} onRefresh={vi.fn()} />);
+    expect(html).toContain(locale === "en" ? "not increased automatically" : "자동 증액하지 않습니다");
+    expect(html).toMatch(/aria-labelledby="[^"]+-q1CandidateBudget-label"/);
+    expect(html).toMatch(/id="[^"]+-q1CandidateBudget"[^>]*aria-invalid="true"[^>]*aria-describedby="[^"]+-q1CandidateBudget-error"/);
+    expect(draft.q1CandidateBudget).toBe("256");
   });
   it.each(["en", "ko"] as const)("shows an explicit Gaussian precision rejection in %s", locale => {
     setCurrentLocale(locale); const {study} = desirabilityFixture();

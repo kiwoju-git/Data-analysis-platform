@@ -159,6 +159,38 @@ def verify_desirability_review(
                     goal["name"] + ": Measurement noise", exact=True
                 ).select_option("fixed")
                 panel.get_by_label(goal["unit"], exact=True).fill("0.2")
+        search_controls = {
+            "Seeded candidate pool per step (32-4096)": "64",
+            "Local search starts per step (0-16)": "1",
+            "Iterations per local search (1-500)": "5",
+            "Iterations per GP optimizer start (1-200)": "80",
+            "Total acquisition evaluation budget (32-160000)": "1024",
+        }
+        if batch_size == 1:
+            # Editing the visible q1 budget also supplies the shared planning
+            # request; a hidden older budget must not disable model saving.
+            panel.get_by_label(
+                "Seeded candidate pool per step (32-4096)", exact=True
+            ).fill("2048")
+            panel.get_by_label(
+                "Total acquisition evaluation budget (32-160000)", exact=True
+            ).fill("4096")
+            expect(
+                page.get_by_role("button", name="Fit and save model", exact=True)
+            ).to_be_enabled()
+            for label, value in search_controls.items():
+                panel.get_by_label(label, exact=True).fill(value)
+            budget_input = panel.get_by_label(
+                "Total acquisition evaluation budget (32-160000)", exact=True
+            )
+            count_before_invalid = len(writes)
+            for invalid in ("", "1e", "10abc", "63"):
+                budget_input.fill(invalid)
+                review_button.click()
+                expect(budget_input).to_have_value(invalid)
+                expect(budget_input).to_have_attribute("aria-invalid", "true")
+                assert len(writes) == count_before_invalid
+            budget_input.fill("1024")
         held = []
 
         def hold(route):
@@ -170,7 +202,18 @@ def verify_desirability_review(
             panel.get_by_role("button", name="Calculating review…", exact=True)
         ).to_be_visible()
         assert len(held) == 1
-        panel.get_by_label("Seed (0–2147483647)", exact=True).fill("43")
+        if batch_size == 1:
+            requested_search = held[0].request.post_data_json["search"]
+            assert requested_search["candidate_count_per_step"] == 64
+            assert requested_search["local_start_count_per_step"] == 1
+            assert requested_search["max_iterations_per_step"] == 5
+            assert requested_search["model_max_iterations"] == 80
+            assert requested_search["max_evaluations_total"] == 1024
+            panel.get_by_label(
+                "Seeded candidate pool per step (32-4096)", exact=True
+            ).fill("65")
+        else:
+            panel.get_by_label("Seed (0–2147483647)", exact=True).fill("43")
         old = held[0].fetch(timeout=90000)
         assert old.status == 200, old.text()
         held[0].fulfill(response=old)
@@ -185,6 +228,20 @@ def verify_desirability_review(
             review_button.click()
         assert response.value.status == 200, response.value.text()
         review = response.value.json()
+        if batch_size == 1:
+            assert (
+                response.value.request.post_data_json["search"][
+                    "candidate_count_per_step"
+                ]
+                == 65
+            )
+            assert (
+                review["calculation"]["search_budget"]["max_evaluations_total"] == 1024
+            )
+            assert all(
+                item["model"]["optimizer"]["max_iterations"] == 80
+                for item in review["calculation"]["shared_model"]["response_models"]
+            )
         expect(
             panel.get_by_role("button", name="Confirm entire pending batch", exact=True)
         ).to_be_visible()
@@ -291,6 +348,13 @@ def verify_desirability_review(
             expect(page.locator("html")).to_have_attribute("lang", locale)
             current = page.get_by_role("region", name=title, exact=True)
             expect(current).to_contain_text("수율 <raw>")
+            if batch_size == 1:
+                expect(current.locator('input[id$="-candidateCount"]')).to_have_value(
+                    "65"
+                )
+                expect(current.locator('input[id$="-modelIterations"]')).to_have_value(
+                    "80"
+                )
             if curve_policy:
                 curves = current.get_by_role(
                     "table",

@@ -14,7 +14,12 @@ from app.api.v1.schemas.bayesian_desirability_recommendations import (
     DesirabilityOrderedBatchItem,
     DesirabilityProvenance,
 )
-from app.api.v1.schemas.bo_augmentation import AugmentationCalculation, AugmentationSelectionRequest
+from app.api.v1.schemas.bo_augmentation import (
+    AUGMENTATION_RESULT,
+    AugmentationRequest,
+    AutoAugmentationCalculation,
+    AutoAugmentationSelectionRequest,
+)
 from app.api.v1.schemas.bo_augmentation_batch import (
     AugmentationBatchResponse,
     AugmentationBatchSource,
@@ -24,11 +29,13 @@ from app.core.config import Settings
 from app.services.analysis_run_execution import APP_VERSION, runtime_build_provenance, utc_now
 from app.services.bayesian_noise_recommendations import _error, _json, _sha
 from app.services.bo_augmentation import (
+    _routing_context,
     _source_candidate,
     _verify_binding,
     get_augmentation_selection,
     validate_saved_augmentation,
 )
+from app.services.bo_auto_evidence import validate_auto_evidence
 from app.services.bo_planning import _current, _read_model, get_planning_model
 from app.storage import bo_planning as storage
 from app.storage.bayesian_studies import (
@@ -44,10 +51,10 @@ from app.storage.bayesian_studies import (
 
 
 def _config(
-    study: Any, request: AugmentationSelectionRequest, source: AugmentationBatchSource
+    study: Any, request: AugmentationRequest, source: AugmentationBatchSource
 ) -> dict[str, Any]:
     return {
-        "schema_version": 9,
+        "schema_version": 11 if request.schema_version == 4 else 9,
         "study_id": str(study.study_id),
         "study_version_id": str(study.study_version_id),
         "definition_sha256": study.definition_sha256,
@@ -160,6 +167,10 @@ def confirm_augmentation_selection(
     )
     runtime = runtime_build_provenance(settings)
     result = AugmentationBatchResponse(
+        method_version="0.16.0" if request.schema_version == 4 else "0.14.0",
+        config_schema_version=11 if request.schema_version == 4 else 9,
+        result_schema_version=11 if request.schema_version == 4 else 9,
+        model_schema_version=11 if request.schema_version == 4 else 9,
         batch_id=selection_id,
         batch_size=request.batch_size,
         study_id=study_id,
@@ -201,9 +212,9 @@ def confirm_augmentation_selection(
         method_version=result.method_version,
         batch_size=request.batch_size,
         batch_policy=result.batch_policy,
-        config_schema_version=9,
-        result_schema_version=9,
-        model_schema_version=9,
+        config_schema_version=result.config_schema_version,
+        result_schema_version=result.result_schema_version,
+        model_schema_version=result.model_schema_version,
         item_schema_version=4,
         config_json=_json(config),
         config_sha256=_sha(config),
@@ -240,7 +251,7 @@ def get_augmentation_batch(
     if (
         record is None
         or record.study_version_id != str(study.study_version_id)
-        or record.result_schema_version != 9
+        or record.result_schema_version not in {9, 11}
     ):
         raise _error("bayesian_planning_not_found")
     saved = AugmentationBatchResponse.model_validate_json(record.result_json)
@@ -292,7 +303,15 @@ def validate_augmentation_batch_record(
                 record.item_schema_version,
                 record.batch_policy,
             )
-            == (result.method_id, "0.14.0", 9, 9, 9, 4, "source_owned_augmentation_v1")
+            == (
+                result.method_id,
+                result.method_version,
+                result.config_schema_version,
+                result.result_schema_version,
+                result.model_schema_version,
+                4,
+                "source_owned_augmentation_v1",
+            )
         )
         require(record.batch_size == result.batch_size and record.batch_id == str(result.batch_id))
         require(record.study_version_id == version.study_version_id == str(result.study_version_id))
@@ -342,17 +361,15 @@ def validate_augmentation_batch_record(
         require(selected is not None)
         assert selected is not None
         require(
-            selected["schema_version"] == 2 and selected["confirmed_batch_id"] == record.batch_id
+            selected["schema_version"] == request.schema_version
+            and selected["confirmed_batch_id"] == record.batch_id
         )
         require(
             selected["config_sha256"] == source.selection_config_sha256
             and selected["result_sha256"] == source.selection_result_sha256
         )
         require(selected["config_json"] == _json(request.model_dump(mode="json")))
-        require(
-            AugmentationCalculation.model_validate_json(selected["result_json"])
-            == result.calculation
-        )
+        require(AUGMENTATION_RESULT.validate_json(selected["result_json"]) == result.calculation)
         require(selected["model_id"] == (None if source.model_id is None else str(source.model_id)))
         require(
             selected["candidate_revision_id"]
@@ -396,6 +413,17 @@ def validate_augmentation_batch_record(
         else:
             require(result.model is None and not result.provenance.package_versions)
         validate_saved_augmentation(study, request, result.calculation, rows, snapshot)
+        if isinstance(request, AutoAugmentationSelectionRequest):
+            require(isinstance(result.calculation, AutoAugmentationCalculation))
+            assert isinstance(result.calculation, AutoAugmentationCalculation)
+            routing = _routing_context(settings, study, identity, request)
+            validate_auto_evidence(
+                result.calculation.auto_evidence,
+                request.auto_strategy,
+                identity=routing["identity"],
+                snapshot=routing["snapshot"],
+                policy=request.policy,
+            )
         item_records = list_bayesian_recommendation_batch_item_records(
             settings.workspace_root, record.batch_id
         )

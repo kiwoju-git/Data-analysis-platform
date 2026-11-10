@@ -1,7 +1,7 @@
 # Statistical Twin Linux Prerelease
 
 This page documents the earlier2026.10.8 archive. It is **not** a Linux release of
-the current BO API39/metadata32 source changes. The owner has deferred the next
+the current BO API42/metadata33 source changes. The owner has deferred the next
 Linux build/publication. Do not reuse an older installation with a workspace
 upgraded by the new source: code rollback is not a metadata downgrade. Keep a
 verified pre-upgrade offline backup and restore into a separate empty directory.

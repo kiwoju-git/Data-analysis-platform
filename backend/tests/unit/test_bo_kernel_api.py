@@ -75,7 +75,7 @@ def test_kernel_review_spawn_confirm_restore_report(tmp_path, monkeypatch, kind,
             assert "radial_scaled_euclidean_v1" in rendered
             assert "factor_bounds_normalized_0_1" in rendered
             assert report.payload["attachment"]["shared_model"] == model
-            assert report.definition.renderer_version == "1.10.0"
+            assert report.definition.renderer_version == "1.11.0"
             request = {"source": source.model_dump(mode="json"), "locale": locale}
             capability = client.post("/api/v1/reports/capability", json=request)
             assert capability.status_code == 200, capability.json()
@@ -254,7 +254,7 @@ def test_populated_metadata24_migration_preserves_legacy_hashes(tmp_path, monkey
         assert read.status_code == 200, read.json()
         assert read.json() == batch
         with sqlite3.connect(metadata_db_path(restored)) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 32
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 33
             assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
             for table in tables:
                 assert (

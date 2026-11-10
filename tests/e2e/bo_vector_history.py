@@ -197,6 +197,12 @@ def verify_bo_vector_history(browser: Browser, base: str, output: Path) -> dict:
         receipt["mixed_planning"] = verify_mixed_workflow(
             browser, base, output / "mixed-planning"
         )
+        receipt["numeric_auto_evidence"] = verify_persistent_planning(
+            browser, base, output / "numeric-auto-evidence", auto_evidence_only=True
+        )
+        receipt["mixed_auto_evidence"] = verify_mixed_workflow(
+            browser, base, output / "mixed-auto-evidence", auto_evidence_only=True
+        )
         (output / "receipt.json").write_text(
             json.dumps(receipt, indent=2), encoding="utf-8"
         )

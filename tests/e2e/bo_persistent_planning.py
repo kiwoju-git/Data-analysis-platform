@@ -14,11 +14,13 @@ from app_readiness import (
     wait_for_layout_settled,
 )
 from playwright.sync_api import Browser, expect, sync_playwright
+from bo_loo import verify_loo
+from bo_auto_strategy import verify_auto_strategy
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
-def verify_persistent_planning(browser: Browser, base: str, output: Path) -> dict:
+def verify_persistent_planning(browser: Browser, base: str, output: Path, *, auto_evidence_only=False) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -120,6 +122,16 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path) -> dic
             panel.get_by_role("button", name="Fit and save model", exact=True).click()
         assert fitted.value.status == 201, fitted.value.text()
         model = fitted.value.json()
+        verify_loo(page, api, model, output)
+        auto_selection = verify_auto_strategy(page, api, model, output)
+        if auto_evidence_only:
+            from bo_auto_evidence import verify_saved_auto_evidence
+
+            receipt = verify_saved_auto_evidence(browser, page, api, base, model, auto_selection, output)
+            assert not errors, errors
+            receipt["pageerrors"] = errors
+            (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            return receipt
         assert page.request.get(api).json() == before
         panel.get_by_label("Candidate table name", exact=True).fill(
             "Synthetic candidate table"
@@ -318,13 +330,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--auto-evidence-only", action="store_true")
     args = parser.parse_args()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
             print(
                 json.dumps(
-                    verify_persistent_planning(browser, args.base_url, args.output)
+                    verify_persistent_planning(browser, args.base_url, args.output, auto_evidence_only=args.auto_evidence_only)
                 )
             )
         finally:

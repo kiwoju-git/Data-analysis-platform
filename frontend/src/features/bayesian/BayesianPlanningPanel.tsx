@@ -15,6 +15,7 @@ import { boKernelLabel } from "./boKernelPolicy";
 import { decimalLatticeValue } from "../../doe/rsmRegion";
 import type { AugmentationManualSeed } from "./BayesianAugmentationPanel";
 import "./boPlanning.css";
+import { BayesianLooPanel } from "./BayesianLooPanel";
 
 interface Props { study: BayesianStudyResponse; fitRequest: DesirabilityReviewRequest | null; disabled?: boolean; onConfirmed: (batchId: string) => void; onConfirmingChange?: (busy: boolean) => void; manualSeed?: AugmentationManualSeed | null }
 function initialHolds(study: BayesianStudyResponse): Record<string, string> {
@@ -98,6 +99,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
         <div><dt>{text.history}</dt><dd>{model.history_sha256}</dd></div>{page && <div><dt>{text.rowsHash}</dt><dd>{page.revision.rows_sha256}</dd></div>}
       </dl><p>{model.source_is_current ? text.current : text.historical}</p></details>
       <PlanningFitSummary model={model} />
+      <BayesianLooPanel studyId={study.study_id} model={model} contextKey={sourceKey} disabled={disabled || busy} />
       {!state.canMutate && <p className="notice-box">{text.stale}</p>}
       <section aria-label={text.candidates}><h4>{text.candidates}</h4>
         <div className="bo-planning-fields">

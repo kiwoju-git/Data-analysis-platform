@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../../../api/boAugmentation";
 import * as planning from "../../../api/boPlanning";
+import type { AutoStrategyView } from "../../../api/boAutoStrategy";
+import type { AutoEvidenceRequest, AugmentationPolicy } from "../../../api/types/boAugmentation";
 import type { BayesianStudyResponse } from "../../../api/types/bayesian";
 import type { AugmentationSelectionRequest, AugmentationSelectionResponse, CandidateRevisionCreateRequestV2 } from "../../../api/types/boAugmentation";
 import type { CandidatePage, CandidateRevisionSummaryV2, CandidateSource, PlanningModelDetail, PlanningModelSummary } from "../../../api/types/boPlanning";
@@ -27,6 +29,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   const [catalog, setCatalog] = useState<{ candidates: CandidateRevisionSummaryV2[]; models: PlanningModelSummary[] }>({ candidates: [], models: [] });
   const [page, setPage] = useState<CandidatePage | null>(null), [model, setModel] = useState<PlanningModelDetail | null>(null);
   const [draft, setDraft] = useState(() => initialAugmentationDraft(study));
+  const [autoReference, setAutoReference] = useState<AutoEvidenceRequest | null>(null);
   const [selection, setSelection] = useState<AugmentationSelectionResponse | null>(null);
   const [busy, setBusy] = useState<Mutation["kind"] | "read" | null>(null), [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null), [retry, setRetry] = useState<Mutation | null>(null);
@@ -50,6 +53,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   const latestRefresh = useRef(refresh); latestRefresh.current = refresh;
   useEffect(() => {
     mounted.current = true; stateOwner.current = token; operation.invalidate(); running.current = false;
+    setAutoReference(null);
     setCatalog({ candidates: [], models: [] }); setPage(null); setModel(null); setDraft(initialAugmentationDraft(study)); setSelection(null); setError(null); setRetry(null);
     if (!confirmation.pending()) setBusy(null);
     void latestRefresh.current();
@@ -61,11 +65,21 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   function invalidate(clearSelection = true) {
     if (!active() || confirmation.pending()) return false;
     operation.invalidate(); running.current = false; setBusy(null); setError(null); setRetry(null);
+    if (clearSelection) setAutoReference(null);
     if (clearSelection) setSelection(null);
     return true;
   }
   function updateDraft<K extends keyof AugmentationDraft>(field: K, value: AugmentationDraft[K]) {
     if (invalidate()) setDraft(current => ({ ...current, [field]: value }));
+  }
+  function applyAuto(policy: AugmentationPolicy, view: AutoStrategyView) {
+    if (!model || !view.apply_allowed || view.decision.recommended_policy !== policy ||
+      view.diagnostic.model_id !== model.model_id || view.diagnostic.model_sha256 !== model.snapshot_sha256 ||
+      view.diagnostic.history_sha256 !== study.observation_history.observation_history_sha256 || !invalidate()) return;
+    setDraft(current => ({ ...current, policy }));
+    setAutoReference({ schema_version: 1, routing_model_id: model.model_id,
+      expected_model_sha256: model.snapshot_sha256, r_squared_threshold: view.decision.threshold,
+      expected_decision_sha256: view.decision_sha256 });
   }
   async function mutate(snapshot: Mutation) {
     if (!active() || disabled || running.current || confirmation.pending()) return;
@@ -76,6 +90,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
     running.current = true; setBusy(snapshot.kind); setError(null); setRetry(null);
     try {
       if (snapshot.kind === "candidates") {
+        setAutoReference(null);
         const value = await api.createAugmentationCandidates(study.study_id, snapshot.request);
         if (!ownerCurrent()) return;
         if (!validAugmentationPage(value, study) || value.revision.candidate_set_id !== snapshot.request.candidate_set_id || value.revision.parent_revision_id !== snapshot.request.expected_head_revision_id) throw new Error("bayesian_augmentation_response_mismatch");
@@ -144,13 +159,16 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
     } catch (caught) { if (current()) setError(errorCode(caught)); }
     finally { if (current()) setBusy(null); }
   }
-  const preview = own ? augmentationRequest(study, page, model, draft, "00000000-0000-0000-0000-000000000000") : null;
+  const basePreview = own ? augmentationRequest(study, page, model, draft, "00000000-0000-0000-0000-000000000000") : null;
+  const preview: AugmentationSelectionRequest | null = basePreview && autoReference
+    ? { ...basePreview, schema_version: 4, auto_strategy: autoReference } : basePreview;
   const canConfirm = own && selection !== null && selection.source_is_current && selection.confirmed_batch_id === null && study.status === "active" && study.pending_trial_count === 0 &&
     selection.request.expected_history_revision_id === study.observation_history.history_revision_id && selection.request.expected_history_sha256 === study.observation_history.observation_history_sha256 && selection.request.expected_trial_count === study.trial_count;
   return { catalog: own ? catalog : { models: [], candidates: [] }, page: own ? page : null, model: own ? model : null,
     draft: own ? draft : initialAugmentationDraft(study), selection: own ? selection : null, busy: own ? busy : null, catalogLoading,
     error: own ? error : null, canRetry: own && retry !== null, isConfirming: confirmation.pending(), canReview: preview !== null, canConfirm,
-    updateDraft, invalidateDraft: invalidate, createCandidates, refresh,
+    updateDraft, applyAuto, clearAuto: () => { if (autoReference) invalidate(); }, autoReference,
+    invalidateDraft: invalidate, createCandidates, refresh,
     openPage: (id: string, offset = 0) => void read("page", id, offset), openModel: (id: string) => void read("model", id), openSelection: (id: string) => void read("selection", id),
     review: () => { if (preview) { try { void mutate({ kind: "review", request: { ...preview, request_id: bayesianRequestId() } }); } catch (caught) { setError(errorCode(caught)); } } },
     confirm: () => { if (canConfirm && selection) void mutate({ kind: "confirm", selection }); },

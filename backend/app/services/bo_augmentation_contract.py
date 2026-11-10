@@ -142,6 +142,9 @@ def _validate(
     mixed_domains: Any = None,
 ) -> None:
     if mixed_domains is None:
+        if result.get("schema_version") == 2:
+            result = {key: value for key, value in result.items() if key != "auto_evidence"}
+            result["schema_version"] = 1
         checked: Any = AugmentationCalculation.model_validate(result)
         candidate_type: Any = CandidateRow
         coordinate_key = "normalized_coordinates"

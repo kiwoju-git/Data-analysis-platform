@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { BayesianLooPanel } from "./BayesianLooPanel";
+import { BayesianAutoStrategyPanel } from "./BayesianAutoStrategyPanel";
 import { ArrowDown, ArrowUp, Check, Redo2, RefreshCw, Undo2 } from "lucide-react";
 import type { AugmentationPolicy } from "../../api/types/boAugmentation";
 import type { EvaluatedMixedCandidateRow, MixedActualPoint, MixedCandidateRow, MixedModelDetail, MixedSelectionResponse, MixedStudyResponse } from "../../api/types/boMixed";
@@ -6,6 +8,7 @@ import { InteractiveScatterChart } from "../../charts/InteractiveScatterChart";
 import { paddedNumericRange } from "../../charts/chartScale";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { augmentationMessages, augmentationPolicyLabel } from "../../i18n/boAugmentation";
+import { autoEvidenceMessages } from "../../i18n/boAutoEvidence";
 import { mixedMessages } from "../../i18n/boMixed";
 import { planningMessages } from "../../i18n/boPlanning";
 import { formatExactNumericValue as exact } from "../../statisticalNumberFormat";
@@ -57,6 +60,7 @@ export function BayesianMixedPlanningPanel(props: Props) {
       <label>{common.models}<select aria-label={common.models} value={selectedModel?.model_id ?? ""} onChange={event => state.openModel(event.currentTarget.value)}><option value="">{common.choose}</option>{state.models.map(model => <option key={model.model_id} value={model.model_id}>{model.created_at} · {model.source_is_current ? common.current : common.historical}</option>)}</select></label>
     </fieldset>
     {selectedModel && <MixedFitReceipt model={selectedModel} study={study} />}
+    {selectedModel && <BayesianLooPanel studyId={study.study_id} model={selectedModel} contextKey={key} mixed disabled={locked || state.busy !== null} />}
     <fieldset className="bo-planning-fieldset" disabled={locked || study.status !== "active"}>
       <legend>{common.candidates}</legend>
       <div className="bo-planning-controls">
@@ -90,6 +94,10 @@ export function BayesianMixedPlanningPanel(props: Props) {
     </>}
     <fieldset className="bo-planning-fieldset" disabled={locked}>
       <legend>{common.selected}</legend>
+      {selectedModel && <BayesianAutoStrategyPanel studyId={study.study_id} model={selectedModel} mixed
+        contextKey={`${key}:${state.page?.revision.revision_id ?? ""}:${JSON.stringify(state.draft)}:${JSON.stringify(state.selectedIds)}`} kinds={study.factors.map(factor => factor.domain_kind)}
+        disabled={locked} onApply={state.applyAuto} onAdviceEdit={() => state.invalidate()} />}
+      {state.autoReference && <p role="status">{autoEvidenceMessages(locale).attached}: {exact(state.autoReference.r_squared_threshold)}</p>}
       <label>{text.selectionKind}<select aria-label={text.selectionKind} value={state.draft.kind} onChange={event => state.updateDraft({ ...state.draft, kind: event.currentTarget.value as "manual_ordered" | "augmentation" })}><option value="manual_ordered">{text.manual}</option><option value="augmentation">{text.automatic}</option></select></label>
       {state.draft.kind === "augmentation" ? <><label>{auto.policy}<select value={state.draft.policy} onChange={event => state.updateDraft({ ...state.draft, policy: event.currentTarget.value as AugmentationPolicy })}>{policies.map(policy => <option key={policy} value={policy}>{augmentationPolicyLabel(policy, locale)}</option>)}</select></label><p>{auto.policyMeaning}</p><p>{state.draft.policy === "greedy_mixed_maximin_v1" ? auto.maximinMeaning : state.draft.policy === "confirm_mean_then_competitive_sd_v1" ? auto.confirmMeaning : auto.refineMeaning}</p><DraftInput label={auto.batch} value={state.draft.batchSize} onChange={value => state.updateDraft({ ...state.draft, batchSize: value })} /></> : <>
         <p>{common.selectionMeaning}</p><div className="bo-planning-actions"><button type="button" title={common.undo} aria-label={common.undo} disabled={!state.canUndo} onClick={state.undo}><Undo2 size={16} /></button><button type="button" title={common.redo} aria-label={common.redo} disabled={!state.canRedo} onClick={state.redo}><Redo2 size={16} /></button><button type="button" disabled={!state.selectedIds.length} onClick={() => state.reorder([])}>{common.clear}</button></div>
@@ -137,7 +145,7 @@ function record(value: unknown): Record<string, unknown> { return typeof value =
 function objects(value: unknown): Record<string, unknown>[] { return Array.isArray(value) ? value.filter(item => typeof item === "object" && item !== null && !Array.isArray(item)) as Record<string, unknown>[] : []; }
 export function MixedSelectionDetails({ selection, study }: { selection: Pick<MixedSelectionResponse, "selection_id" | "result_sha256" | "calculation" | "request">; study: MixedStudyResponse }) {
   const { locale } = useI18n(), text = mixedMessages(locale), common = planningMessages(locale);
-  return <section aria-label={common.reviewed}><h4>{common.reviewed}</h4><p>{selection.selection_id}</p><p><code>{selection.result_sha256}</code></p>{selection.calculation.schema_version === 3 ? <><p>{text.automaticMeaning}</p><AugmentationTraceTable calculation={selection.calculation} study={study} /></> : <>
+  return <section aria-label={common.reviewed}><h4>{common.reviewed}</h4><p>{selection.selection_id}</p><p><code>{selection.result_sha256}</code></p>{selection.calculation.schema_version !== 2 ? <><p>{text.automaticMeaning}</p><AugmentationTraceTable calculation={selection.calculation} study={study} /></> : <>
     <MixedPredictionTable rows={selection.calculation.items} study={study} /><div className="table-wrap"><table className="result-table"><thead><tr><th>{common.rank}</th><th>{common.marginal}</th></tr></thead><tbody>{selection.calculation.items.map(row => <tr key={row.row_id}><th scope="row">{row.rank}</th><td>{exact(row.planning.score)}</td></tr>)}</tbody></table></div>
   </>}</section>;
 }

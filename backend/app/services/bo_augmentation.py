@@ -6,9 +6,13 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from app.api.v1.schemas.bo_augmentation import (
-    AugmentationCalculation,
-    AugmentationSelectionRequest,
+    AUGMENTATION_REQUEST,
+    AUGMENTATION_RESULT,
+    AugmentationRequest,
+    AugmentationResult,
     AugmentationSelectionResponse,
+    AutoAugmentationCalculation,
+    AutoAugmentationSelectionRequest,
 )
 from app.api.v1.schemas.bo_planning import CandidateRow
 from app.core.config import Settings
@@ -16,6 +20,7 @@ from app.services.analysis_run_execution import utc_now
 from app.services.bayesian_noise_recommendations import _error
 from app.services.bayesian_studies import get_bayesian_study
 from app.services.bo_augmentation_contract import validate_augmentation_binding
+from app.services.bo_auto_evidence import evidence_identity, validate_auto_evidence
 from app.services.bo_candidates_v2 import read_candidate_revision_v2
 from app.services.bo_planning import (
     _current,
@@ -32,8 +37,8 @@ from app.storage.bayesian_studies import BayesianStorageConflict
 
 def validate_saved_augmentation(
     study: Any,
-    body: AugmentationSelectionRequest,
-    calculation: AugmentationCalculation,
+    body: AugmentationRequest,
+    calculation: AugmentationResult,
     rows: list[CandidateRow],
     snapshot: dict[str, Any] | None,
 ) -> None:
@@ -76,7 +81,7 @@ def _verify_binding(
     candidate: dict[str, Any],
     source: dict[str, Any],
     tolerance: float,
-    body: AugmentationSelectionRequest,
+    body: AugmentationRequest,
 ) -> None:
     if (
         str(body.expected_study_version_id) != str(study.study_version_id)
@@ -101,14 +106,15 @@ def get_augmentation_selection(
         )
         if record is None:
             raise _not_found()
-        body = AugmentationSelectionRequest.model_validate_json(record["config_json"])
-        calculation = AugmentationCalculation.model_validate_json(record["result_json"])
+        body = AUGMENTATION_REQUEST.validate_json(record["config_json"])
+        calculation = AUGMENTATION_RESULT.validate_json(record["result_json"])
         candidate, rows, source, tolerance = _source_candidate(
             settings, study, body.candidate_revision_id
         )
         _verify_binding(study, candidate, source, tolerance, body)
         if (
-            record["schema_version"] != 2
+            record["schema_version"] != body.schema_version
+            or (body.schema_version == 4) != isinstance(calculation, AutoAugmentationCalculation)
             or str(body.request_id) != record["request_id"]
             or str(body.candidate_revision_id) != record["candidate_revision_id"]
             or (None if body.model_id is None else str(body.model_id)) != record["model_id"]
@@ -145,7 +151,19 @@ def get_augmentation_selection(
             ):
                 raise ValueError
         validate_saved_augmentation(study, body, calculation, rows, snapshot)
+        if isinstance(body, AutoAugmentationSelectionRequest):
+            if not isinstance(calculation, AutoAugmentationCalculation):
+                raise ValueError
+            routing = _routing_context(settings, study, source, body)
+            validate_auto_evidence(
+                calculation.auto_evidence,
+                body.auto_strategy,
+                identity=routing["identity"],
+                snapshot=routing["snapshot"],
+                policy=body.policy,
+            )
         return AugmentationSelectionResponse(
+            schema_version=body.schema_version,
             selection_id=selection_id,
             study_id=study_id,
             study_version_id=study.study_version_id,
@@ -165,8 +183,28 @@ def get_augmentation_selection(
         raise _error("bayesian_planning_artifact_invalid") from None
 
 
+def _routing_context(
+    settings: Settings, study: Any, source: dict[str, Any], body: AutoAugmentationSelectionRequest
+) -> dict[str, Any]:
+    model, snapshot, _ = _read_model(settings, study, body.auto_strategy.routing_model_id)
+    if (
+        model["snapshot_sha256"] != body.auto_strategy.expected_model_sha256
+        or any(
+            model[key] != source[key]
+            for key in ("definition_sha256", "history_sha256", "source_history_revision_id")
+        )
+        or (body.model_id is not None and body.model_id != body.auto_strategy.routing_model_id)
+    ):
+        raise _error("bayesian_planning_model_mismatch")
+    return {
+        "snapshot": snapshot,
+        "identity": evidence_identity(str(study.study_id), model),
+        "reference": body.auto_strategy.model_dump(mode="json"),
+    }
+
+
 def create_augmentation_selection(
-    settings: Settings, study_id: UUID, body: AugmentationSelectionRequest
+    settings: Settings, study_id: UUID, body: AugmentationRequest
 ) -> AugmentationSelectionResponse:
     study = get_bayesian_study(settings, study_id)
     if study.objective.goal_type != "desirability":
@@ -180,7 +218,9 @@ def create_augmentation_selection(
             kind="selection",
         )
         if old is not None:
-            if old["schema_version"] != 2 or old["config_sha256"] != storage.planning_sha(config):
+            if old["schema_version"] != body.schema_version or old[
+                "config_sha256"
+            ] != storage.planning_sha(config):
                 raise _error("bayesian_planning_request_conflict")
             return get_augmentation_selection(settings, study_id, UUID(old["selection_id"]))
         candidate, rows, source, tolerance = _source_candidate(
@@ -201,9 +241,15 @@ def create_augmentation_selection(
                 for key in ("definition_sha256", "history_sha256", "source_history_revision_id")
             ):
                 raise _error("bayesian_planning_model_mismatch")
+        routing = (
+            _routing_context(settings, study, source, body)
+            if isinstance(body, AutoAugmentationSelectionRequest)
+            else None
+        )
         raw = _run(
-            "augmentation",
+            "auto_augmentation" if routing is not None else "augmentation",
             {
+                **({"routing": routing} if routing is not None else {}),
                 "factors": snapshot["calculation_request"]["factors"]
                 if snapshot is not None
                 else [factor.model_dump(mode="json") for factor in study.factors],
@@ -233,7 +279,7 @@ def create_augmentation_selection(
             },
             time_budget_ms=body.time_budget_ms,
         )
-        result = AugmentationCalculation.model_validate(raw).model_dump(
+        result = AUGMENTATION_RESULT.validate_python(raw).model_dump(
             mode="json", exclude_unset=True
         )
         record = {
@@ -242,7 +288,7 @@ def create_augmentation_selection(
             "model_id": None if body.model_id is None else str(body.model_id),
             "candidate_revision_id": str(body.candidate_revision_id),
             "request_id": str(body.request_id),
-            "schema_version": 2,
+            "schema_version": body.schema_version,
             "config_json": storage.planning_json(config),
             "config_sha256": storage.planning_sha(config),
             "result_json": storage.planning_json(result),

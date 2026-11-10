@@ -449,7 +449,7 @@ def _batch_snapshot(
     config = parsed(record.config_json)
     request: Any
     response: Any
-    if record.result_schema_version in {4, 5, 6, 7, 8, 9}:
+    if record.result_schema_version in {4, 5, 6, 7, 8, 9, 11}:
         from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
         from app.api.v1.schemas.bo_planning_batch import PlanningBatchResponse
         from app.services.bayesian_desirability_recommendations import validate_desirability_record
@@ -463,7 +463,7 @@ def _batch_snapshot(
             _verified_trial(stored_trial, source.definition_sha256, factors)
         validator = (
             validate_augmentation_batch_record
-            if record.result_schema_version == 9
+            if record.result_schema_version in {9, 11}
             else (
                 validate_planning_batch_record
                 if record.result_schema_version == 8

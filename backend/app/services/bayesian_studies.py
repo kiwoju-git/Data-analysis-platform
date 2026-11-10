@@ -153,6 +153,7 @@ SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
         "0.13.0",
         "0.14.0",
         "0.15.0",
+        "0.16.0",
     }
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
@@ -1991,14 +1992,14 @@ def _validate_recommendation_batches(
                 validate_desirability_record,
             )
 
-            if batch.result_schema_version not in {4, 5, 6, 7, 8, 9}:
+            if batch.result_schema_version not in {4, 5, 6, 7, 8, 9, 11}:
                 raise _artifact_error()
             from app.services.bo_augmentation_batches import validate_augmentation_batch_record
             from app.services.bo_planning_batches import validate_planning_batch_record
 
             validate_vector = (
                 validate_augmentation_batch_record
-                if batch.result_schema_version == 9
+                if batch.result_schema_version in {9, 11}
                 else validate_planning_batch_record
                 if batch.result_schema_version == 8
                 else validate_desirability_record

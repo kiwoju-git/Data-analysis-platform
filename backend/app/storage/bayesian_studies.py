@@ -737,7 +737,7 @@ def insert_bayesian_recommendation_batch_bundle(
                         raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
                 connection.commit()
                 return
-        if (batch.result_schema_version in {8, 9, 10}) != (planning_selection is not None):
+        if (batch.result_schema_version in {8, 9, 10, 11, 12}) != (planning_selection is not None):
             raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
         if planning_selection is not None:
             from app.storage.bo_planning import validate_planning_confirmation

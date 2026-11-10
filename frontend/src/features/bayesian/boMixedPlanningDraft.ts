@@ -1,5 +1,5 @@
 import type { BayesianKernelKind, BayesianSurrogatePolicyRequest } from "../../api/types/bayesian";
-import type { AugmentationPolicy } from "../../api/types/boAugmentation";
+import type { AugmentationPolicy, AutoEvidenceRequest } from "../../api/types/boAugmentation";
 import type { EvaluatedMixedCandidateRow, MixedActualPoint, MixedBatchResponse, MixedCandidatePage, MixedCandidateRow, MixedFitOptions, MixedModelDetail, MixedSelectionRequest, MixedSelectionResponse, MixedSourceRequest, MixedStudyResponse } from "../../api/types/boMixed";
 import type { ReportSourceDescriptor } from "../../api/types/reports";
 import { isReportSourceDescriptor } from "../../managedReportSource";
@@ -8,7 +8,7 @@ import { defaultDesirabilitySearch, type DesirabilityModelDraft } from "./bayesi
 import { isMixedCategory, validateMixedCoordinates } from "./boMixedDraft";
 import { planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
-import { modelFreeAugmentation } from "./boAugmentationDraft";
+import { modelFreeAugmentation, validSavedAutoEvidence } from "./boAugmentationDraft";
 import { decimalLatticeValue, isRsmOnLattice } from "../../doe/rsmRegion";
 
 export interface MixedFitDraft {
@@ -98,28 +98,30 @@ export function validMixedPrediction(row: EvaluatedMixedCandidateRow, study: Mix
     new Set(row.response_predictions.map(response => response.response_id)).size === row.response_predictions.length && row.response_predictions.every(response => study.objective.responses.some(item => item.response_id === response.response_id) &&
       [response.mean_raw, response.latent_standard_deviation_raw, response.predictive_standard_deviation_raw].every(Number.isFinite) && response.latent_standard_deviation_raw >= 0 && response.predictive_standard_deviation_raw >= response.latent_standard_deviation_raw);
 }
-export function mixedSelectionRequest(study: MixedStudyResponse, page: MixedCandidatePage | null, model: MixedModelDetail | null, ids: string[], draft: MixedSelectionDraft, requestId: string): MixedSelectionRequest | null {
+export function mixedSelectionRequest(study: MixedStudyResponse, page: MixedCandidatePage | null, model: MixedModelDetail | null, ids: string[], draft: MixedSelectionDraft, requestId: string, autoReference: AutoEvidenceRequest | null = null): MixedSelectionRequest | null {
   if (!page || !validMixedPage(page, study) || !page.revision.source_is_current || page.revision.source_trial_count !== study.trial_count || page.revision.history_sha256 !== study.observation_history.observation_history_sha256 ||
     page.revision.source_history_revision_id !== study.observation_history.history_revision_id || study.status !== "active" || study.pending_trial_count !== 0) return null;
   const manual = draft.kind === "manual_ordered", free = !manual && modelFreeAugmentation(draft.policy), count = manual ? ids.length : planningInteger(draft.batchSize, 1, 8),
     budget = planningInteger(draft.budget, 2, 200), samples = planningInteger(draft.samples, 16, 256), evaluations = planningInteger(draft.evaluations, 1, 100000), moments = planningInteger(draft.moments, 1, 65536), seconds = planningInteger(draft.seconds, 1, 60), distance = strictBoNumber(draft.distance);
   if (count === null || count < 1 || count > 8 || count > page.revision.eligible_count || budget === null || budget < study.trial_count + count || samples === null || evaluations === null || moments === null || seconds === null || distance === null || distance < 0 || distance > Math.sqrt(study.factors.length) ||
     (!free && (!model || !currentMixedModel(model, study))) || (!manual && draft.policy === "greedy_incremental_maxpro_v1") || (manual && (new Set(ids).size !== count || !ids.every(planningHash)))) return null;
-  return { ...mixedSource(study), schema_version: 3, request_id: requestId, kind: draft.kind, candidate_revision_id: page.revision.revision_id, expected_rows_sha256: page.revision.rows_sha256,
+  if (autoReference && (manual || !model || !currentMixedModel(model, study) || autoReference.routing_model_id !== model.model_id || autoReference.expected_model_sha256 !== model.snapshot_sha256)) return null;
+  const request: MixedSelectionRequest = { ...mixedSource(study), schema_version: 3, request_id: requestId, kind: draft.kind, candidate_revision_id: page.revision.revision_id, expected_rows_sha256: page.revision.rows_sha256,
     model_id: free ? null : model!.model_id, expected_model_sha256: free ? null : model!.snapshot_sha256, row_ids: manual ? [...ids] : [], policy: manual ? null : draft.policy,
     batch_size: count, total_trial_budget: budget, duplicate_tolerance: page.revision.duplicate_tolerance, ordinal_rank_distance: page.revision.ordinal_rank_distance,
     min_batch_distance: distance, sample_count: samples, max_evaluations: evaluations, max_moment_evaluations: moments, time_budget_ms: seconds * 1000 };
+  return autoReference ? { ...request, schema_version: 5, kind: "augmentation", auto_strategy: autoReference } : request;
 }
 export const mixedSelectedRows = (selection: Pick<MixedSelectionResponse, "calculation">) => selection.calculation.schema_version === 2 ? selection.calculation.items : selection.calculation.selected_rows;
 export function validMixedSelection(value: MixedSelectionResponse, study: MixedStudyResponse, request?: MixedSelectionRequest): boolean {
-  if (!value || value.schema_version !== 3 || value.study_id !== study.study_id || value.study_version_id !== study.study_version_id || !planningId(value.selection_id) || ![value.config_sha256, value.result_sha256].every(planningHash) ||
+  if (!value || ![3, 5].includes(value.schema_version) || value.schema_version !== value.request?.schema_version || value.study_id !== study.study_id || value.study_version_id !== study.study_version_id || !planningId(value.selection_id) || ![value.config_sha256, value.result_sha256].every(planningHash) ||
     value.request?.expected_definition_sha256 !== study.definition_sha256 || value.request.expected_study_version_id !== study.study_version_id || value.model_id !== value.request.model_id || value.candidate_revision_id !== value.request.candidate_revision_id ||
     (request && !sameDesirabilityJson(value.request, request)) || value.calculation?.model_refit !== false) return false;
   const rows = mixedSelectedRows(value);
   if (!Array.isArray(rows) || rows.length !== value.request.batch_size || rows.length < 1 || rows.length > 8 || new Set(rows.map(row => row.row_id)).size !== rows.length || rows.some(row => !validMixedRow(row, study) || !row.eligible || row.ordinal_rank_distance !== value.request.ordinal_rank_distance)) return false;
-  if (value.request.kind === "manual_ordered") return value.calculation.schema_version === 2 && value.calculation.selection_policy === "manual_ordered_mixed_model_v1" && value.calculation.items.every((row, index) =>
+  if (value.request.kind === "manual_ordered") return value.request.schema_version === 3 && value.calculation.schema_version === 2 && value.calculation.selection_policy === "manual_ordered_mixed_model_v1" && value.calculation.items.every((row, index) =>
     validMixedPrediction(row, study) && row.row_id === value.request.row_ids[index] && row.rank === index + 1 && Number.isFinite(row.planning.score) && row.planning.score >= 0 && row.planning.sampler.coordinate_encoding === "numeric_normalized_category_index_v1");
-  if (value.calculation.schema_version !== 3) return false;
+  if (value.calculation.schema_version === 2 || !validSavedAutoEvidence(value.calculation, value.request, study)) return false;
   const trace = value.calculation.augmentation;
   return trace?.policy === value.request.policy && trace.model_refit === false && trace.fantasy_observations === false && trace.source.model_snapshot_id === value.model_id && trace.source.model_snapshot_sha256 === value.request.expected_model_sha256 &&
     trace.source.candidate_revision_id === value.candidate_revision_id && trace.source.candidate_revision_sha256 === value.request.expected_rows_sha256 && trace.source.history_sha256 === value.request.expected_history_sha256 &&
@@ -127,11 +129,12 @@ export function validMixedSelection(value: MixedSelectionResponse, study: MixedS
     rows.every(row => value.model_id === null ? !("response_predictions" in row) : "response_predictions" in row && validMixedPrediction(row, study));
 }
 export function validMixedBatch(batch: MixedBatchResponse, study: MixedStudyResponse, id: string): boolean {
-  if (!batch || batch.result_schema_version !== 10 || batch.config_schema_version !== 10 || batch.model_schema_version !== 10 || batch.item_schema_version !== 5 || batch.method_version !== "0.15.0" || batch.batch_policy !== "source_owned_mixed_planning_v1" ||
+  const version = batch?.selection_request?.schema_version === 5 ? 12 : 10;
+  if (!batch || batch.result_schema_version !== version || batch.config_schema_version !== version || batch.model_schema_version !== version || batch.item_schema_version !== 5 || batch.method_version !== (version === 12 ? "0.16.0" : "0.15.0") || batch.batch_policy !== "source_owned_mixed_planning_v1" ||
     batch.batch_id !== id || batch.source?.selection_id !== id || batch.study_id !== study.study_id || batch.study_version_id !== study.study_version_id || batch.definition_sha256 !== study.definition_sha256 || !sameDesirabilityJson(batch.objective, study.objective) ||
     ![batch.config_sha256, batch.result_sha256, batch.source.rows_sha256, batch.source.selection_config_sha256, batch.source.selection_result_sha256].every(planningHash) || batch.source.model_id !== batch.selection_request?.model_id || batch.source.model_sha256 !== batch.selection_request.expected_model_sha256 ||
     batch.source.candidate_revision_id !== batch.selection_request.candidate_revision_id || batch.source.rows_sha256 !== batch.selection_request.expected_rows_sha256 || batch.source_history_revision_id !== batch.selection_request.expected_history_revision_id || batch.source_observation_history_sha256 !== batch.selection_request.expected_history_sha256 ||
-    !validMixedSelection({ schema_version: 3, selection_id: id, study_id: batch.study_id, study_version_id: batch.study_version_id, model_id: batch.source.model_id, candidate_revision_id: batch.source.candidate_revision_id,
+    !validMixedSelection({ schema_version: batch.selection_request.schema_version, selection_id: id, study_id: batch.study_id, study_version_id: batch.study_version_id, model_id: batch.source.model_id, candidate_revision_id: batch.source.candidate_revision_id,
       config_sha256: batch.source.selection_config_sha256, result_sha256: batch.source.selection_result_sha256, request: batch.selection_request, calculation: batch.calculation, created_at: batch.created_at, source_is_current: false, confirmed_batch_id: id }, study) ||
     !Array.isArray(batch.items) || batch.items.length !== batch.batch_size || batch.batch_size !== batch.selection_request.batch_size || new Set(batch.items.map(item => item.trial.trial_id)).size !== batch.batch_size) return false;
   const rows = mixedSelectedRows(batch);

@@ -313,6 +313,12 @@ candidate/profiler/augmentation/category work is still missing.
 
 ## Upgrade and Rollback Boundary
 
+Local follow-up after main52f5670: API40 adds read-only conditional row-LOO
+diagnostics to numeric and mixed saved planning models, with no new migration or
+model rewrite. [Scope and evidence](bo_loo_diagnostic_contract.md) distinguish this
+diagnostic from automatic augmentation routing and live JMP numerical parity.
+These remain follow-up gates; no publication is claimed for the local change.
+
 Stop the application before an offline backup. Keep the archive outside the
 workspace and keep the original workspace intact. Example PowerShell commands
 use operator-selected paths, not a developer or test workspace:
@@ -336,3 +342,24 @@ verification. Do not use a broad range containing other contributors' work,
 and the backend request contracts form one compatible unit; an arbitrary
 UI-only rollback across API versions is not supported. No rollback is performed
 without an explicit owner request. Linux Release/tag/assets remain unchanged.
+
+## Local API41 Strategy Advice Checkpoint
+
+Source-locked conditional LOO Auto advice now connects to the existing numeric
+and mixed augmentation draft/review flow. Any response below an editable
+threshold proposes exploration; all-pass Refine and mixed maximin are explicit
+product policies. Confirm remains manual. No automatic pending trials, new
+storage schema, managed Auto receipt or Release is introduced. See
+`docs/bo_auto_strategy_contract.md` for current evidence and remaining limits.
+
+## Local API42 Numeric Evidence Checkpoint
+
+The next slice attaches server-verified Auto evidence to numeric automatic
+selection4 and confirmed batch11. Restore and renderer1.11 read the saved
+threshold/LOO/source/decision without recomputation; model-free provenance stays
+null. Metadata33 changes only the selection/batch CHECK constraints. See
+`bo_auto_evidence_contract.md` for actual tests, first failures and limitations.
+The subsequent integrated follow-up adds mixed selection5/calculation4/batch12
+evidence persistence while retaining selection3/batch10 unchanged. See
+`bo_final_validation_20261111.md` for final execution/publication status. Live JMP
+numerical parity remains an external evidence limit; Linux publication is deferred.

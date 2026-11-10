@@ -46,8 +46,8 @@ describe("planning select accessible names", () => {
     const { study } = augmentationFixture(), text = augmentationMessages(locale), common = planningMessages(locale);
     const render = () => renderToStaticMarkup(<BayesianAugmentationPanel study={study} disabled={false} onConfirmed={vi.fn()} onConfirmingChange={vi.fn()} />);
     const modelFree = render();
-    expectSelectNames(modelFree, [common.sets, text.policy]);
-    expect(modelFree).not.toContain(`aria-label="${common.models}"`);
+    // A model can inform Auto advice without becoming the model-free selection's source.
+    expectSelectNames(modelFree, [common.sets, text.policy, common.models]);
     state.modelBased = true;
     expectSelectNames(render(), [common.sets, text.policy, common.models]);
   });

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import math
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, TypeAdapter, model_validator
 
+from app.api.v1.schemas.bo_auto_strategy import AutoEvidenceRequest, AutoStrategyEvidence
 from app.api.v1.schemas.bo_desirability_calculation import (
     DesirabilityMomentResult,
     _Acquisition,
@@ -28,8 +29,7 @@ class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class AugmentationSelectionRequest(_Model):
-    schema_version: Literal[2]
+class _AugmentationSelectionRequest(_Model):
     request_id: UUID
     expected_study_version_id: UUID
     expected_definition_sha256: Sha256
@@ -50,13 +50,29 @@ class AugmentationSelectionRequest(_Model):
     time_budget_ms: int = Field(default=60000, ge=1000, le=60000, strict=True)
 
     @model_validator(mode="after")
-    def model_policy(self) -> AugmentationSelectionRequest:
+    def model_policy(self) -> _AugmentationSelectionRequest:
         model_free = self.policy in {"greedy_incremental_maxpro_v1", "greedy_mixed_maximin_v1"}
         if (self.model_id is None) != (self.expected_model_sha256 is None) or model_free != (
             self.model_id is None
         ):
             raise ValueError("bayesian_augmentation_model_policy_mismatch")
         return self
+
+
+class AugmentationSelectionRequest(_AugmentationSelectionRequest):
+    schema_version: Literal[2]
+
+
+class AutoAugmentationSelectionRequest(_AugmentationSelectionRequest):
+    schema_version: Literal[4]
+    auto_strategy: AutoEvidenceRequest
+
+
+AugmentationRequest = Annotated[
+    AugmentationSelectionRequest | AutoAugmentationSelectionRequest,
+    Field(discriminator="schema_version"),
+]
+AUGMENTATION_REQUEST: TypeAdapter[AugmentationRequest] = TypeAdapter(AugmentationRequest)
 
 
 class AugmentationSource(_Model):
@@ -164,8 +180,7 @@ class AugmentationPredictedRow(CandidateRow):
     prediction_source: Literal["completed_observations_base_posterior"]
 
 
-class AugmentationCalculation(_Model):
-    schema_version: Literal[1]
+class _AugmentationCalculation(_Model):
     augmentation: AugmentationTrace
     selected_rows: list[CandidateRow | AugmentationPredictedRow] = Field(min_length=1, max_length=8)
     source_row_count: int = Field(ge=1, le=10000)
@@ -175,7 +190,7 @@ class AugmentationCalculation(_Model):
     model_refit: Literal[False]
 
     @model_validator(mode="after")
-    def exact_rows(self) -> AugmentationCalculation:
+    def exact_rows(self) -> _AugmentationCalculation:
         if [row.row_id for row in self.selected_rows] != self.augmentation.selected_row_ids or any(
             not row.eligible for row in self.selected_rows
         ):
@@ -190,8 +205,23 @@ class AugmentationCalculation(_Model):
         return self
 
 
+class AugmentationCalculation(_AugmentationCalculation):
+    schema_version: Literal[1]
+
+
+class AutoAugmentationCalculation(_AugmentationCalculation):
+    schema_version: Literal[2]
+    auto_evidence: AutoStrategyEvidence
+
+
+AugmentationResult = Annotated[
+    AugmentationCalculation | AutoAugmentationCalculation, Field(discriminator="schema_version")
+]
+AUGMENTATION_RESULT: TypeAdapter[AugmentationResult] = TypeAdapter(AugmentationResult)
+
+
 class AugmentationSelectionResponse(_Model):
-    schema_version: Literal[2] = 2
+    schema_version: Literal[2, 4] = 2
     selection_id: UUID
     study_id: UUID
     study_version_id: UUID
@@ -199,8 +229,16 @@ class AugmentationSelectionResponse(_Model):
     candidate_revision_id: UUID
     config_sha256: Sha256
     result_sha256: Sha256
-    request: AugmentationSelectionRequest
-    calculation: AugmentationCalculation
+    request: AugmentationRequest
+    calculation: AugmentationResult
     created_at: str
     source_is_current: bool
     confirmed_batch_id: UUID | None
+
+    @model_validator(mode="after")
+    def version_binding(self) -> AugmentationSelectionResponse:
+        if self.schema_version != self.request.schema_version or (
+            self.schema_version == 4
+        ) != isinstance(self.calculation, AutoAugmentationCalculation):
+            raise ValueError("bayesian_planning_artifact_invalid")
+        return self

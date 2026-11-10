@@ -4,6 +4,7 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.bo_auto_evidence_report import auto_evidence_markup
 from app.services.report_contract import ReportSection
 from app.services.stored_report_primitives import report_table
 
@@ -37,6 +38,8 @@ def mixed_batch_report_section(
             [text("Distance policy", "거리 정책"), rows[0]["distance_policy"]],
         ],
     )
+    if "auto_evidence" in calculation:
+        markup += auto_evidence_markup(calculation["auto_evidence"], goals, locale)
     if attachment["response_models"] is None:
         markup += (
             "<p>"
