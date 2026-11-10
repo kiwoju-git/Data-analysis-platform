@@ -70,7 +70,9 @@ def verify_bo_vector_history(browser: Browser, base: str, output: Path) -> dict:
                 ],
             },
         }
-        created = page.request.post(base + "/api/v1/bayesian-studies", data=request)
+        created = page.request.post(
+            base + "/api/v1/bayesian-studies", headers={"Origin": base}, data=request
+        )
         assert created.status == 201, created.text()
         study = created.json()
         api = base + "/api/v1/bayesian-studies/" + study["study_id"]
@@ -94,7 +96,11 @@ def verify_bo_vector_history(browser: Browser, base: str, output: Path) -> dict:
                 for index, trial in enumerate(study["trials"])
             ],
         }
-        saved = page.request.put(api + "/observations/batch", data=observation_request)
+        saved = page.request.put(
+            api + "/observations/batch",
+            headers={"Origin": base},
+            data=observation_request,
+        )
         assert saved.status == 200, saved.text()
         before = saved.json()["study"]
         writes: list[str] = []
@@ -398,6 +404,7 @@ def verify_bo_vector_entry(
         entry.get_by_role("button", name="Review measurements", exact=True).click()
         remote = page.request.put(
             endpoint,
+            headers={"Origin": base},
             data={
                 "request_id": str(uuid4()),
                 "expected_study_version_id": before["study_version_id"],

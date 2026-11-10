@@ -24,6 +24,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path) -> dic
     ) as page:
         created = page.request.post(
             base + "/api/v1/bayesian-studies",
+            headers={"Origin": base},
             data={
                 "name": "Synthetic persistent planning",
                 "initial_design_seed": 42,
@@ -56,6 +57,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path) -> dic
         api = base + "/api/v1/bayesian-studies/" + study["study_id"]
         measured = page.request.put(
             api + "/observations/batch",
+            headers={"Origin": base},
             data={
                 "request_id": str(uuid4()),
                 "expected_study_version_id": study["study_version_id"],

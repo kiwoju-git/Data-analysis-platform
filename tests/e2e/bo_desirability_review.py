@@ -33,6 +33,7 @@ def verify_desirability_review(
     ) as page:
         created = page.request.post(
             base + "/api/v1/bayesian-studies",
+            headers={"Origin": base},
             data={
                 "name": f"Synthetic q{batch_size} desirability journey",
                 "initial_design_seed": 42,
@@ -88,6 +89,7 @@ def verify_desirability_review(
         api = base + "/api/v1/bayesian-studies/" + study["study_id"]
         measured = page.request.put(
             api + "/observations/batch",
+            headers={"Origin": base},
             data={
                 "request_id": str(uuid4()),
                 "expected_study_version_id": study["study_version_id"],
@@ -418,7 +420,9 @@ def verify_desirability_review(
         )
         source = descriptor["source"]
         capability = page.request.post(
-            base + "/api/v1/reports/capability", data={"source": source, "locale": "en"}
+            base + "/api/v1/reports/capability",
+            headers={"Origin": base},
+            data={"source": source, "locale": "en"},
         )
         assert capability.status == 200, capability.text()
         reference = capability.json()["source_ref_sha256"]

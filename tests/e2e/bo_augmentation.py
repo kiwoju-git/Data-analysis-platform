@@ -24,6 +24,7 @@ def verify_augmentation(browser: Browser, base: str, output: Path) -> dict:
     ) as page:
         created = page.request.post(
             base + "/api/v1/bayesian-studies",
+            headers={"Origin": base},
             data={
                 "name": "Synthetic augmentation",
                 "initial_design_seed": 41,
@@ -55,6 +56,7 @@ def verify_augmentation(browser: Browser, base: str, output: Path) -> dict:
         api = base + "/api/v1/bayesian-studies/" + study["study_id"]
         measured = page.request.put(
             api + "/observations/batch",
+            headers={"Origin": base},
             data={
                 "request_id": str(uuid4()),
                 "expected_study_version_id": study["study_version_id"],

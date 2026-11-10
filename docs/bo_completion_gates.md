@@ -231,6 +231,27 @@ Dependency-security and both native GP resource jobs passed in this first run.
 Linux archive verification was skipped because its upstream product gates failed;
 that skip is not an archive pass. Main integration remains gated on final CI.
 
+### Native Rerun And Development-Proxy Browser Boundary
+
+Source042c993 / run42754453175: Python3.11 on Ubuntu passed4,295 tests with26
+skipped, including the three originally failing numeric planning APIs. The
+Cholesky restore correction did not change tolerances or stored numbers. Local
+Windows focused reruns passed249 contract/roundtrip tests and153 snapshot,
+planning, augmentation, tutorial and legacy-lifecycle tests. Mypy passed318
+source files; Ruff check and direct no-cache format-check passed584 files.
+The earlier local broad BO run had1,310 passed/10 stale-expectation failures/1
+skip; it is not recorded as an all-pass run.
+
+Linux3.12's full check passed in this rerun, but its browser suite failed at the
+first new vector fixture POST with `dev_origin_not_allowed`. The built-server
+journey had not exposed the development proxy's mandatory Origin header for
+mutations. New fixture API writes must send the exact tested origin, following
+the existing BO noise fixture. Neither the Vite guard nor backend Host/Origin/
+CORS policies are relaxed. Browser-origin behavior is not forged globally; only
+explicit synthetic API setup/mutation calls receive the header. A separate AST
+regression covers these manual mutation calls. Full development-proxy and final
+native/browser/archive reruns remain required after this correction.
+
 The owner explicitly requested all of these remaining gates, not only a release
 of the current target-curve checkpoint. Do not mark this plan complete while
 candidate/profiler/augmentation/category work is still missing.

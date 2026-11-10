@@ -129,6 +129,7 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path) -> dict:
         builder_receipt = verify_mixed_builder(page, base)
         created = page.request.post(
             base + "/api/v1/bayesian-studies/mixed",
+            headers={"Origin": base},
             data={
                 "schema_version": 7,
                 "name": "Synthetic typed BO",
