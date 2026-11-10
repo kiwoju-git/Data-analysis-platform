@@ -37,6 +37,7 @@ export interface AttributeControlLimitSetsRouteParams {
 }
 
 export const apiRoutes = {
+  bayesianTargetCurvePreview: () => apiUrl("/bayesian-studies/target-curve-preview"),
   reportSources(sourceKind: import("./types/reports").ReportSourceKind, limit = 20, offset = 0): string {
     return urlWithQuery("/reports/sources", new URLSearchParams({ source_kind: sourceKind, limit: String(limit), offset: String(offset) }));
   },
@@ -316,6 +317,22 @@ export const apiRoutes = {
 
   bayesianRecommendationReviews(studyId: string): string {
     return apiUrl(`/bayesian-studies/${pathId(studyId)}/recommendation-reviews`);
+  },
+
+  bayesianDesirabilityReviews(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/desirability-reviews`);
+  },
+
+  bayesianDesirabilityReviewConfirm(studyId: string, reviewId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/desirability-reviews/${pathId(reviewId)}/confirm`);
+  },
+
+  bayesianLatestDesirabilityRecommendation(studyId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/desirability-recommendations/latest`);
+  },
+
+  bayesianDesirabilityRecommendation(studyId: string, batchId: string): string {
+    return apiUrl(`/bayesian-studies/${pathId(studyId)}/desirability-recommendations/${pathId(batchId)}`);
   },
 
   bayesianRecommendationReviewConfirm(studyId: string, reviewId: string): string {

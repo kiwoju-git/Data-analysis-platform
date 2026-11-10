@@ -57,6 +57,17 @@ function decimalParts(value: number): { coefficient: bigint; exponent: number } 
   return { coefficient: BigInt(integer + fraction), exponent: Number(exponent) - fraction.length };
 }
 
+export function decimalLatticeValue(anchor: number, step: number, index: number): number | null {
+  if (!Number.isFinite(anchor) || !Number.isFinite(step) || step <= 0 ||
+      !Number.isSafeInteger(index) || index < 0 || index > 10000) return null;
+  const a = decimalParts(anchor), s = decimalParts(step);
+  const exponent = Math.min(a.exponent, s.exponent);
+  const coefficient = a.coefficient * 10n ** BigInt(a.exponent - exponent) +
+    BigInt(index) * s.coefficient * 10n ** BigInt(s.exponent - exponent);
+  const value = Number(`${coefficient}e${exponent}`);
+  return Number.isFinite(value) ? value : null;
+}
+
 export function isRsmOnLattice(value: number, anchor: number, step: number | null | undefined): boolean {
   if (!Number.isFinite(value) || !Number.isFinite(anchor) || step == null || !Number.isFinite(step) || step <= 0) return false;
   // Match the backend Decimal(str(value)) policy; binary division widens the

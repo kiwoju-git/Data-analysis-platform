@@ -4,6 +4,11 @@ import { boText } from "./boNoisePolicy";
 export function bayesianReviewErrorDetails(code: string, locale: AppLocale) {
   const text = (ko: string, en: string) => boText(locale, ko, en);
   const messages: Record<string, { title: string; message: string; action: string }> = {
+    bayesian_vector_goals_invalid: {
+      title: text("반응 목표를 확인하세요", "Check the response goals"),
+      message: text("반응은 1~4개이며 이름, 유효한 기준값과 양수 중요도가 필요합니다.", "Provide 1–4 named responses, valid thresholds and positive importance weights."),
+      action: text("최대화: 하한 < 목표값. 최소화: 목표값 < 상한. 목표값 맞추기: 하한 < 목표값 < 상한. 빈 값은 0이 아닙니다.", "Maximize: lower < target. Minimize: target < upper. Match target: lower < target < upper. Blank values are not zero."),
+    },
     bayesian_kernel_invalid: {
       title: text("커널 설정을 확인하세요", "Check the kernel setting"),
       message: text("지원하지 않는 신호 커널입니다.", "The signal kernel is not supported."),

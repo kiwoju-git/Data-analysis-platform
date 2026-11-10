@@ -1,12 +1,13 @@
 # Bayesian Optimization Contract
 
-Last updated: 2026-11-07
+Last updated: 2026-11-09
 
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
-`0.8.0`. New studies use study schema `4`; readers retain study schemas `1`,
-`2`, and `3` and their recorded method versions without rewriting checksums.
+`0.11.0`. New scalar studies use study schema `4`; response-vector studies use
+schema `5`/history `2`. Readers retain study schemas `1`, `2`, `3` and `4`
+and their recorded method versions without rewriting checksums.
 Legacy definition verification reconstructs the schema-specific factor and
 initial-design field set; schema-4 defaults are never injected into a schema-1
 through schema-3 checksum payload. The application stores an immutable bounded study and
@@ -16,6 +17,26 @@ batch of two through eight. Only explicit confirmation creates pending trials.
 Matérn5/2 remains the default; Gaussian, Matérn3/2 and Exponential are available
 under the [versioned kernel contract](bo_kernel_alignment.md). It never runs the user's
 objective.
+
+API33/metadata27 additionally enables multiresponse desirability q1 review,
+explicit confirmation, complete measured-vector entry, exact restoration and
+managed reports. It uses independent raw-response GPs, approved public DS-linear
+curves and moment-matched Beta EI; it is not the scalar EI/ETI or MC batch policy.
+The new config4/result4/model5/item3 contract, version dispatch and additive
+migration are specified in [Stage3e](bo_desirability_review.md). API34/metadata28
+adds ordered multiresponse q1..8 review, whole-batch confirmation and exact
+partial-completion restoration through config5/result5/model5/item4. See
+[Stage3h](bo_desirability_public_batch.md) for the conditional MC/Beta policy,
+resource/precision restrictions and executed evidence. Candidate-set imports,
+manual subsets and named JMP augmentation remain unsupported; actual JMP output
+parity is unverified. The scalar behavior below is retained, not replaced.
+
+API35/metadata29 adds the explicitly selected `bounded_multiscale_starts_v1`
+fit policy on desirability q1..8. Request/config/result6, review4, aggregate
+model6 and per-response model5 persist the starting-point plan, best evaluated
+receipts and boundary diagnostics. Legacy fitting and schemas4/5 remain readable
+and selectable. See [fit-quality contract](bo_fit_quality_gate.md); no global
+fit optimum, validation improvement or JMP numerical equivalence is promised.
 
 No generic analysis-run execution API is provided. `POST /api/v1/analysis-runs`
 returns `analysis_method_uses_dedicated_api` with

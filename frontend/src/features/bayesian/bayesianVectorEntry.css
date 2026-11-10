@@ -1,0 +1,7 @@
+.bo-vector-form { border: 0; padding: 0; margin: 0; min-inline-size: 0; }
+.bo-vector-goals input { min-inline-size: 6rem; inline-size: 100%; }
+.bo-vector-goals select { min-inline-size: 9rem; }
+.bo-vector-goals td:first-child input { min-inline-size: 9rem; }
+.bo-vector-entry input { min-inline-size: 8rem; inline-size: 100%; }
+.bo-vector-entry td { font-variant-numeric: tabular-nums; }
+.bo-vector-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 12px; }

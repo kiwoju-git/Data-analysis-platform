@@ -1,0 +1,43 @@
+.bo-planning { container-type: inline-size; min-inline-size: 0; margin-block: 1rem; border-block-start: 1px solid var(--border-color, #d6dce0); padding-block-start: 1rem; }
+.bo-planning section { min-inline-size: 0; margin-block: 1.25rem; }
+.bo-planning h3, .bo-planning h4 { margin-block: 0 .65rem; line-height: 1.4; }
+.bo-planning-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; align-items: start; }
+.bo-planning-fields label, .bo-planning-label { display: grid; gap: .35rem; min-inline-size: 0; }
+.bo-planning input, .bo-planning select, .bo-planning textarea { inline-size: 100%; min-inline-size: 0; box-sizing: border-box; }
+.bo-planning input[type="checkbox"] { inline-size: 1.1rem; block-size: 1.1rem; }
+.bo-planning-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-block: .75rem; }
+.bo-planning-actions button, .bo-planning-icon { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-block-size: 2.5rem; }
+.bo-planning-icon { inline-size: 2.5rem; flex: 0 0 2.5rem; }
+.bo-planning .table-wrap { max-inline-size: 100%; overflow-x: auto; }
+.bo-planning table { font-variant-numeric: tabular-nums; }
+.bo-planning td, .bo-planning th { vertical-align: top; }
+.bo-planning-caption { text-align: start; padding-block: .5rem; }
+.bo-planning-selection { display: grid; gap: .5rem; padding: 0; list-style: none; }
+.bo-planning-selection li { display: flex; gap: .6rem; align-items: flex-start; border-block-end: 1px solid var(--border-color, #d6dce0); padding-block: .4rem; min-inline-size: 0; }
+.bo-planning-selection .bo-planning-coordinates { flex: 1; min-inline-size: 0; overflow-wrap: anywhere; line-height: 1.5; }
+.bo-planning-source { display: grid; gap: .5rem; }
+.bo-planning-source > div { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr); gap: .75rem; }
+.bo-planning-source dd { margin: 0; min-inline-size: 0; overflow-wrap: anywhere; white-space: normal; }
+.bo-planning-profile-mean { color: var(--chart-series-1, #167585); stroke: currentColor; fill: currentColor; }
+.bo-planning-profile-sd { color: var(--chart-series-2, #95528d); stroke: currentColor; fill: currentColor; }
+.bo-planning textarea { min-block-size: 8rem; resize: vertical; }
+@container (max-width: 700px) { .bo-planning-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 440px) { .bo-planning-fields { grid-template-columns: minmax(0, 1fr); } .bo-planning-source > div { grid-template-columns: minmax(0, 1fr); gap: .2rem; } }
+.bo-planning-confirm-lock { min-inline-size: 0; border: 0; padding: 0; margin: 0; }
+.bo-planning-fieldset { min-inline-size: 0; border: 0; padding: 0; margin-block: 1rem; }
+.bo-planning-fieldset legend { font-weight: 600; margin-block-end: .65rem; }
+.bo-planning-fieldset > label, .bo-planning-fieldset details > label { display: grid; gap: .35rem; min-inline-size: 0; margin-block: .65rem; }
+.bo-planning-fieldset .checkbox-label { display: flex; align-items: center; gap: .5rem; }
+.bo-augmentation td, .bo-augmentation th { overflow-wrap: anywhere; }
+.bo-mixed-levels { display: grid; gap: .5rem; padding-inline-start: 1.5rem; max-inline-size: 40rem; }
+.bo-mixed-levels li { display: flex; gap: .35rem; align-items: center; min-inline-size: 0; }
+.bo-mixed-levels li > input { flex: 1; min-inline-size: 0; }
+.bo-planning-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; align-items: start; margin-block: .65rem; }
+.bo-planning-controls > label { display: grid; gap: .35rem; min-inline-size: 0; }
+.bo-planning-order { display: grid; gap: .5rem; padding-inline-start: 1.5rem; }
+.bo-planning-order > li { display: flex; align-items: center; gap: .5rem; min-inline-size: 0; }
+.bo-planning-order code { flex: 1; min-inline-size: 0; }
+.bo-planning code { white-space: normal; overflow-wrap: anywhere; }
+.bo-planning-order button { display: inline-flex; align-items: center; justify-content: center; inline-size: 2.5rem; block-size: 2.5rem; flex: 0 0 2.5rem; }
+@container (max-width: 700px) { .bo-planning-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 440px) { .bo-planning-controls { grid-template-columns: minmax(0, 1fr); } }

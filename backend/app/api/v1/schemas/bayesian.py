@@ -5,6 +5,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.api.v1.schemas.bayesian_desirability import ResponseValues
+from app.api.v1.schemas.bo_curve_policy import (
+    AnyDesirabilityObjective as BayesianDesirabilityObjective,
+)
 from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
@@ -102,7 +106,7 @@ class BayesianStudyCreateRequest(BaseModel):
         min_length=1,
         max_length=BAYESIAN_STUDY_FACTOR_LIMIT,
     )
-    objective: BayesianObjectiveRequest
+    objective: BayesianObjectiveRequest | BayesianDesirabilityObjective
     constraints: list[BayesianLinearConstraintRequest] = Field(default_factory=list, max_length=16)
     initial_design_seed: int = Field(ge=0, le=2_147_483_647)
     initial_design_size: int = Field(ge=1, le=64)
@@ -261,7 +265,22 @@ class BayesianReplicateTrialResponse(BaseModel):
     replicate_of_trial_id: UUID
 
 
-BayesianAnyTrialResponse = BayesianTrialResponse | BayesianReplicateTrialResponse
+class BayesianVectorTrialResponse(BayesianTrialResponse):
+    objective_value: None
+    response_values: ResponseValues
+
+
+class BayesianVectorReplicateTrialResponse(BayesianReplicateTrialResponse):
+    objective_value: None
+    response_values: ResponseValues
+
+
+BayesianAnyTrialResponse = (
+    BayesianVectorTrialResponse
+    | BayesianVectorReplicateTrialResponse
+    | BayesianTrialResponse
+    | BayesianReplicateTrialResponse
+)
 
 
 class BayesianReplicateCreateRequest(BaseModel):
@@ -296,7 +315,7 @@ class BayesianHistoryRevisionResponse(BaseModel):
     history_revision_id: UUID
     study_version_id: UUID
     revision_number: int = Field(ge=1)
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     completed_trial_ids: list[UUID]
     completed_trial_count: int = Field(ge=0)
     observation_history_sha256: str
@@ -393,7 +412,7 @@ class BayesianStudyResponse(BaseModel):
     study_id: UUID
     study_version_id: UUID
     version_number: int = Field(ge=1)
-    study_schema_version: Literal[1, 2, 3, 4]
+    study_schema_version: Literal[1, 2, 3, 4, 5, 6]
     method_id: Literal["doe.bayesian_optimization"]
     method_version: str
     name: str
@@ -404,7 +423,7 @@ class BayesianStudyResponse(BaseModel):
     app_version: str
     definition_sha256: str
     factors: list[BayesianFactorResponse]
-    objective: BayesianObjectiveResponse
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
     initial_design: BayesianInitialDesignResponse
     trial_count: int = Field(ge=1)
@@ -426,6 +445,7 @@ class BayesianStudyResponse(BaseModel):
             "bayesian_optimization_pending_recommendation_exists",
             "bayesian_optimization_budget_exhausted",
             "bayesian_study_not_active",
+            "bayesian_multiresponse_recommendation_not_enabled",
         ]
     ]
     lifecycle_event: BayesianStudyLifecycleEventResponse | None
@@ -450,6 +470,11 @@ class BayesianStudyDeletionCounts(BaseModel):
     recommendation_batch_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     recommendation_batch_item_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
     replicate_request_count: int = Field(default=0, ge=0, le=MAX_BAYESIAN_TRIALS)
+    planning_model_count: int = Field(default=0, ge=0, le=32)
+    candidate_set_count: int = Field(default=0, ge=0, le=32)
+    candidate_revision_count: int = Field(default=0, ge=0, le=2048)
+    planning_selection_count: int = Field(default=0, ge=0, le=32)
+    planning_confirmation_count: int = Field(default=0, ge=0, le=32)
     lifecycle_event_count: int = Field(ge=0, le=1)
     metadata_record_count: int = Field(ge=4)
     report_count: int = Field(default=0, ge=0)
@@ -553,6 +578,13 @@ class BayesianObservationBatchItem(BaseModel):
     objective_value: FiniteFloat
 
 
+class BayesianVectorObservationBatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    trial_id: UUID
+    response_values: ResponseValues
+
+
 class BayesianObservationBatchCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -560,7 +592,7 @@ class BayesianObservationBatchCreateRequest(BaseModel):
     expected_study_version_id: UUID
     expected_history_revision_id: UUID
     expected_observation_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    observations: list[BayesianObservationBatchItem] = Field(
+    observations: list[BayesianObservationBatchItem | BayesianVectorObservationBatchItem] = Field(
         min_length=1,
         max_length=MAX_COMPLETED_OBSERVATIONS,
     )

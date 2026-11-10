@@ -8,6 +8,8 @@ import {
   type FactorDraft,
 } from "../../../bayesianStudyDraft";
 import { DOE_FACTOR_CAPABILITIES } from "../../../doe/factorCapabilities";
+import { buildVectorObjective, newResponseDraft, type ResponseGoalDraft } from "../bayesianVectorDraft";
+import { parseDoeResponseNumber } from "../../../doe/doeResponsePaste";
 
 export function useBayesianStudyDraftState() {
   const [studyName, setStudyName] = useState("Sequential process study");
@@ -26,6 +28,9 @@ export function useBayesianStudyDraftState() {
   ]);
   const [objectiveName, setObjectiveName] = useState("Response");
   const [objectiveUnit, setObjectiveUnit] = useState("");
+  const [responseMode, setResponseMode] = useState<"scalar" | "vector">("scalar");
+  const [responseGoals, setResponseGoals] = useState<ResponseGoalDraft[]>([newResponseDraft(1), newResponseDraft(2)]);
+  const nextResponseKey = useRef(3);
   const [goalType, setGoalType] = useState<
     "minimize" | "maximize" | "match_target"
   >("maximize");
@@ -165,13 +170,20 @@ export function useBayesianStudyDraftState() {
   }
 
   function buildRequest(): BayesianStudyCreateRequest | string {
+    const vectorObjective = responseMode === "vector" ? buildVectorObjective(objectiveName, responseGoals) : null;
+    if (typeof vectorObjective === "string") return vectorObjective;
+    if (responseMode === "vector" && (
+      factors.some(f => parseDoeResponseNumber(f.low) === null || parseDoeResponseNumber(f.high) === null) ||
+      !/^\d+$/.test(initialDesignSize.trim()) || !/^\d+$/.test(initialDesignSeed.trim()) ||
+      constraints.some(c => parseDoeResponseNumber(c.bound) === null || Object.values(c.coefficients).some(v => v.trim() !== "" && parseDoeResponseNumber(v) === null))
+    )) return "bayesian_study_input_invalid";
     const request = buildBayesianStudyRequest({
       studyName,
       factors,
       constraints,
       objectiveName,
       objectiveUnit,
-      goalType,
+      goalType: responseMode === "vector" ? "maximize" : goalType,
       targetValue,
       targetTolerance,
       initialDesignSize,
@@ -180,10 +192,12 @@ export function useBayesianStudyDraftState() {
     });
     return typeof request === "string"
       ? request
-      : { ...request, predecessor_study_id: predecessorStudyId };
+      : { ...request, objective: vectorObjective ?? request.objective, predecessor_study_id: predecessorStudyId };
   }
 
   function prepareSuccessor(study: BayesianStudyResponse) {
+    if (study.objective.goal_type === "desirability") return;
+    setResponseMode("scalar");
     const nextFactors = study.factors.map((factor, index) => ({
       key: index + 1,
       factorId: factor.factor_id,
@@ -248,6 +262,17 @@ export function useBayesianStudyDraftState() {
   }
 
   return {
+    responseMode,
+    setResponseMode,
+    responseGoals,
+    updateResponseGoal: <Field extends keyof Omit<ResponseGoalDraft, "key">>(key: number, field: Field, value: ResponseGoalDraft[Field]) => {
+      setResponseGoals(current => current.map(row => row.key === key ? { ...row, [field]: value } : row));
+    },
+    addResponseGoal: () => {
+      const row = newResponseDraft(nextResponseKey.current++);
+      setResponseGoals(current => current.length >= 4 ? current : [...current, row]);
+    },
+    removeResponseGoal: (key: number) => setResponseGoals(current => current.length <= 1 ? current : current.filter(row => row.key !== key)),
     addConstraint,
     addFactor,
     buildRequest,

@@ -1,3 +1,5 @@
+import type { DesirabilityBatch } from "./bayesianDesirability";
+
 export interface BayesianFactorRequest {
   factor_id: string;
   name: string;
@@ -19,6 +21,30 @@ export interface BayesianObjectiveRequest {
   observation_policy: "manual_single_observation";
 }
 
+export interface BayesianDesirabilityResponseGoal {
+  curve?: { policy: "two_sided_gaussian_target_peak_one_v1"; lower_desirability: number; upper_desirability: number };
+  response_id: string;
+  name: string;
+  unit: string | null;
+  goal: "maximize" | "minimize" | "match_target";
+  lower: number | null;
+  target: number;
+  upper: number | null;
+  importance: number;
+}
+
+export interface BayesianDesirabilityObjective {
+  name: string;
+  goal_type: "desirability";
+  observation_policy: "complete_response_vector";
+  curve_policy: "derringer_suich_linear_v1" | "per_response_target_gaussian_or_ds_v1";
+  responses: BayesianDesirabilityResponseGoal[];
+  unit: null;
+  direction: null;
+  target_value: null;
+  target_tolerance: null;
+}
+
 export interface BayesianConstraintTermRequest {
   factor_id: string;
   coefficient: number;
@@ -35,7 +61,7 @@ export interface BayesianLinearConstraintRequest {
 export interface BayesianStudyCreateRequest {
   name: string;
   factors: BayesianFactorRequest[];
-  objective: BayesianObjectiveRequest;
+  objective: BayesianObjectiveRequest | BayesianDesirabilityObjective;
   constraints: BayesianLinearConstraintRequest[];
   initial_design_seed: number;
   initial_design_size: number;
@@ -55,12 +81,13 @@ export interface BayesianFactorResponse extends BayesianFactorRequest {
   scaling_rule: "linear_0_1";
 }
 
-export interface BayesianObjectiveResponse extends BayesianObjectiveRequest {
+export interface BayesianScalarObjectiveResponse extends BayesianObjectiveRequest {
   unit: string | null;
   target_value: number | null;
   target_tolerance: number | null;
   direction: "minimize" | "maximize" | null;
 }
+export type BayesianObjectiveResponse = BayesianScalarObjectiveResponse | BayesianDesirabilityObjective;
 
 export type BayesianConstraintTermResponse = BayesianConstraintTermRequest;
 
@@ -105,6 +132,7 @@ export interface BayesianLegacyTrialResponse {
   normalized_coordinates: Record<string, number>;
   coordinates_sha256: string;
   objective_value: number | null;
+  response_values?: Record<string, number>;
   created_at: string;
   closed_at: string | null;
 }
@@ -203,7 +231,7 @@ export interface BayesianStudyResponse {
   study_id: string;
   study_version_id: string;
   version_number: number;
-  study_schema_version: 1 | 2 | 3 | 4;
+  study_schema_version: 1 | 2 | 3 | 4 | 5 | 6;
   method_id: "doe.bayesian_optimization";
   method_version: string;
   name: string;
@@ -232,6 +260,7 @@ export interface BayesianStudyResponse {
     | "bayesian_optimization_pending_recommendation_exists"
     | "bayesian_optimization_budget_exhausted"
     | "bayesian_study_not_active"
+    | "bayesian_multiresponse_recommendation_not_enabled"
   >;
   lifecycle_event: BayesianStudyLifecycleEventResponse | null;
 }
@@ -253,6 +282,11 @@ export interface BayesianStudyDeletionCounts {
   lifecycle_event_count: number;
   metadata_record_count: number;
   report_count?: number;
+  planning_model_count?: number;
+  candidate_set_count?: number;
+  candidate_revision_count?: number;
+  planning_selection_count?: number;
+  planning_confirmation_count?: number;
   file_count: number;
   file_bytes: number;
 }
@@ -332,7 +366,10 @@ export interface BayesianObservationBatchCreateRequest {
   expected_study_version_id: string;
   expected_history_revision_id: string;
   expected_observation_history_sha256: string;
-  observations: Array<{ trial_id: string; objective_value: number }>;
+  observations: Array<
+    | { trial_id: string; objective_value: number }
+    | { trial_id: string; response_values: Record<string, number> }
+  >;
 }
 
 export interface BayesianObservationBatchCreateResponse {
@@ -817,6 +854,7 @@ export interface BayesianKernelBatchResponse extends Omit<BayesianNoiseBatchResp
 }
 export type BayesianCurrentBatchResponse = BayesianNoiseBatchResponse | BayesianKernelBatchResponse;
 export type BayesianRecommendationBatchResponse = BayesianLegacyRecommendationBatchResponse | BayesianCurrentBatchResponse;
+export type BayesianStoredRecommendationBatchResponse = BayesianRecommendationBatchResponse | DesirabilityBatch;
 
 type BayesianReviewCalculation<T extends BayesianCurrentBatchResponse> = Pick<T,
   "batch_size" | "batch_policy" | "shared_model" | "incumbent" |
@@ -844,5 +882,5 @@ export interface BayesianRecommendationReviewConfirmRequest {
 export interface BayesianLatestRecommendationBatchResponse {
   study_id: string;
   study_version_id: string;
-  item: BayesianRecommendationBatchResponse | null;
+  item: BayesianStoredRecommendationBatchResponse | null;
 }

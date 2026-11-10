@@ -1,5 +1,16 @@
 # Browser E2E Coverage
 
+## Target Curve Preview (API36)
+
+`bo_vector_history.py` additionally invokes `bo_target_curve_preview.py` in the
+existing context journey. It checks an explicit, non-persistent target curve
+comparison in the built UI, independent normal-moment values, original SVG
+coordinates, Korean user text in English mode, keyboard pin/Escape, viewport
+changes, A-B-A source invalidation and network failure without automatic retry.
+It does not claim the new curve is used by recommendation/confirmation. Current
+native execution evidence is in `bo_target_curve_preview_gate.md`; registration
+alone is not proof that remote CI or a packaged release ran it.
+
 ## Pilot Boundary Additions
 
 The four existing Windows shards remain separate. Their new stages are:
@@ -848,6 +859,9 @@ browser critical path.
 - `verify Report Center request context` (full flow)
 - `verify RSM response validation and source ownership`
 - `verify explicit replicate retry ownership`
+- `verify stored multiresponse history without UI writes` (API-seeded restoration;
+  Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
+  same-request replay after a lost response, delayed failure protection and reload)
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
@@ -1114,6 +1128,37 @@ not as a second executable GP method. Requested diagnostics use
 
 ## Maintenance Checklist
 
+The `bo_vector_history` context-suite stage now calls
+`bo_desirability_review.verify_desirability_review`. It tests the built UI with
+two synthetic measured responses, holds a real HTTP review across a settings
+edit, simulates loss after a real confirmation commit, explicitly retries the
+same review, enters measured values and reloads the exact saved recommendation.
+KO/EN/1024/1440 checks preserve a Korean user-owned response name and record no
+fit request during locale/resize. Report Center source selection, creation,
+download and deep-link restoration plus offline HTML use the same saved source.
+Current execution results and any gaps are recorded in
+[Stage3e](bo_desirability_review.md), not inferred from test registration.
+
+Stage3h extends the same helper with `--batch-size 2` and registers both q1 and
+q2 in the vector-history stage (sequentially, with separate diagnostics). It
+checks every candidate's visible actual settings and raw response predictions,
+whole-batch confirmation with lost-response explicit replay, reverse-order
+individual vector entry, partial-completion reload without changing original
+predictions/hash, exact Report Center source/download, and every saved rank in
+offline HTML. q8 API lifecycle tests are separate evidence, not q8 browser
+coverage. Current results and limits are recorded in
+[Stage3h](bo_desirability_public_batch.md). This local gate does not publish an
+archive or imply that remote native CI was run.
+
+The fit-quality gate adds a sequential q2 `fit_quality=True` journey in the same
+context-suite helper, retaining the existing q1/q2 legacy journeys. Its explicit
+GP initialization selector, saved LML chart/table, keyboard pin/release, KO/EN
+1024/1440 layout, response-loss idempotency, restore and offline HTML use the
+built app. The standalone `--fit-quality --batch-size 1` entry checks q1;
+`--restore-receipt` verifies exact-source reads after an independently performed
+server restart. Registration is not evidence that remote CI ran; current native
+execution and failures are recorded in [fit-quality evidence](bo_fit_quality_gate.md).
+
 The `verify current analysis completion ownership` stage uses an isolated
 synthetic dataset and real analysis/storage endpoints. It delays HTTP publication
 after server completion to inspect input/source changes, checks status-only
@@ -1141,6 +1186,26 @@ a temporary workspace and stores only synthetic screenshots. Physical peer
 reachability and site-specific firewall policy require separate IT verification.
 
 When extending `tests/e2e/critical_path.py`:
+
+The current `bo_vector_history` context stage also calls
+`bo_target_curve_recommendation.py`: actual new-study curve selection, q1 and
+q2 with opt-in fit quality, visible saved controls, stale/retry ownership,
+actual measurements and Report Center/offline HTML. It uses only isolated
+synthetic workspaces. Registration is not proof of a remote CI execution;
+current native evidence is in `bo_target_curve_recommendation_gate.md`.
+
+The completion gate additionally calls `bo_persistent_planning.py`,
+`bo_augmentation.py` and `bo_mixed_workflow.py` sequentially from this stage.
+They cover stored-model predictions and Profiler, paged persistent candidates,
+explicit ordered review/confirmation, model-free augmentation, and typed
+nominal/ordinal coordinates. The mixed journey first exercises a separate actual
+UI builder, including invalid-input rejection, ordinal reordering and locale
+preservation. Its end-to-end planning fixture seeds only the initial study
+through the API; actual observations, fitting, candidate/profile controls,
+confirmation, exact saved URL and managed-report download use the built UI.
+All three record API counts, immutable hashes, KO/EN and1024/1440 layout,
+page errors and offline report checks. Current-run evidence is in
+`bo_completion_gates.md`; source registration alone is not execution evidence.
 
 - Add a `diagnostics.step(...)` marker before each major browser action or
   process wait so failure screenshots and HTML snapshots include a meaningful

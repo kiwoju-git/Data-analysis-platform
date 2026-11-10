@@ -11,6 +11,22 @@ import {
 describe("analysis method card guidance", () => {
   afterEach(() => setCurrentLocale("ko"));
 
+  it("separates scalar and q1 desirability BO capabilities and measurement noise", () => {
+    for (const locale of ["en", "ko"] as const) {
+      const guidance = getAnalysisMethodGuidance("doe.bayesian_optimization", locale);
+      const options = guidance.optionChecklist.join(" ");
+      expect(options).toContain("jitter");
+      expect(options).toContain("Gaussian");
+      expect(options).toContain("Matérn 3/2");
+      expect(options).toContain("Exponential");
+      expect(options).toContain("Beta");
+      expect(guidance.plainLanguage).toContain("q=1–8");
+      expect(guidance.plainLanguage).toContain("q=1");
+      expect(guidance.plainLanguage).toContain(locale === "en" ? "has not been established" : "검증되지 않았습니다");
+      expect(JSON.stringify(guidance)).not.toContain(locale === "en" ? "Deterministic Observation Policy" : "결정론적 관측 정책");
+    }
+  });
+
   it("separates OLS inference from penalty-model guidance in both locales", () => {
     for (const locale of ["en", "ko"] as const) {
       const guidance = getAnalysisMethodGuidance("regression.linear_model", locale);

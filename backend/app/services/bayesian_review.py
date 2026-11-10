@@ -10,6 +10,16 @@ from threading import BoundedSemaphore, Lock
 from time import monotonic
 from uuid import UUID, uuid4
 
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyReviewRequest as DesirabilityReviewRequest,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyReviewResponse as DesirabilityReviewResponse,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    parse_desirability_request,
+    parse_desirability_review,
+)
 from app.api.v1.schemas.bayesian_noise import (
     BayesianCurrentBatchRequest,
     BayesianCurrentBatchResponse,
@@ -43,6 +53,7 @@ class _ReviewEntry:
     request_json: str
     response_json: str
     deadline: float
+    kind: str = "scalar"
 
 
 class BayesianReviewStore:
@@ -66,29 +77,52 @@ class BayesianReviewStore:
     def put(
         self, body: BayesianCurrentBatchRequest, review: BayesianRecommendationReviewResponse
     ) -> None:
-        entry = _ReviewEntry(
-            body.model_dump_json(), review.model_dump_json(), self._clock() + REVIEW_TTL_SECONDS
+        self._put(body.model_dump_json(), review.model_dump_json(), review.review_id, "scalar")
+
+    def put_desirability(
+        self, body: DesirabilityReviewRequest, review: DesirabilityReviewResponse
+    ) -> None:
+        self._put(
+            body.model_dump_json(), review.model_dump_json(), review.review_id, "desirability"
         )
+
+    def _put(self, request_json: str, response_json: str, review_id: UUID, kind: str) -> None:
+        entry = _ReviewEntry(request_json, response_json, self._clock() + REVIEW_TTL_SECONDS, kind)
         if len(entry.request_json.encode()) + len(entry.response_json.encode()) > MAX_REVIEW_BYTES:
             raise _error("bayesian_review_size_exceeded")
         with self._lock:
             self._prune()
             while len(self._entries) >= MAX_REVIEWS:
                 self._entries.popitem(last=False)
-            self._entries[review.review_id] = entry
+            self._entries[review_id] = entry
 
     def get(
         self, review_id: UUID
     ) -> tuple[BayesianCurrentBatchRequest, BayesianRecommendationReviewResponse]:
+        entry = self._get(review_id, "scalar")
+        return (
+            parse_current_batch_request(json.loads(entry.request_json)),
+            BayesianRecommendationReviewResponse.model_validate_json(entry.response_json),
+        )
+
+    def get_desirability(
+        self, review_id: UUID
+    ) -> tuple[DesirabilityReviewRequest, DesirabilityReviewResponse]:
+        entry = self._get(review_id, "desirability")
+        return (
+            parse_desirability_request(json.loads(entry.request_json)),
+            parse_desirability_review(json.loads(entry.response_json)),
+        )
+
+    def _get(self, review_id: UUID, kind: str) -> _ReviewEntry:
         with self._lock:
             self._prune()
             entry = self._entries.get(review_id)
         if entry is None:
             raise _error("bayesian_review_expired")
-        return (
-            parse_current_batch_request(json.loads(entry.request_json)),
-            BayesianRecommendationReviewResponse.model_validate_json(entry.response_json),
-        )
+        if entry.kind != kind:
+            raise _error("bayesian_review_mismatch")
+        return entry
 
     def discard(self, review_id: UUID) -> None:
         with self._lock:

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+import math
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +75,7 @@ class BayesianTrialRecord:
     created_at: str
     closed_at: str | None
     replicate_of_trial_id: str | None = None
+    response_values_json: str | None = None
 
 
 @dataclass(frozen=True)
@@ -191,6 +195,12 @@ class BayesianStudyDeletionGraphRecord:
     report_count: int = 0
     report_bytes: int = 0
     reports_manifest_sha256: str = ""
+    planning_model_count: int = 0
+    candidate_set_count: int = 0
+    candidate_revision_count: int = 0
+    planning_selection_count: int = 0
+    planning_confirmation_count: int = 0
+    planning_manifest_sha256: str = ""
 
 
 def insert_bayesian_study_bundle(
@@ -343,6 +353,14 @@ def delete_bayesian_study_graph_record(
         quarantine.records = owner_reports(connection, study_id=expected.study_id)
         quarantine.move()
 
+        from app.storage.bo_planning import delete_planning_owner
+
+        for owned_version in connection.execute(
+            "SELECT study_version_id FROM bayesian_study_versions WHERE study_id=?",
+            (expected.study_id,),
+        ).fetchall():
+            delete_planning_owner(connection, str(owned_version[0]))
+
         lifecycle = connection.execute(
             "DELETE FROM bayesian_study_lifecycle_events WHERE study_id = ?;",
             (expected.study_id,),
@@ -444,7 +462,7 @@ def get_bayesian_trial_record(workspace_root: Path, trial_id: str) -> BayesianTr
             SELECT trial_id, study_version_id, trial_number, origin, state,
                    actual_coordinates_json, normalized_coordinates_json,
                    coordinates_sha256, objective_value, created_at, closed_at,
-                   replicate_of_trial_id
+                   replicate_of_trial_id, response_values_json
             FROM bayesian_trials
             WHERE trial_id = ?;
             """,
@@ -466,7 +484,7 @@ def list_bayesian_trial_records(
             SELECT trial_id, study_version_id, trial_number, origin, state,
                    actual_coordinates_json, normalized_coordinates_json,
                    coordinates_sha256, objective_value, created_at, closed_at,
-                   replicate_of_trial_id
+                   replicate_of_trial_id, response_values_json
             FROM bayesian_trials
             WHERE study_version_id = ?
             ORDER BY trial_number
@@ -692,6 +710,7 @@ def insert_bayesian_recommendation_batch_bundle(
     expected_history_sha256: str,
     total_trial_budget: int,
     allow_existing: bool = False,
+    planning_selection: tuple[str, str, str] | None = None,
 ) -> None:
     connection = sqlite3.connect(metadata_db_path(workspace_root), isolation_level=None)
     try:
@@ -706,8 +725,33 @@ def insert_bayesian_recommendation_batch_bundle(
             if existing is not None:
                 if existing != (batch.study_version_id, batch.config_sha256):
                     raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+                if planning_selection is not None:
+                    linked = connection.execute(
+                        "SELECT c.batch_id,s.config_sha256,s.result_sha256 "
+                        "FROM bayesian_planning_confirmations c "
+                        "JOIN bayesian_planning_selections s ON s.selection_id=c.selection_id "
+                        "WHERE c.selection_id=? AND s.study_version_id=?",
+                        (planning_selection[0], batch.study_version_id),
+                    ).fetchone()
+                    if linked != (batch.batch_id, *planning_selection[1:]):
+                        raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
                 connection.commit()
                 return
+        if (batch.result_schema_version in {8, 9, 10}) != (planning_selection is not None):
+            raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
+        if planning_selection is not None:
+            from app.storage.bo_planning import validate_planning_confirmation
+
+            selection_id, config_hash, result_hash = planning_selection
+            if selection_id != batch.batch_id:
+                raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
+            validate_planning_confirmation(
+                connection,
+                selection_id,
+                study_version_id=batch.study_version_id,
+                expected_config_sha256=config_hash,
+                expected_result_sha256=result_hash,
+            )
         if not _study_is_active(connection, batch.study_version_id):
             raise BayesianStorageConflict("bayesian_study_closed")
         head = connection.execute(
@@ -809,6 +853,11 @@ def insert_bayesian_recommendation_batch_bundle(
         ).fetchone()
         if item_count is None or _row_int(item_count[0]) != batch.batch_size:
             raise BayesianStorageConflict("bayesian_optimization_artifact_mismatch")
+        if planning_selection is not None:
+            connection.execute(
+                "INSERT INTO bayesian_planning_confirmations(selection_id,batch_id) VALUES(?,?)",
+                (planning_selection[0], batch.batch_id),
+            )
         connection.execute(
             """
             UPDATE bayesian_studies
@@ -868,17 +917,19 @@ def list_bayesian_recommendation_batch_records(
 def get_latest_bayesian_recommendation_batch_record(
     workspace_root: Path,
     study_version_id: str,
+    *,
+    automatic_desirability_only: bool = False,
 ) -> BayesianRecommendationBatchRecord | None:
     with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
         row = connection.execute(
             f"""
             SELECT {_BATCH_COLUMNS}
             FROM bayesian_recommendation_batches
-            WHERE study_version_id = ?
+            WHERE study_version_id = ? AND (?=0 OR result_schema_version IN (4,5,6,7))
             ORDER BY rowid DESC
             LIMIT 1;
             """,
-            (study_version_id,),
+            (study_version_id, int(automatic_desirability_only)),
         ).fetchone()
     return None if row is None else _batch_from_row(row)
 
@@ -1287,7 +1338,7 @@ def complete_bayesian_trial_record(
 def complete_bayesian_trial_batch_records(
     workspace_root: Path,
     *,
-    observations: list[tuple[str, float]],
+    observations: Sequence[tuple[str, float | dict[str, float]]],
     closed_at: str,
     expected_history_revision_id: str,
     expected_history_sha256: str,
@@ -1303,6 +1354,9 @@ def complete_bayesian_trial_batch_records(
         connection.execute("PRAGMA foreign_keys = ON;")
         connection.execute("BEGIN IMMEDIATE;")
         with connection:
+            observation_columns = _validated_observation_columns(
+                connection, observations, new_history
+            )
             replay = connection.execute(
                 """
                 SELECT observation_history_sha256, previous_history_sha256,
@@ -1318,6 +1372,13 @@ def complete_bayesian_trial_batch_records(
                     and str(replay[1]) == expected_history_sha256
                     and str(replay[2]) == new_history.study_version_id
                 ):
+                    _validate_observation_replay(
+                        connection,
+                        observation_columns,
+                        expected_history_revision_id,
+                        expected_history_sha256,
+                        new_history,
+                    )
                     return "replay"
                 raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
 
@@ -1336,7 +1397,7 @@ def complete_bayesian_trial_batch_records(
             head = connection.execute(
                 """
                 SELECT revision.history_revision_id,
-                       revision.observation_history_sha256
+                       revision.observation_history_sha256, revision.schema_version
                 FROM bayesian_observation_history_heads AS head
                 INNER JOIN bayesian_observation_history_revisions AS revision
                     ON revision.history_revision_id = head.history_revision_id
@@ -1350,6 +1411,8 @@ def complete_bayesian_trial_batch_records(
                 or str(head[1]) != expected_history_sha256
             ):
                 raise BayesianStorageConflict("history head changed")
+            if _row_int(head[2]) != new_history.schema_version:
+                raise BayesianStorageConflict("bayesian_observation_mode_invalid")
 
             trial_ids = [trial_id for trial_id, _ in observations]
             placeholders = ",".join("?" for _ in trial_ids)
@@ -1366,14 +1429,21 @@ def complete_bayesian_trial_batch_records(
             if any(str(row[1]) != "pending" for row in trial_rows):
                 raise BayesianStorageConflict("bayesian_observation_trial_not_pending")
 
-            for trial_id, objective_value in observations:
+            for trial_id, objective_value, response_values_json in observation_columns:
                 cursor = connection.execute(
                     """
                     UPDATE bayesian_trials
-                    SET state = 'completed', objective_value = ?, closed_at = ?
+                    SET state = 'completed', objective_value = ?, closed_at = ?,
+                        response_values_json = ?
                     WHERE trial_id = ? AND study_version_id = ? AND state = 'pending';
                     """,
-                    (objective_value, closed_at, trial_id, new_history.study_version_id),
+                    (
+                        objective_value,
+                        closed_at,
+                        response_values_json,
+                        trial_id,
+                        new_history.study_version_id,
+                    ),
                 )
                 if cursor.rowcount != 1:
                     raise BayesianStorageConflict("bayesian_observation_trial_not_pending")
@@ -1406,6 +1476,145 @@ def complete_bayesian_trial_batch_records(
                 (closed_at, new_history.study_version_id),
             )
     return "created"
+
+
+def _validated_observation_columns(
+    connection: sqlite3.Connection,
+    observations: Sequence[tuple[str, float | dict[str, float]]],
+    history: BayesianHistoryRevisionRecord,
+) -> list[tuple[str, float | None, str | None]]:
+    owner = connection.execute(
+        "SELECT schema_version, objective_json FROM bayesian_study_versions "
+        "WHERE study_version_id=?;",
+        (history.study_version_id,),
+    ).fetchone()
+    if owner is None or _row_int(owner[0]) not in {1, 2, 3, 4, 5, 6, 7}:
+        raise BayesianStorageConflict("bayesian_observation_mode_invalid")
+    vector = _row_int(owner[0]) in {5, 6, 7}
+    if history.schema_version != (2 if vector else 1):
+        raise BayesianStorageConflict("bayesian_observation_mode_invalid")
+    ids = [trial_id for trial_id, _ in observations]
+    if not 1 <= len(ids) <= MAX_BAYESIAN_TRIALS or len(set(ids)) != len(ids):
+        raise BayesianStorageConflict("bayesian_observation_response_values_invalid")
+    response_ids: set[str] = set()
+    if vector:
+        try:
+            objective = json.loads(str(owner[1]))
+            responses = objective["responses"]
+            valid_definition = (
+                objective.get("goal_type") == "desirability"
+                and objective.get("observation_policy") == "complete_response_vector"
+                and objective.get("curve_policy")
+                in (
+                    {"derringer_suich_linear_v1", "per_response_target_gaussian_or_ds_v1"}
+                    if _row_int(owner[0]) == 7
+                    else {"per_response_target_gaussian_or_ds_v1"}
+                    if _row_int(owner[0]) == 6
+                    else {"derringer_suich_linear_v1"}
+                )
+                and isinstance(responses, list)
+                and 1 <= len(responses) <= 4
+                and all(
+                    isinstance(item, dict)
+                    and isinstance(item.get("response_id"), str)
+                    and bool(item["response_id"])
+                    for item in responses
+                )
+            )
+            if valid_definition:
+                response_ids = {item["response_id"] for item in responses}
+                valid_definition = len(response_ids) == len(responses)
+        except (TypeError, ValueError, KeyError, AttributeError):
+            valid_definition = False
+        if not valid_definition:
+            raise BayesianStorageConflict("bayesian_observation_mode_invalid")
+    result: list[tuple[str, float | None, str | None]] = []
+    for trial_id, value in observations:
+        if isinstance(value, dict) != vector:
+            raise BayesianStorageConflict("bayesian_observation_mode_invalid")
+        if isinstance(value, dict):
+            if set(value) != response_ids:
+                raise BayesianStorageConflict("bayesian_observation_response_values_invalid")
+            validated = {key: _finite_observation(item) for key, item in value.items()}
+            result.append(
+                (
+                    trial_id,
+                    None,
+                    json.dumps(
+                        validated,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ),
+                )
+            )
+        else:
+            result.append((trial_id, _finite_observation(value), None))
+    return result
+
+
+def _finite_observation(value: object) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise BayesianStorageConflict("bayesian_observation_response_values_invalid")
+    try:
+        result = float(value)
+    except (OverflowError, ValueError) as exc:
+        raise BayesianStorageConflict("bayesian_observation_response_values_invalid") from exc
+    if not math.isfinite(result):
+        raise BayesianStorageConflict("bayesian_observation_response_values_invalid")
+    return result
+
+
+def _validate_observation_replay(
+    connection: sqlite3.Connection,
+    observations: list[tuple[str, float | None, str | None]],
+    source_id: str,
+    source_sha256: str,
+    history: BayesianHistoryRevisionRecord,
+) -> None:
+    source = connection.execute(
+        "SELECT study_version_id, observation_history_sha256, schema_version, "
+        "completed_trial_ids_json FROM bayesian_observation_history_revisions "
+        "WHERE history_revision_id=?;",
+        (source_id,),
+    ).fetchone()
+    replay = connection.execute(
+        "SELECT completed_trial_ids_json, schema_version "
+        "FROM bayesian_observation_history_revisions WHERE history_revision_id=?;",
+        (history.history_revision_id,),
+    ).fetchone()
+    if (
+        source is None
+        or replay is None
+        or str(source[0]) != history.study_version_id
+        or str(source[1]) != source_sha256
+        or _row_int(source[2]) != history.schema_version
+        or _row_int(replay[1]) != history.schema_version
+    ):
+        raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
+    try:
+        source_ids = json.loads(str(source[3]))
+        completed_ids = json.loads(str(replay[0]))
+        if (
+            not isinstance(source_ids, list)
+            or not isinstance(completed_ids, list)
+            or not all(isinstance(item, str) for item in [*source_ids, *completed_ids])
+            or set(completed_ids) - set(source_ids) != {item[0] for item in observations}
+        ):
+            raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
+    except (TypeError, ValueError) as exc:
+        raise BayesianStorageConflict("bayesian_observation_request_id_conflict") from exc
+    for trial_id, objective, response_json in observations:
+        stored = connection.execute(
+            "SELECT state, objective_value, response_values_json FROM bayesian_trials "
+            "WHERE study_version_id=? AND trial_id=?;",
+            (history.study_version_id, trial_id),
+        ).fetchone()
+        if stored is None or str(stored[0]) != "completed" or stored[1] != objective:
+            raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
+        if stored[2] != response_json:
+            raise BayesianStorageConflict("bayesian_observation_request_id_conflict")
 
 
 def abandon_bayesian_trial_record(
@@ -1627,6 +1836,7 @@ def _deletion_graph_from_connection(
     connection: sqlite3.Connection,
     study_id: str,
 ) -> BayesianStudyDeletionGraphRecord | None:
+    from app.storage.bo_planning import planning_owner_manifest
     from app.storage.managed_report_artifacts import managed_reports_manifest, owner_reports
 
     study = connection.execute(
@@ -1748,6 +1958,7 @@ def _deletion_graph_from_connection(
         report_count=len(reports),
         report_bytes=sum(report.size_bytes for report in reports),
         reports_manifest_sha256=managed_reports_manifest(reports) if reports else "",
+        **planning_owner_manifest(connection, study_id),
     )
 
 
@@ -1795,6 +2006,7 @@ def _trial_from_row(row: tuple[object, ...]) -> BayesianTrialRecord:
         created_at=str(row[9]),
         closed_at=None if row[10] is None else str(row[10]),
         replicate_of_trial_id=None if row[11] is None else str(row[11]),
+        response_values_json=None if row[12] is None else str(row[12]),
     )
 
 

@@ -1,0 +1,30 @@
+.bo-desirability,
+.bo-desirability-form,
+.bo-desirability-result { min-inline-size: 0; }
+.bo-desirability-form { border: 0; margin: 0; padding: 0; }
+.bo-desirability-form legend { font-weight: 600; }
+.bo-desirability .bo-desirability-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; margin-block: 12px; }
+.bo-desirability-settings .field { min-inline-size: 0; }
+.bo-desirability-settings input,
+.bo-desirability-settings select { min-inline-size: 0; inline-size: 100%; }
+.bo-desirability-models select { min-inline-size: 9rem; }
+.bo-desirability-models input { min-inline-size: 6rem; inline-size: 100%; }
+.bo-desirability-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.bo-desirability-summary > div { min-inline-size: 0; }
+.bo-desirability-summary dt { line-height: 1.4; overflow-wrap: anywhere; }
+.bo-desirability-summary dd { margin: 4px 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bo-desirability-result { margin-block-start: 16px; }
+.bo-desirability-result h5 { font-size: 1rem; }
+.bo-desirability-candidate { min-inline-size: 0; padding-block: 16px; border-block-start: 1px solid var(--border-default); }
+.bo-desirability-candidate h6 { font-size: 0.95rem; margin: 0 0 12px; }
+.bo-desirability-overview th,
+.bo-desirability-overview td { font-variant-numeric: tabular-nums; }
+.bo-desirability-result p,
+.bo-desirability-result code,
+.bo-desirability .error-box { overflow-wrap: anywhere; }
+.bo-fit-diagnostics { min-inline-size: 0; }
+.bo-fit-response { border-top: 1px solid var(--border-color, #d6dbe0); padding-block: 16px; min-inline-size: 0; }
+.bo-fit-response .chart-frame { max-inline-size: 700px; }
+.bo-fit-point.bo-fit-series-0 { fill: #2861a0; stroke: #2861a0; }
+.bo-fit-point.bo-fit-series-1 { fill: #217556; stroke: #217556; }
+.bo-fit-point.bo-fit-series-2 { fill: #a64935; stroke: #a64935; }

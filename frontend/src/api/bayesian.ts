@@ -1,5 +1,6 @@
 import { apiErrorCode, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
+import type { AnyBayesianStudyResponse } from "./types/boMixed";
 import type {
   BayesianHistoryListResponse,
   BayesianHistoryRevisionResponse,
@@ -13,6 +14,7 @@ import type {
   BayesianRecommendationResponse,
   BayesianRecommendationBatchCreateRequest,
   BayesianRecommendationBatchResponse,
+  BayesianStoredRecommendationBatchResponse,
   BayesianNoiseBatchCreateRequest,
   BayesianKernelBatchCreateRequest,
   BayesianCurrentBatchResponse,
@@ -95,7 +97,7 @@ export async function createBayesianReplicates(
 export async function fetchBayesianRecommendationBatch(
   studyId: string,
   batchId: string,
-): Promise<BayesianRecommendationBatchResponse> {
+): Promise<BayesianStoredRecommendationBatchResponse> {
   const response = await fetchApi(
     apiRoutes.bayesianRecommendationBatch(studyId, batchId),
     { headers: { Accept: "application/json" } },
@@ -105,7 +107,7 @@ export async function fetchBayesianRecommendationBatch(
       await apiErrorCode(response, "bayesian_recommendation_batch_fetch_failed"),
     );
   }
-  return (await response.json()) as BayesianRecommendationBatchResponse;
+  return (await response.json()) as BayesianStoredRecommendationBatchResponse;
 }
 
 export async function fetchLatestBayesianRecommendationBatch(
@@ -205,14 +207,18 @@ export async function fetchBayesianStudies(
   return (await response.json()) as BayesianStudyListResponse;
 }
 
-export async function fetchBayesianStudy(studyId: string): Promise<BayesianStudyResponse> {
+export function fetchBayesianStudy(studyId: string): Promise<BayesianStudyResponse>;
+export function fetchBayesianStudy(studyId: string, options: { includeMixed: true }): Promise<AnyBayesianStudyResponse>;
+export async function fetchBayesianStudy(studyId: string, options?: { includeMixed: true }): Promise<AnyBayesianStudyResponse> {
   const response = await fetchApi(apiRoutes.bayesianStudy(studyId), {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "bayesian_study_fetch_failed"));
   }
-  return (await response.json()) as BayesianStudyResponse;
+  const result = await response.json() as AnyBayesianStudyResponse;
+  if (result.study_schema_version === 7 && !options?.includeMixed) throw new Error("bayesian_mixed_typed_reader_required");
+  return result;
 }
 
 export async function closeBayesianStudy(

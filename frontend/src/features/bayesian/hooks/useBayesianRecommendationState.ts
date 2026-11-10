@@ -121,6 +121,12 @@ export function useBayesianRecommendationState({
             : await fetchBayesianRecommendationBatch(studyId, batchId);
         if (!restoreGuard.isCurrent(request)) return null;
         if (restoredBatch !== null) {
+          if (restoredBatch.result_schema_version === 4 || restoredBatch.result_schema_version === 5 || restoredBatch.result_schema_version === 6 || restoredBatch.result_schema_version === 7) {
+            setBatch(null);
+            setRecommendation(null);
+            setError("bayesian_desirability_response_mapping_invalid");
+            return null;
+          }
           if (restoredBatch.study_id !== studyId) {
             setBatch(null);
             setRecommendation(null);

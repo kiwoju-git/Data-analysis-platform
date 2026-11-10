@@ -39,6 +39,15 @@ class RuntimeCapabilities(BaseModel):
     bayesian_batch_recommendation: bool
     bayesian_recommendation_review: bool
     bayesian_numeric_kernels: bool
+    bayesian_response_vector_lifecycle: bool
+    bayesian_multiresponse_recommendation: bool
+    bayesian_multiresponse_batch: bool
+    bayesian_fit_quality: bool
+    bayesian_target_curve_preview: bool
+    bayesian_versioned_target_curves: bool
+    bayesian_persistent_planning: bool
+    bayesian_augmentation: bool
+    bayesian_mixed_factor_planning: bool
     bayesian_objective_goal_modes: bool
 
 

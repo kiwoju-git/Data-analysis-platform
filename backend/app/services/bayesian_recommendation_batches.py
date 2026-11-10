@@ -22,12 +22,15 @@ from app.api.v1.schemas.bayesian import (
     BayesianRecommendationCurrentTrialResponse,
     BayesianTrialResponse,
 )
-from app.api.v1.schemas.bayesian_noise import (
+from app.api.v1.schemas.bayesian_batches import (
     BayesianAnyBatchListResponse,
     BayesianAnyBatchResponse,
     BayesianAnyLatestBatchResponse,
-    BayesianCurrentBatchRequest,
 )
+from app.api.v1.schemas.bayesian_noise import (
+    BayesianAnyBatchResponse as ScalarBatchResponse,
+)
+from app.api.v1.schemas.bayesian_noise import BayesianCurrentBatchRequest
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
@@ -67,12 +70,15 @@ def create_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
     body: BayesianRecommendationBatchCreateRequest | BayesianCurrentBatchRequest,
-) -> BayesianAnyBatchResponse:
+) -> ScalarBatchResponse:
     if isinstance(body, BayesianCurrentBatchRequest):
         from app.services.bayesian_noise_recommendations import create_noise_batch
 
         return create_noise_batch(settings, study_id, body)
     study = get_bayesian_study(settings, study_id)
+    from app.services.bayesian_studies import require_scalar_bayesian_objective
+
+    require_scalar_bayesian_objective(study.objective)
     if study.status != "active":
         raise _batch_error("bayesian_study_closed")
     if str(body.expected_history_revision_id) != str(study.observation_history.history_revision_id):
@@ -337,7 +343,9 @@ def get_bayesian_recommendation_batch(
     study_id: UUID,
     batch_id: UUID,
 ) -> BayesianAnyBatchResponse:
-    study = get_bayesian_study(settings, study_id)
+    from app.services.bo_mixed_studies import get_any_bayesian_study
+
+    study = get_any_bayesian_study(settings, study_id)
     record = get_bayesian_recommendation_batch_record(
         settings.workspace_root,
         str(batch_id),
@@ -364,7 +372,9 @@ def get_latest_bayesian_recommendation_batch(
     settings: Settings,
     study_id: UUID,
 ) -> BayesianAnyLatestBatchResponse:
-    study = get_bayesian_study(settings, study_id)
+    from app.services.bo_mixed_studies import get_any_bayesian_study
+
+    study = get_any_bayesian_study(settings, study_id)
     record = get_latest_bayesian_recommendation_batch_record(
         settings.workspace_root,
         str(study.study_version_id),
@@ -385,7 +395,9 @@ def list_bayesian_recommendation_batches(
     offset: int,
     limit: int,
 ) -> BayesianAnyBatchListResponse:
-    study = get_bayesian_study(settings, study_id)
+    from app.services.bo_mixed_studies import get_any_bayesian_study
+
+    study = get_any_bayesian_study(settings, study_id)
     records = list_bayesian_recommendation_batch_records(
         settings.workspace_root,
         str(study.study_version_id),
@@ -424,6 +436,47 @@ def _validated_response(
     *,
     is_latest: bool,
 ) -> BayesianAnyBatchResponse:
+    if record.result_schema_version == 10:
+        from app.api.v1.schemas.bo_mixed_batch import MixedBatchResponse
+
+        saved_mixed = MixedBatchResponse.model_validate_json(record.result_json)
+        current_mixed = {trial.trial_id: trial for trial in study.trials}
+        mixed_items = [
+            item.model_copy(update={"current_trial": current_mixed[item.trial.trial_id]})
+            for item in saved_mixed.items
+        ]
+        return saved_mixed.model_copy(
+            update={
+                "items": mixed_items,
+                "is_latest": is_latest,
+                "batch_state": _batch_state(mixed_items),
+            }
+        )
+    if record.result_schema_version in {8, 9}:
+        from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
+        from app.api.v1.schemas.bo_planning_batch import PlanningBatchResponse
+
+        saved = (
+            PlanningBatchResponse
+            if record.result_schema_version == 8
+            else AugmentationBatchResponse
+        ).model_validate_json(record.result_json)
+        current = {trial.trial_id: trial for trial in study.trials}
+        items = [
+            item.model_copy(update={"current_trial": current[item.trial.trial_id]})
+            for item in saved.items
+        ]
+        return saved.model_copy(
+            update={
+                "items": items,
+                "is_latest": is_latest,
+                "batch_state": _batch_state(items),
+            }
+        )
+    if record.result_schema_version in {4, 5, 6, 7}:
+        from app.services.bayesian_desirability_recommendations import current_desirability_response
+
+        return current_desirability_response(study, record, is_latest=is_latest)
     if record.result_schema_version in {2, 3}:
         from app.api.v1.schemas.bayesian_noise import parse_current_batch_response
 

@@ -9,7 +9,7 @@ import {
 import { createLatestRequestGuard } from "../../../latestRequest";
 import { bayesianErrorCode } from "../bayesianDisplay";
 
-export function useBayesianRetentionState(study: BayesianStudyResponse | null) {
+export function useBayesianRetentionState(study: Pick<BayesianStudyResponse, "study_id" | "status"> | null) {
   const [preflight, setPreflight] =
     useState<BayesianStudyDeletionPreflightResponse | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState(false);

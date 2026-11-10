@@ -744,13 +744,13 @@ export const analysisMethodGuidance = {
     methodId: "doe.bayesian_optimization",
     roleRequirements: [
       required("요인", translationToken("capabilityGuidance.continuousFactors")),
-      required("목적", "최대화 또는 최소화할 단일 숫자 반응"),
+      required("목적", translationToken("boHelp.goal")),
       required("순차 이력", "실제로 수행한 조건과 관측 반응"),
     ],
     optionChecklist: [
-      "결정론적 관측 정책",
-      "Matérn-5/2 GP surrogate",
-      "Expected Improvement xi",
+      translationToken("boHelp.noise"),
+      translationToken("boHelp.kernel"),
+      translationToken("boHelp.acquisition"),
       "seed/trial/candidate/time budget",
     ],
     preflightChecks: [
@@ -761,12 +761,11 @@ export const analysisMethodGuidance = {
     ],
     resultFocus: [
       "다음 실험 후보",
-      "예측 평균/표준편차",
+      translationToken("boHelp.prediction"),
       "Expected Improvement",
       "incumbent와 audit trail",
     ],
-    plainLanguage:
-      "전용 API와 화면에서 bounded 요인·목적·선형 제약, seed 기반 초기 실험점, pending/completed/abandoned trial과 immutable 관측 history를 관리하고 Matérn-5/2 Gaussian Process와 Expected Improvement로 다음 확인 실험 후보를 계산합니다. 앱은 목적함수를 실행하지 않으며 추천은 관측값이나 전역 최적 보장이 아닙니다.",
+    plainLanguage: translationToken("boHelp.summary"),
     commonErrors: [
       "아직 수행하지 않은 추천 조건을 관측값처럼 history에 기록하는 경우",
       "설계경계 밖 후보나 이미 평가한 점을 새 추천으로 해석하는 경우",

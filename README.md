@@ -26,22 +26,99 @@ runtime compatibility is recorded above. See [method contract](docs/two_variance
 
 ### Noise-Aware BO and GPR
 
-The API31 source workflow separates **Review experiment candidates** from
+The current source contract is **API39 / metadata32 / BO method0.15.0**.
+It retains numeric single/multiresponse review and confirmation, and adds
+source-locked reusable models, immutable candidate-table revisions, ordered
+manual selection, conditional Profiler views and separate augmentation policies.
+Numeric, nominal and explicitly ordered factors use separate domain/kernel
+contracts; category labels are not treated as arbitrary numeric distances.
+See the [completion gates and executed checks](docs/bo_completion_gates.md),
+[candidate/Profiler contract](docs/bo_candidate_planning_contract.md),
+[augmentation policies](docs/bo_augmentation_contract.md) and
+[mixed-factor integration](docs/bo_mixed_factor_integration.md).
+The workflow follows documented JMP options where established; it is not a
+claim of identical JMP fitting, desirability curves or recommendation values.
+Linux publication is deferred. The Linux download below remains an older build,
+not a distribution of these source changes. Back up offline before upgrading;
+code rollback alone cannot open a metadata32 workspace with an older binary.
+
+The following paragraphs record earlier gates. The API31 source workflow separated
+**Review experiment candidates** from
 **Confirm these experiments**. Reviewing does not add trials; confirmation saves
 the exact ordered batch without another fit and supports safe explicit retry.
 Unconfirmed reviews are temporary (up to20 minutes/eight reviews, or until server
 restart). Numeric BO now selects Gaussian, Matern5/2 (default), Matern3/2 or
 Exponential. The selected family and fitted parameters remain attached to the
 review, committed result and report. This matches JMP19.2's numeric option names,
-not a verified match to its fitted results. Multiresponse desirability and editable
-candidate tables remain later stages. See the
+not a verified match to its fitted results. Multiresponse ordered batches are
+connected in Stage3h below; persistent tables and separate augmentation were
+subsequent gates, now covered by the current source contract above. See the
 [implementation stages and evidence](docs/bo_jmp_workflow_stages.md).
 
-API31/metadata25 extends the existing batch table's version constraint for
+Stage2 API31/metadata25 extends the existing batch table's version constraint for
 method0.8.0/config3/result3/model4. Back up an existing workspace offline before
 upgrade; old code cannot open metadata25. Legacy recommendation JSON/hashes are
 preserved, not recalculated. See [kernel contract and current evidence](docs/bo_kernel_alignment.md).
 No new Linux Release is published by this stage.
+
+Stage3c API32/metadata26 added immutable multiresponse
+goals and complete measured-response vectors through the API, with exact history
+restore, repeats, offline backup and stored-history reports. Local Stage3d adds
+explicit multiresponse goal setup and reviewed actual-response entry with
+source-locked, idempotent saves. Local Stage3e API33/metadata27 connects one-point
+candidate review, explicit confirmation, measured entry and saved recommendation
+reports. Scalar studies keep their storage/hash formats.
+Migration26 adds a nullable vector column; older code cannot open this workspace
+version. Back up offline before upgrading. See the
+[lifecycle contract and current verification](docs/bo_multiresponse_lifecycle.md).
+The [entry UI gate](docs/bo_multiresponse_ui.md) and
+[q1 recommendation contract and verification](docs/bo_desirability_review.md)
+record the historical q1 boundary, extended by Stage3h below. Candidate
+tables and augmentation strategies remain separate. Migration27 adds the new recommendation tuple
+to existing table constraints without rewriting saved payloads.
+That gate's record does not certify later source or release builds.
+
+Local [Stage3f](docs/bo_desirability_batch_acquisition.md) adds and tests an
+internal correlated-latent batch acquisition foundation. At that historical gate,
+multiresponse batches were not yet enabled in the UI/API; Stage3h below adds them. Its
+conditional MC/Beta policy is approximate, not a verified JMP algorithm match.
+Local [Stage3g](docs/bo_desirability_batch_search.md) connects internal q1..8
+mixed search and global budgets to the existing bounded worker. At that gate it
+remained internal; Stage3h below adds whole-batch review/confirmation,
+restore/report and UI. Existing multiresponse q1 and scalar workflows are retained.
+
+Local [Stage3h](docs/bo_desirability_public_batch.md) connects ordered multiresponse
+batch review (1-8), whole-batch confirmation, individual actual-vector entry,
+partial-completion restoration and exact saved reports. That gate's API34/metadata28
+adds method0.10.0/config5/result5/model5/item4 without replacing q1 schema4 or
+scalar readers. Migration28 extends table constraints, preserving existing
+payloads and hashes. Back up offline before upgrade: older code cannot open28.
+Batch size, posterior sample count and shared budgets are explicit; numerical
+precision or resource rejection creates no partial batch. This conditional
+MC/Beta policy is not JMP MaxPro, Refine Model or Confirm and Challenge Optima.
+Current executed checks and unverified environments are recorded in the gate
+document. Linux publication remains separate from source validation.
+
+The [fit-quality gate](docs/bo_fit_quality_gate.md) adds opt-in multiscale
+GP initialization and saved diagnostics for desirability q1..8. It shows initial,
+best visited and terminal likelihoods, evaluation counts, convergence and bound
+warnings in the UI and offline HTML. Legacy initialization remains the default.
+This is API35/metadata29, method0.11.0/config6/result6/aggregate-model6/item4;
+migration29 preserves existing payloads and only extends the batch constraint.
+Back up offline before upgrade; older code cannot open29. A supplied workshop
+sample improved its fitted likelihood under this policy, but JMP numerical
+parity and globally better predictions are not established. This gate does not
+implement JMP Auto/MaxPro, editable candidate sets or JMP desirability curves.
+
+The earlier [stored target-curve gate](docs/bo_target_curve_recommendation_gate.md)
+adds explicit peak-one, two-sided Gaussian target preferences for new studies.
+The left/right desirability controls are saved and used by q1..8 recommendations,
+restoration and offline reports. DS-linear remains the default and is retained
+for maximize/minimize. Preview distribution assumptions never enter a recommendation.
+API37/metadata30 uses study6/history2 and BO0.12.0/config7/result7/model7/item4;
+the batch constraint migration preserves old JSON/hash bytes. Back up offline
+before upgrading. This is a documented product policy, not verified JMP parity.
+Its evidence is scoped to that gate; current integration status is in the completion record.
 
 BO separates observation noise from numerical jitter and uses latent-posterior
 EI/ETI, reproducible joint-latent batch planning, executable mixed-domain search
@@ -176,8 +253,12 @@ elimination and disclosed saturated error pooling. Response paste previews into
 the draft; saving creates one immutable revision. Final equations, coefficients,
 VIF/PRESS, interactive residual/factorial plots, domain-bounded stored-model
 prediction and managed KOR/ENG HTML analysis reports share the existing DOE
-workspace. Fractional/PB automated selection is intentionally unavailable.
-See [contracts and validation](docs/factorial_model_workflow_validation.md).
+workspace. Regular fractions additionally support main/two-factor terms through
+an explicit estimable representative basis and hierarchical backward selection;
+PB automated selection remains unavailable. The
+[earlier validation record](docs/factorial_model_workflow_validation.md) retains
+its historical scope; see the current
+[selection contract](docs/factorial_model_selection_contract.md) for the extension.
 
 Fit Regression Model now offers OLS, Ridge, Lasso and Elastic Net in one panel.
 Regularized models use training-fold standardization and nested cross-validation,

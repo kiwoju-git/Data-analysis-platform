@@ -128,8 +128,8 @@ DEFINITIONS = {
         "bayesian",
         ("source", "definition", "history"),
         ("observations", "history_plot", "attachment", "noise_summary", "warnings"),
-        (1,),
-        renderer_version="1.3.0",
+        (1, 2),
+        renderer_version="1.10.0",
     ),
     "doe_prediction": _definition(
         "doe.factorial_prediction",
@@ -802,7 +802,7 @@ def render_bayesian_body(payload: dict[str, Any], locale: ReportLocale) -> Repor
                 )
             ],
         )
-        if observations
+        if observations and objective.get("goal_type") != "desirability"
         else paragraph(
             "선택한 이력에는 완료 관측이 없습니다. 추천이나 학습을 실행하지 않았습니다.",
             "The selected history has no completed observations. "
@@ -810,6 +810,33 @@ def render_bayesian_body(payload: dict[str, Any], locale: ReportLocale) -> Repor
             locale,
         )
     )
+    if objective.get("goal_type") == "desirability" and observations:
+        plot = "".join(
+            report_plot(
+                str(response["name"]),
+                text(locale, "실험 번호", "Trial number"),
+                str(response["name"]) + (f" ({response['unit']})" if response.get("unit") else ""),
+                [
+                    (
+                        str(response["name"]),
+                        [
+                            (
+                                report_number(item["trial_number"]),
+                                report_number(item["response_values"][response["response_id"]]),
+                                str(item["trial_id"]),
+                            )
+                            for item in observations
+                        ],
+                    )
+                ],
+            )
+            for response in objective["responses"]
+        ) + paragraph(
+            "각 그래프는 실제 측정 반응입니다. 종합 만족도나 추천 예측값으로 대체하지 않았습니다.",
+            "Each graph shows a measured response, "
+            "not a joint desirability or a recommended prediction.",
+            locale,
+        )
     attachment = payload.get("attachment")
     return _ordered(
         "bayesian",
@@ -852,7 +879,9 @@ def render_bayesian_body(payload: dict[str, Any], locale: ReportLocale) -> Repor
             ),
             _warning_section(
                 payload,
-                attachment.get("result", attachment) if isinstance(attachment, dict) else {},
+                attachment.get("calculation", attachment.get("result", attachment))
+                if isinstance(attachment, dict)
+                else {},
                 locale,
             ),
         ],

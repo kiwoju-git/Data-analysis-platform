@@ -369,10 +369,10 @@ describe("App", () => {
       "회귀모형 적합 화면에서도 같은 dedicated API",
     );
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization", "ko").plainLanguage).toContain(
-      "pending/completed/abandoned trial",
+      "대기 실험을 확정하고 실제 측정값을 입력",
     );
     expect(getAnalysisMethodGuidance("doe.bayesian_optimization", "ko").plainLanguage).toContain(
-      "추천은 관측값이나 전역 최적 보장이 아닙니다",
+      "예측은 관측값이나 전역 최적 보장이 아니며",
     );
   });
 

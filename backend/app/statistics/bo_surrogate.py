@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Any, Literal
 
 from app.statistics.bayesian_optimization import BayesianOptimizationError
+from app.statistics.bo_fit_policy import (
+    BoFitPolicy,
+    bounded_multiscale_optimize,
+    parameter_bound_hits,
+)
 from app.statistics.bo_kernels import BoKernelSpec, kernel_family, signal_kernel
 
 POLICY_VERSION = "bo_noise_latent_v2"
@@ -123,6 +129,8 @@ def _likelihood(
     jitter: float,
     counts: Any | None = None,
     within_ss: Any | None = None,
+    *,
+    signal_noise_splitter: Callable[[Any], tuple[Any, float]] = split_signal_noise,
 ) -> tuple[float, Any, Any, Any]:
     import numpy as np
     from scipy.linalg import cho_solve, cholesky  # type: ignore[import-untyped]
@@ -135,7 +143,7 @@ def _likelihood(
     if counts is None:
         covariance[indices] += jitter
     else:
-        _, noise = split_signal_noise(current)
+        _, noise = signal_noise_splitter(current)
         variance = noise + jitter
         counts, within_ss = np.asarray(counts, dtype=float), np.asarray(within_ss, dtype=float)
         if (
@@ -212,10 +220,14 @@ class BoSurrogate:
     raw_observation_count: int
     group_counts: tuple[int, ...]
     kernel_spec: BoKernelSpec | None = None
+    fit_diagnostics: dict[str, Any] | None = None
+
+    def _signal_and_noise(self) -> tuple[Any, float]:
+        return split_signal_noise(self.kernel)
 
     @property
     def covariance_roundoff_scale(self) -> float:
-        signal, _ = split_signal_noise(self.kernel)
+        signal, _ = self._signal_and_noise()
         return float(signal.k1.constant_value)
 
     def latent_cross_covariance(self, x: Any, z: Any) -> Any:
@@ -232,7 +244,7 @@ class BoSurrogate:
                 or not np.all(np.isfinite(query))
             ):
                 raise BayesianOptimizationError("bayesian_surrogate_prediction_invalid")
-        signal, _ = split_signal_noise(self.kernel)
+        signal, _ = self._signal_and_noise()
         left_solved = solve_triangular(
             self.lower, signal(self.x_train, left), lower=True, check_finite=False
         )
@@ -257,7 +269,7 @@ class BoSurrogate:
             or (joint and len(query) > 256)
         ):
             raise BayesianOptimizationError("bayesian_surrogate_prediction_invalid")
-        signal, noise = split_signal_noise(self.kernel)
+        signal, noise = self._signal_and_noise()
         means, variances = [], []
         joint_covariance = None
         for start in range(0, len(query), 256):
@@ -340,6 +352,12 @@ class BoSurrogate:
                 initial_amplitude=1.0,
                 initial_length_scales=[1.0] * self.x_train.shape[1],
             )
+        if self.fit_diagnostics is not None:
+            result.update(
+                schema_version=5,
+                policy_version="bo_noise_latent_fit_v4",
+                fit_diagnostics=self.fit_diagnostics,
+            )
         return result
 
 
@@ -354,12 +372,15 @@ def fit_bo_surrogate(
     optimize: bool = True,
     group_member_indices: tuple[tuple[int, ...], ...] | None = None,
     kernel_spec: BoKernelSpec | None = None,
+    fit_policy: BoFitPolicy | None = None,
 ) -> BoSurrogate:
     import numpy as np
     from scipy.optimize import minimize  # type: ignore[import-untyped]
     from threadpoolctl import threadpool_limits  # type: ignore[import-untyped]
 
     started = time.perf_counter()
+    if fit_policy is not None and (kernel_spec is None or not optimize):
+        raise BayesianOptimizationError("bayesian_fit_policy_invalid")
     points, observed = np.asarray(x, dtype=float), np.asarray(raw_y, dtype=float)
     if (
         points.ndim != 2
@@ -410,6 +431,7 @@ def fit_bo_surrogate(
     kernel = _kernel(points.shape[1], policy, scale, kernel_spec=kernel_spec)
     evaluations = 0
     traces: list[dict[str, Any]] = []
+    fit_diagnostics = None
 
     def evaluate(theta: Any) -> tuple[float, Any]:
         nonlocal evaluations
@@ -424,7 +446,17 @@ def fit_bo_surrogate(
     theta = kernel.theta.copy()
     try:
         with threadpool_limits(limits=1):
-            if optimize:
+            if fit_policy is not None:
+                theta, traces, fit_diagnostics = bounded_multiscale_optimize(
+                    theta, kernel.bounds, points.shape[1], fit_policy, search, evaluate
+                )
+                if any(not trace["success"] for trace in traces):
+                    warning_codes.append("bayesian_optimization_model_convergence_warning")
+                hits = parameter_bound_hits(theta, kernel.bounds, points.shape[1])
+                fit_diagnostics["bound_hits"] = hits
+                if any(hit["parameter"] != "measurement_variance" for hit in hits):
+                    warning_codes.append("bayesian_surrogate_signal_bound")
+            elif optimize:
                 rng = np.random.default_rng(search["random_seed"])
                 starts = [theta] + [
                     rng.uniform(kernel.bounds[:, 0], kernel.bounds[:, 1])
@@ -505,4 +537,5 @@ def fit_bo_surrogate(
         raw_count,
         tuple(int(count) for count in counts) if counts is not None else (1,) * raw_count,
         kernel_spec,
+        fit_diagnostics,
     )

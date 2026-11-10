@@ -15,6 +15,22 @@ def bo_noise_report_section(
         return report_text(locale, en=en, ko=ko)
 
     title = text("Noise-aware Recommendation", "관측 노이즈 기반 추천")
+    if isinstance(attachment, dict) and attachment.get("result_schema_version") == 10:
+        from app.services.bo_mixed_batch_report import mixed_batch_report_section
+
+        return mixed_batch_report_section(attachment, definition, locale)
+    if isinstance(attachment, dict) and attachment.get("result_schema_version") == 9:
+        from app.services.bo_augmentation_report import augmentation_report_section
+
+        return augmentation_report_section(attachment, definition, locale)
+    if isinstance(attachment, dict) and attachment.get("result_schema_version") == 8:
+        from app.services.bo_planning_report import planning_report_section
+
+        return planning_report_section(attachment, definition, locale)
+    if isinstance(attachment, dict) and attachment.get("result_schema_version") in {4, 5, 6, 7}:
+        from app.services.bo_desirability_report import desirability_report_section
+
+        return desirability_report_section(attachment, definition, locale)
     if not isinstance(attachment, dict) or attachment.get("result_schema_version") not in {2, 3}:
         return ReportSection(
             "noise_summary", title, "not_applicable", reason="legacy_or_no_attachment"

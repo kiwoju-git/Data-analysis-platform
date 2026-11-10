@@ -1,5 +1,6 @@
 import * as React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EXPECTED_API_CONTRACT_VERSION, MINIMUM_METADATA_SCHEMA_VERSION } from "./runtimeCompatibility";
 
 import type {
   AnalysisMethodListResponse,
@@ -55,8 +56,14 @@ import { useRegressionModelRetentionState } from "./useRegressionModelRetentionS
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
 import { useBayesianStudyCatalogState } from "./features/bayesian/hooks/useBayesianStudyCatalogState";
 import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesianStudyDraftState";
+import { useBayesianVectorEntry } from "./features/bayesian/hooks/useBayesianVectorEntry";
+import { buildVectorObjective, newResponseDraft } from "./features/bayesian/bayesianVectorDraft";
+import type { BayesianObservationBatchCreateRequest } from "./api";
 import { useBayesianStudyLifecycleState } from "./features/bayesian/hooks/useBayesianStudyLifecycleState";
 import { useBayesianRecommendationState } from "./features/bayesian/hooks/useBayesianRecommendationState";
+import { useBayesianDesirabilityRecommendation } from "./features/bayesian/hooks/useBayesianDesirabilityRecommendation";
+import { desirabilityBatchFixture, desirabilityFixture } from "./features/bayesian/bayesianDesirability.fixture";
+import type { DesirabilityReview, DesirabilityBatch } from "./api/types/bayesianDesirability";
 import { useBayesianReplicateState } from "./features/bayesian/hooks/useBayesianReplicateState";
 import type { BayesianReplicateCreateRequest, BayesianReplicateCreateResponse } from "./api/types/bayesian";
 import { useBayesianRetentionState } from "./features/bayesian/hooks/useBayesianRetentionState";
@@ -94,6 +101,111 @@ function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): 
     source_validation: "stored_dependencies_only",
   };
 }
+
+describe("multiresponse measured entry ownership", () => {
+  function vectorStudy(id: string): BayesianStudyResponse {
+    const objective = buildVectorObjective("Q", [{ ...newResponseDraft(1), lower: "0", target: "1" }, { ...newResponseDraft(2), lower: "0", target: "1" }]);
+    if (typeof objective === "string") throw new Error(objective);
+    return { ...bayesianStudy(id), objective, study_schema_version: 5 };
+  }
+  function useEntryHarness(props: { study: BayesianStudyResponse; commit: (study: BayesianStudyResponse, source: string) => void }) {
+    return useBayesianVectorEntry(props.study, props.commit);
+  }
+  it("rejects partial rows, preserves scalar drafts across mode changes and keeps response IDs stable", async () => {
+    const runner = new HookRunner(useBayesianStudyDraftState, undefined);
+    const scalar = runner.output.buildRequest();
+    await runner.act(() => runner.output.setResponseMode("vector"));
+    expect(runner.output.buildRequest()).toBe("bayesian_vector_goals_invalid");
+    for (const row of runner.output.responseGoals) {
+      await runner.act(() => { runner.output.updateResponseGoal(row.key, "lower", "0"); runner.output.updateResponseGoal(row.key, "target", "1"); });
+    }
+    const vector = runner.output.buildRequest();
+    expect(vector).toMatchObject({ objective: { goal_type: "desirability", responses: [{ response_id: "response_1" }, { response_id: "response_2" }] } });
+    await runner.act(() => runner.output.removeResponseGoal(1));
+    expect(runner.output.responseGoals[0].responseId).toBe("response_2");
+    await runner.act(() => runner.output.setResponseMode("scalar"));
+    expect(runner.output.buildRequest()).toEqual(scalar);
+    runner.unmount();
+  });
+  it("retries only explicitly using the exact request snapshot and preserves zero", async () => {
+    const study = vectorStudy("A"); const commit = vi.fn();
+    apiMocks.recordBayesianObservationsBatch.mockReset().mockRejectedValueOnce(new Error("network"));
+    const runner = new HookRunner(useEntryHarness, { study, commit });
+    await runner.act(() => runner.output.edit("A-trial-1", "response_1", "0"));
+    await runner.act(() => runner.output.preview());
+    expect(runner.output.error).toBe("bayesian_vector_observations_invalid");
+    expect(apiMocks.recordBayesianObservationsBatch).not.toHaveBeenCalled();
+    await runner.act(() => runner.output.edit("A-trial-1", "response_2", "1e-8"));
+    await runner.act(() => runner.output.preview());
+    await runner.act(() => { void runner.output.confirm(); });
+    expect(runner.output.failed).toBe(true);
+    const snapshot = apiMocks.recordBayesianObservationsBatch.mock.calls[0][1] as BayesianObservationBatchCreateRequest;
+    expect(snapshot.observations).toEqual([{ trial_id: "A-trial-1", response_values: { response_1: 0, response_2: 1e-8 } }]);
+    await runner.flush(); expect(apiMocks.recordBayesianObservationsBatch).toHaveBeenCalledTimes(1);
+    apiMocks.recordBayesianObservationsBatch.mockResolvedValueOnce({ study, completed_trial_ids: ["A-trial-1"] });
+    await runner.act(() => { void runner.output.confirm(); });
+    expect(apiMocks.recordBayesianObservationsBatch.mock.calls[1][1]).toEqual(snapshot);
+    expect(commit).toHaveBeenCalledOnce(); expect(runner.output.draft).toEqual({}); runner.unmount();
+  });
+  it.each(["success", "error"])("ignores stale %s and finally after an input edit during the next save", async outcome => {
+    const study = vectorStudy("A"); const commit = vi.fn();
+    const first = deferred<unknown>(); const second = deferred<unknown>();
+    apiMocks.recordBayesianObservationsBatch.mockReset().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const runner = new HookRunner(useEntryHarness, { study, commit });
+    await runner.act(() => { runner.output.edit("A-trial-1", "response_1", "1"); runner.output.edit("A-trial-1", "response_2", "2"); });
+    await runner.act(() => runner.output.preview());
+    await runner.act(() => { void runner.output.confirm(); });
+    await runner.act(() => runner.output.edit("A-trial-1", "response_1", "3"));
+    expect(runner.output.review).toBeNull(); expect(runner.output.mayHaveCommitted).toBe(true);
+    await runner.act(() => runner.output.preview());
+    await runner.act(() => { void runner.output.confirm(); });
+    if (outcome === "success") first.resolve({ study, completed_trial_ids: ["A-trial-1"] }); else first.reject(new Error("old"));
+    await runner.flush(); expect(commit).not.toHaveBeenCalled(); expect(runner.output.error).toBeNull(); expect(runner.output.isSaving).toBe(true);
+    second.resolve({ study, completed_trial_ids: ["A-trial-1"] }); await runner.flush();
+    expect(commit).toHaveBeenCalledOnce(); expect(runner.output.isSaving).toBe(false); runner.unmount();
+  });
+  it("guards old captured callbacks, source changes, refresh and unmount", async () => {
+    const study = vectorStudy("A"); const commit = vi.fn(); const response = deferred<unknown>();
+    apiMocks.recordBayesianObservationsBatch.mockReset().mockReturnValueOnce(response.promise);
+    const runner = new HookRunner(useEntryHarness, { study, commit });
+    await runner.act(() => { runner.output.edit("A-trial-1", "response_1", "1"); runner.output.edit("A-trial-1", "response_2", "2"); });
+    await runner.act(() => runner.output.preview());
+    const oldConfirm = runner.output.confirm;
+    const oldCancel = runner.output.cancel;
+    await runner.act(() => { void runner.output.confirm(); });
+    runner.update({ study: vectorStudy("B"), commit });
+    await oldConfirm(); response.resolve({ study, completed_trial_ids: ["A-trial-1"] }); await runner.flush();
+    expect(commit).not.toHaveBeenCalled(); expect(runner.output.draft).toEqual({}); expect(apiMocks.recordBayesianObservationsBatch).toHaveBeenCalledTimes(1);
+    await runner.act(() => runner.output.edit("B-trial-1", "response_1", "5"));
+    await runner.act(() => runner.output.edit("B-trial-1", "response_2", "6"));
+    await runner.act(() => runner.output.preview());
+    const bReview = runner.output.review;
+    await runner.act(() => oldCancel());
+    expect(runner.output.review).toBe(bReview);
+    const b = vectorStudy("B"); b.observation_history.history_revision_id = "new-history";
+    runner.update({ study: b, commit });
+    expect(runner.output.draft["B-trial-1"].response_1).toBe("5");
+    const edit = runner.output.edit; runner.unmount(); await oldConfirm();
+    edit("B-trial-1", "response_1", "99");
+    expect(apiMocks.recordBayesianObservationsBatch).toHaveBeenCalledTimes(1);
+    expect(typeof edit).toBe("function");
+  });
+  it("retains a conflicting closed-trial draft until explicit discard", async () => {
+    const study = vectorStudy("A"); const commit = vi.fn();
+    const runner = new HookRunner(useEntryHarness, { study, commit });
+    await runner.act(() => { runner.output.edit("A-trial-1", "response_1", "1"); runner.output.edit("A-trial-1", "response_2", "2"); });
+    const updated = vectorStudy("A");
+    updated.observation_history.history_revision_id = "remote-history";
+    updated.trials[0] = { ...updated.trials[0], state: "completed", response_values: { response_1: 3, response_2: 4 } };
+    runner.update({ study: updated, commit });
+    expect(runner.output.draft["A-trial-1"]).toEqual({ response_1: "1", response_2: "2" });
+    await runner.act(() => runner.output.preview());
+    expect(runner.output.error).toBe("bayesian_vector_observations_invalid");
+    await runner.act(() => runner.output.discardClosedDrafts());
+    expect(runner.output.draft).toEqual({}); expect(updated.trials[0].response_values).toEqual({ response_1: 3, response_2: 4 });
+    runner.unmount();
+  });
+});
 
 describe("GPR mixed input and applied surface ownership", () => {
   const source = { analysisId: "analysis-gp", modelId: "model-gp", manifestSha256: "a".repeat(64), responseColumnId: "response", predictorColumnIds: ["x", "category"], nominalLevels: { category: ["01", "1"] } };
@@ -228,11 +340,187 @@ const apiMocks = vi.hoisted(() => ({
   fetchRegressionModelManifest: vi.fn(),
   fetchRegressionModels: vi.fn(),
   recordBayesianObservation: vi.fn(),
+  recordBayesianObservationsBatch: vi.fn(),
   updateDatasetSchema: vi.fn(),
   uploadDataset: vi.fn(),
 }));
 
 vi.mock("./api", () => apiMocks);
+
+const desirabilityApi = vi.hoisted(() => ({ createDesirabilityReview: vi.fn(), confirmDesirabilityReview: vi.fn(), fetchDesirabilityBatch: vi.fn(), fetchLatestDesirabilityBatch: vi.fn() }));
+vi.mock("./api/bayesianDesirability", () => desirabilityApi);
+
+describe("scalar recommendation restore type isolation", () => {
+  it.each(["latest", "exact"] as const)("rejects a valid vector %s response before scalar state or legacy fallback", async (route) => {
+    const { batch } = desirabilityFixture();
+    const selected = vi.fn();
+    if (route === "exact") apiMocks.fetchBayesianRecommendationBatch.mockResolvedValueOnce(batch);
+    else apiMocks.fetchLatestBayesianRecommendationBatch.mockResolvedValueOnce({ item: batch });
+    const runner = new HookRunner(useBayesianRecommendationState, {
+      selectedStudyId: batch.study_id,
+      requestedBatchId: route === "exact" ? batch.batch_id : null,
+      requestedRecommendationId: null,
+      onRecommendationSelected: selected,
+      onBatchSelected: selected,
+    });
+    await runner.flush();
+    expect(runner.output.batch).toBeNull();
+    expect(runner.output.recommendation).toBeNull();
+    expect(runner.output.error).toBe("bayesian_desirability_response_mapping_invalid");
+    expect(runner.output.isRestoring).toBe(false);
+    expect(runner.output.executionMode).toBe("sequential_single");
+    expect(apiMocks.fetchLatestBayesianRecommendation).not.toHaveBeenCalled();
+    expect(apiMocks.createBayesianRecommendationReview).not.toHaveBeenCalled();
+    expect(selected).not.toHaveBeenCalled();
+    runner.unmount();
+  });
+});
+
+describe("multiresponse desirability review ownership", () => {
+  beforeEach(() => {
+    Object.values(desirabilityApi).forEach(mock => mock.mockReset());
+    desirabilityApi.fetchLatestDesirabilityBatch.mockResolvedValue({ item: null });
+  });
+  function harness(id = "A") {
+    const fixture = desirabilityFixture(id);
+    const props = { study: fixture.study as BayesianStudyResponse | null, requestedBatchId: null as string | null, onBatchSelected: vi.fn() };
+    return { ...fixture, props, runner: new HookRunner(useBayesianDesirabilityRecommendation, props) };
+  }
+  it("confirms the exact whole q2 batch and restores partial observations without refitting", async () => {
+    const f = desirabilityBatchFixture("A"); const h = harness(); await h.runner.flush();
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, batchSize: "2" }));
+    desirabilityApi.createDesirabilityReview.mockResolvedValue(f.review);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    expect(h.runner.output.review).toEqual(f.review);
+    expect(desirabilityApi.createDesirabilityReview.mock.calls[0][1]).toMatchObject({ schema_version: 5, batch_size: 2 });
+    desirabilityApi.confirmDesirabilityReview.mockResolvedValue(f.batch);
+    await h.runner.act(() => { void h.runner.output.confirm(); });
+    expect(h.runner.output.saved?.items).toHaveLength(2);
+    const partial = structuredClone(f.batch); partial.batch_state = "partially_completed";
+    partial.items[1].current_trial.state = "completed";
+    partial.items[1].current_trial.response_values = { yield: 42, cost: 3 };
+    desirabilityApi.fetchDesirabilityBatch.mockResolvedValue(partial);
+    h.runner.update({ ...h.props, requestedBatchId: f.batch.batch_id, study: { ...h.study,
+      trials: [...h.study.trials, ...partial.items.map(item => item.current_trial)],
+      observation_history: { ...h.study.observation_history, history_revision_id: "new-history", observation_history_sha256: "e".repeat(64) } } });
+    await h.runner.flush();
+    expect(h.runner.output.saved?.batch_state).toBe("partially_completed");
+    expect(h.runner.output.saved?.calculation).toEqual(f.calculation);
+    expect(desirabilityApi.createDesirabilityReview).toHaveBeenCalledOnce();
+    expect(desirabilityApi.confirmDesirabilityReview).toHaveBeenCalledExactlyOnceWith("A", f.review.review_id, f.review.config_sha256);
+    h.runner.unmount();
+  });
+  it("invalidates a q2 review when the batch size changes and rejects a stale final item", async () => {
+    const h = harness(); const f = desirabilityBatchFixture("A"); await h.runner.flush();
+    const response = deferred<DesirabilityReview>();
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, batchSize: "2" }));
+    desirabilityApi.createDesirabilityReview.mockReturnValue(response.promise);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, batchSize: "3" }));
+    response.resolve(f.review); await h.runner.flush();
+    expect(h.runner.output.review).toBeNull(); expect(h.runner.output.isReviewing).toBe(false);
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, batchSize: "2" }));
+    f.review.calculation.items[1].rank = 1;
+    desirabilityApi.createDesirabilityReview.mockResolvedValue(f.review);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    expect(h.runner.output.error).toBe("bayesian_review_mismatch"); expect(h.runner.output.review).toBeNull();
+    expect(desirabilityApi.confirmDesirabilityReview).not.toHaveBeenCalled(); h.runner.unmount();
+  });
+  it("never calls vector endpoints for scalar or unloaded owners", async () => {
+    const runner = new HookRunner(useBayesianDesirabilityRecommendation, { study: null as BayesianStudyResponse | null, requestedBatchId: null, onBatchSelected: vi.fn() });
+    runner.update({ study: bayesianStudy("scalar"), requestedBatchId: null, onBatchSelected: vi.fn() }); await runner.flush();
+    await runner.output.requestReview(); await runner.output.confirm();
+    expect(desirabilityApi.fetchLatestDesirabilityBatch).not.toHaveBeenCalled();
+    expect(desirabilityApi.createDesirabilityReview).not.toHaveBeenCalled(); runner.unmount();
+  });
+  it("creates no trial during review, and explicitly retries confirmation with the same ID and hash", async () => {
+    const h = harness(); await h.runner.flush();
+    desirabilityApi.createDesirabilityReview.mockResolvedValue(h.review);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    expect(h.runner.output.review).toEqual(h.review); expect(desirabilityApi.confirmDesirabilityReview).not.toHaveBeenCalled();
+    expect(desirabilityApi.createDesirabilityReview.mock.calls[0][1]).toMatchObject({ schema_version: 4, batch_size: 1, expected_history_revision_id: h.study.observation_history.history_revision_id });
+    desirabilityApi.confirmDesirabilityReview.mockRejectedValueOnce(new Error("private raw exception")).mockResolvedValueOnce(h.batch);
+    await h.runner.act(() => { void h.runner.output.confirm(); });
+    expect(h.runner.output.error).toBe("bayesian_recommendation_confirm_failed"); expect(h.runner.output.review).toEqual(h.review);
+    expect(h.runner.output.mayHaveCommitted).toBe(true); await h.runner.flush(); expect(desirabilityApi.confirmDesirabilityReview).toHaveBeenCalledTimes(1);
+    await h.runner.act(() => { void h.runner.output.confirm(); });
+    expect(desirabilityApi.confirmDesirabilityReview.mock.calls).toEqual([[h.study.study_id, h.review.review_id, h.review.config_sha256], [h.study.study_id, h.review.review_id, h.review.config_sha256]]);
+    expect(h.props.onBatchSelected).toHaveBeenCalledExactlyOnceWith(h.batch.batch_id); expect(h.runner.output.saved).toEqual(h.batch);
+    expect(h.study.trials.every(trial => trial.state === "completed")).toBe(true); h.runner.unmount();
+  });
+  it.each(["success", "error"])("ignores stale %s and finally after an option edit starts a new review", async outcome => {
+    const h = harness(); await h.runner.flush(); const a = deferred<DesirabilityReview>(), b = deferred<DesirabilityReview>();
+    desirabilityApi.createDesirabilityReview.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, seed: "43" }));
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    if (outcome === "success") a.resolve(h.review); else a.reject(new Error("old")); await h.runner.flush();
+    expect(h.runner.output.review).toBeNull(); expect(h.runner.output.error).toBeNull(); expect(h.runner.output.isReviewing).toBe(true);
+    b.resolve(h.review); await h.runner.flush(); expect(h.runner.output.review).toEqual(h.review); expect(h.runner.output.isReviewing).toBe(false); h.runner.unmount();
+  });
+  it("invalidates A-to-B-to-A responses and old callbacks even for the same history hash", async () => {
+    const h = harness(); await h.runner.flush(); const response = deferred<DesirabilityReview>();
+    desirabilityApi.createDesirabilityReview.mockReturnValue(response.promise);
+    const oldRequest = h.runner.output.requestReview;
+    await h.runner.act(() => { void oldRequest(); });
+    h.runner.update({ ...h.props, study: desirabilityFixture("B").study });
+    h.runner.update(h.props); await h.runner.flush();
+    await oldRequest(); response.resolve(h.review); await h.runner.flush();
+    expect(desirabilityApi.createDesirabilityReview).toHaveBeenCalledTimes(1); expect(h.runner.output.review).toBeNull(); h.runner.unmount();
+  });
+  it("does not apply a committed response after a settings edit or invoke a new trial automatically", async () => {
+    const h = harness(); await h.runner.flush(); desirabilityApi.createDesirabilityReview.mockResolvedValue(h.review);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    const response = deferred<DesirabilityBatch>(); desirabilityApi.confirmDesirabilityReview.mockReturnValue(response.promise);
+    const oldConfirm = h.runner.output.confirm;
+    await h.runner.act(() => { void h.runner.output.confirm(); });
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, seed: "43" }));
+    expect(h.runner.output.mayHaveCommitted).toBe(true); await oldConfirm(); response.resolve(h.batch); await h.runner.flush();
+    expect(h.runner.output.saved).toBeNull(); expect(h.props.onBatchSelected).not.toHaveBeenCalled();
+    expect(desirabilityApi.confirmDesirabilityReview).toHaveBeenCalledOnce(); h.runner.unmount();
+  });
+  it("restores an exact historical batch and keeps predictions when the current history advances", async () => {
+    const h = harness(); await h.runner.flush(); desirabilityApi.fetchDesirabilityBatch.mockResolvedValue(h.batch);
+    const newer = { ...h.study, observation_history: { ...h.study.observation_history, history_revision_id: "new", observation_history_sha256: "e".repeat(64) } };
+    h.runner.update({ ...h.props, study: newer, requestedBatchId: h.batch.batch_id }); await h.runner.flush();
+    expect(h.runner.output.saved).toEqual(h.batch); expect(desirabilityApi.fetchDesirabilityBatch).toHaveBeenCalledExactlyOnceWith("A", h.batch.batch_id);
+    expect(desirabilityApi.fetchLatestDesirabilityBatch).toHaveBeenCalledTimes(1);
+    h.runner.update({ ...h.props, study: structuredClone(newer), requestedBatchId: h.batch.batch_id }); await h.runner.flush();
+    expect(desirabilityApi.fetchDesirabilityBatch).toHaveBeenCalledTimes(1); expect(desirabilityApi.createDesirabilityReview).not.toHaveBeenCalled(); h.runner.unmount();
+  });
+  it.each(["owner", "responses", "kernel", "xi"])("rejects review %s mismatch", async kind => {
+    const h = harness(); await h.runner.flush(); const wrong = structuredClone(h.review);
+    if (kind === "owner") wrong.study_id = "B";
+    if (kind === "responses") wrong.calculation.items[0].response_predictions[0].response_id = "foreign";
+    if (kind === "kernel") wrong.calculation.shared_model.response_models[0].model.signal_kernel.family = "gaussian";
+    if (kind === "xi") wrong.calculation.items[0].acquisition.xi_desirability = 1;
+    desirabilityApi.createDesirabilityReview.mockResolvedValue(wrong); await h.runner.act(() => { void h.runner.output.requestReview(); });
+    expect(h.runner.output.error).toBe("bayesian_review_mismatch"); expect(h.runner.output.review).toBeNull(); h.runner.unmount();
+  });
+  it("does not fallback from a failed exact saved link and rejects foreign trial coordinates", async () => {
+    const h = harness(); await h.runner.flush(); desirabilityApi.fetchDesirabilityBatch.mockRejectedValueOnce(new Error("bayesian_recommendation_not_found"));
+    h.runner.update({ ...h.props, requestedBatchId: "missing" }); await h.runner.flush();
+    expect(h.runner.output.error).toBe("bayesian_recommendation_not_found"); expect(desirabilityApi.fetchLatestDesirabilityBatch).toHaveBeenCalledTimes(1);
+    const wrong = structuredClone(h.batch); wrong.items[0].trial.actual_coordinates.x = .9;
+    desirabilityApi.fetchDesirabilityBatch.mockResolvedValue(wrong); h.runner.update({ ...h.props, requestedBatchId: wrong.batch_id }); await h.runner.flush();
+    expect(h.runner.output.error).toBe("bayesian_review_mismatch"); expect(h.runner.output.saved).toBeNull(); h.runner.unmount();
+  });
+  it("invalidates review when another pending trial is added without a history change", async () => {
+    const h = harness(); await h.runner.flush(); desirabilityApi.createDesirabilityReview.mockResolvedValue(h.review);
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    const oldConfirm = h.runner.output.confirm;
+    h.runner.update({ ...h.props, study: { ...h.study, trial_count: 3, trials: [...h.study.trials, h.batch.items[0].trial] } }); await h.runner.flush();
+    await oldConfirm(); expect(h.runner.output.review).toBeNull(); expect(desirabilityApi.confirmDesirabilityReview).not.toHaveBeenCalled(); h.runner.unmount();
+  });
+  it("guards unmount and malformed draft without POST", async () => {
+    const h = harness(); await h.runner.flush();
+    await h.runner.act(() => h.runner.output.edit({ ...h.runner.output.draft, totalBudget: "40abc" }));
+    await h.runner.act(() => { void h.runner.output.requestReview(); });
+    expect(h.runner.output.errors.totalBudget).toBe("budget"); expect(desirabilityApi.createDesirabilityReview).not.toHaveBeenCalled();
+    const request = h.runner.output.requestReview; h.runner.unmount(); await request();
+    expect(desirabilityApi.createDesirabilityReview).not.toHaveBeenCalled();
+  });
+});
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -1280,8 +1568,8 @@ function runtimeInfo(
   return {
     service: "datalab-studio-api",
     app_version: "0.1.0",
-    api_contract_version: 31,
-    metadata_schema_version: 25,
+    api_contract_version: EXPECTED_API_CONTRACT_VERSION,
+    metadata_schema_version: MINIMUM_METADATA_SCHEMA_VERSION,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -1302,6 +1590,15 @@ function runtimeInfo(
       bayesian_batch_recommendation: true,
       bayesian_recommendation_review: true,
       bayesian_numeric_kernels: true,
+      bayesian_response_vector_lifecycle: true,
+      bayesian_multiresponse_recommendation: true,
+      bayesian_multiresponse_batch: true,
+      bayesian_fit_quality: true,
+      bayesian_target_curve_preview: true,
+      bayesian_versioned_target_curves: true,
+      bayesian_persistent_planning: true,
+      bayesian_augmentation: true,
+      bayesian_mixed_factor_planning: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },
@@ -4135,7 +4432,7 @@ describe("async workbench hooks", () => {
     const runner = new HookRunner(useBayesianRecommendationState, props);
     await runner.flush();
     const study = bayesianStudy("study-a");
-    study.objective = { ...study.objective, goal_type: "match_target", target_value: 1, target_tolerance: 0.1 };
+    study.objective = { ...study.objective, observation_policy: "manual_single_observation", goal_type: "match_target", target_value: 1, target_tolerance: 0.1 };
     await runner.act(() => { void runner.output.onRecommend(study); });
     expect(apiMocks.createBayesianRecommendationReview.mock.calls[0][1]).toMatchObject({ batch_size: 1, acquisition: { kind: "expected_target_improvement" } });
     runner.update({ ...props, sourceHistoryKey: "history-2" });

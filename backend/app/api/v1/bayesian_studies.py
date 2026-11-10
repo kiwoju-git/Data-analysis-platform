@@ -27,10 +27,27 @@ from app.api.v1.schemas.bayesian import (
     BayesianTrialListResponse,
     BayesianTrialTransitionResponse,
 )
-from app.api.v1.schemas.bayesian_noise import (
+from app.api.v1.schemas.bayesian_batches import (
     BayesianAnyBatchListResponse,
     BayesianAnyBatchResponse,
     BayesianAnyLatestBatchResponse,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyBatchResponse as DesirabilityBatchResponse,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyLatestResponse as DesirabilityLatestResponse,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyReviewRequest as DesirabilityReviewRequest,
+)
+from app.api.v1.schemas.bayesian_desirability_recommendations import (
+    DesirabilityAnyReviewResponse as DesirabilityReviewResponse,
+)
+from app.api.v1.schemas.bayesian_noise import (
+    BayesianAnyBatchResponse as ScalarBatchResponse,
+)
+from app.api.v1.schemas.bayesian_noise import (
     BayesianCurrentBatchRequest,
     BayesianCurrentBatchResponse,
     BayesianCurrentSingleRequest,
@@ -38,6 +55,22 @@ from app.api.v1.schemas.bayesian_noise import (
 from app.api.v1.schemas.bayesian_review import (
     BayesianRecommendationReviewConfirmRequest,
     BayesianRecommendationReviewResponse,
+)
+from app.api.v1.schemas.bo_curve_preview import CurvePreviewRequest, CurvePreviewResponse
+from app.api.v1.schemas.bo_mixed_studies import (
+    MixedObservationBatchResponse,
+    MixedReplicateCreateResponse,
+    MixedStudyCloseResponse,
+    MixedStudyCreateRequest,
+    MixedStudyResponse,
+    MixedTrialListResponse,
+    MixedTrialTransitionResponse,
+)
+from app.services.bayesian_desirability_recommendations import (
+    confirm_desirability_review,
+    create_desirability_review,
+    get_desirability_recommendation,
+    latest_desirability_recommendation,
 )
 from app.services.bayesian_recommendation_batches import (
     create_bayesian_recommendation_batch,
@@ -62,14 +95,73 @@ from app.services.bayesian_studies import (
     create_bayesian_study,
     delete_bayesian_study,
     get_bayesian_history,
-    get_bayesian_study,
     get_bayesian_study_deletion_preflight,
     list_bayesian_history,
     list_bayesian_studies,
     list_bayesian_trials,
 )
+from app.services.bo_curve_preview import preview_target_curve
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
+
+
+@router.post("/target-curve-preview", response_model=CurvePreviewResponse)
+def target_curve_preview_route(body: CurvePreviewRequest) -> CurvePreviewResponse:
+    return preview_target_curve(body)
+
+
+@router.post("/{study_id}/desirability-reviews", response_model=DesirabilityReviewResponse)
+def create_desirability_review_route(
+    request: Request,
+    study_id: UUID,
+    body: DesirabilityReviewRequest,
+) -> DesirabilityReviewResponse:
+    return create_desirability_review(
+        request.app.state.settings,
+        request.app.state.bayesian_reviews,
+        study_id,
+        body,
+    )
+
+
+@router.post(
+    "/{study_id}/desirability-reviews/{review_id}/confirm",
+    response_model=DesirabilityBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def confirm_desirability_review_route(
+    request: Request,
+    study_id: UUID,
+    review_id: UUID,
+    body: BayesianRecommendationReviewConfirmRequest,
+) -> DesirabilityBatchResponse:
+    return confirm_desirability_review(
+        request.app.state.settings,
+        request.app.state.bayesian_reviews,
+        study_id,
+        review_id,
+        body,
+    )
+
+
+@router.get(
+    "/{study_id}/desirability-recommendations/latest", response_model=DesirabilityLatestResponse
+)
+def latest_desirability_recommendation_route(
+    request: Request, study_id: UUID
+) -> DesirabilityLatestResponse:
+    return latest_desirability_recommendation(request.app.state.settings, study_id)
+
+
+@router.get(
+    "/{study_id}/desirability-recommendations/{batch_id}", response_model=DesirabilityBatchResponse
+)
+def get_desirability_recommendation_route(
+    request: Request,
+    study_id: UUID,
+    batch_id: UUID,
+) -> DesirabilityBatchResponse:
+    return get_desirability_recommendation(request.app.state.settings, study_id, batch_id)
 
 
 @router.post(
@@ -102,7 +194,7 @@ def confirm_bayesian_review_route(
 
 @router.post(
     "/{study_id}/trials/{trial_id}/replicates",
-    response_model=BayesianReplicateCreateResponse,
+    response_model=BayesianReplicateCreateResponse | MixedReplicateCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_replicates_route(
@@ -110,7 +202,7 @@ def create_bayesian_replicates_route(
     study_id: UUID,
     trial_id: UUID,
     body: BayesianReplicateCreateRequest,
-) -> BayesianReplicateCreateResponse:
+) -> BayesianReplicateCreateResponse | MixedReplicateCreateResponse:
     return create_bayesian_replicates(request.app.state.settings, study_id, trial_id, body)
 
 
@@ -123,6 +215,13 @@ def create_bayesian_study_route(
     request: Request, body: BayesianStudyCreateRequest
 ) -> BayesianStudyResponse:
     return create_bayesian_study(request.app.state.settings, body)
+
+
+@router.post("/mixed", response_model=MixedStudyResponse, status_code=status.HTTP_201_CREATED)
+def create_mixed_study_route(request: Request, body: MixedStudyCreateRequest) -> MixedStudyResponse:
+    from app.services.bo_mixed_studies import create_mixed_study
+
+    return create_mixed_study(request.app.state.settings, body)
 
 
 @router.get("", response_model=BayesianStudyListResponse)
@@ -147,9 +246,13 @@ def export_bayesian_initial_design_route(request: Request, study_id: UUID) -> Re
     )
 
 
-@router.get("/{study_id}", response_model=BayesianStudyResponse)
-def get_bayesian_study_route(request: Request, study_id: UUID) -> BayesianStudyResponse:
-    return get_bayesian_study(request.app.state.settings, study_id)
+@router.get("/{study_id}", response_model=BayesianStudyResponse | MixedStudyResponse)
+def get_bayesian_study_route(
+    request: Request, study_id: UUID
+) -> BayesianStudyResponse | MixedStudyResponse:
+    from app.services.bo_mixed_studies import get_any_bayesian_study
+
+    return get_any_bayesian_study(request.app.state.settings, study_id)
 
 
 @router.get(
@@ -172,22 +275,24 @@ def delete_bayesian_study_route(
     return delete_bayesian_study(request.app.state.settings, study_id, body)
 
 
-@router.post("/{study_id}/close", response_model=BayesianStudyCloseResponse)
+@router.post(
+    "/{study_id}/close", response_model=BayesianStudyCloseResponse | MixedStudyCloseResponse
+)
 def close_bayesian_study_route(
     request: Request,
     study_id: UUID,
     body: BayesianStudyCloseRequest,
-) -> BayesianStudyCloseResponse:
+) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
     return close_bayesian_study(request.app.state.settings, study_id, body)
 
 
-@router.get("/{study_id}/trials", response_model=BayesianTrialListResponse)
+@router.get("/{study_id}/trials", response_model=BayesianTrialListResponse | MixedTrialListResponse)
 def list_bayesian_trials_route(
     request: Request,
     study_id: UUID,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-) -> BayesianTrialListResponse:
+) -> BayesianTrialListResponse | MixedTrialListResponse:
     return list_bayesian_trials(
         request.app.state.settings,
         study_id,
@@ -211,13 +316,13 @@ def complete_bayesian_trial_route(
 
 @router.put(
     "/{study_id}/observations/batch",
-    response_model=BayesianObservationBatchCreateResponse,
+    response_model=BayesianObservationBatchCreateResponse | MixedObservationBatchResponse,
 )
 def complete_bayesian_observations_batch_route(
     request: Request,
     study_id: UUID,
     body: BayesianObservationBatchCreateRequest,
-) -> BayesianObservationBatchCreateResponse:
+) -> BayesianObservationBatchCreateResponse | MixedObservationBatchResponse:
     return complete_bayesian_observations_batch(
         request.app.state.settings,
         study_id,
@@ -227,14 +332,14 @@ def complete_bayesian_observations_batch_route(
 
 @router.post(
     "/{study_id}/trials/{trial_id}/abandon",
-    response_model=BayesianTrialTransitionResponse,
+    response_model=BayesianTrialTransitionResponse | MixedTrialTransitionResponse,
 )
 def abandon_bayesian_trial_route(
     request: Request,
     study_id: UUID,
     trial_id: UUID,
     body: BayesianTrialAbandonRequest | None = None,
-) -> BayesianTrialTransitionResponse:
+) -> BayesianTrialTransitionResponse | MixedTrialTransitionResponse:
     return abandon_bayesian_trial(request.app.state.settings, study_id, trial_id, body)
 
 
@@ -330,14 +435,14 @@ def get_bayesian_recommendation_route(
 
 @router.post(
     "/{study_id}/recommendation-batches",
-    response_model=BayesianAnyBatchResponse,
+    response_model=ScalarBatchResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_recommendation_batch_route(
     request: Request,
     study_id: UUID,
     body: BayesianRecommendationBatchCreateRequest | BayesianCurrentBatchRequest,
-) -> BayesianAnyBatchResponse:
+) -> ScalarBatchResponse:
     return create_bayesian_recommendation_batch(
         request.app.state.settings,
         study_id,

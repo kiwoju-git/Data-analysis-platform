@@ -32,6 +32,7 @@ STAGE_CALLS = {
     "report_center_context": "verify_report_center_context",
     "rsm_context": "verify_rsm_context",
     "bo_noise_context": "verify_bo_noise_context",
+    "bo_vector_history": "verify_bo_vector_history",
     "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
     "doe_browser_zoom": "verify_doe_browser_zoom",
@@ -70,6 +71,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "report_center_context",
         "rsm_context",
         "bo_noise_context",
+        "bo_vector_history",
         "api_translation",
         "dataset_context",
         "gp_prediction_context",
@@ -107,6 +109,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     )
     assert "pilot_feedback" in driver.suite_stage_ids("context")
     assert "rsm_context" in driver.suite_stage_ids("context")
+    assert "bo_vector_history" in driver.suite_stage_ids("context")
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
@@ -259,6 +262,44 @@ def test_legacy_workflow_checks_remain_in_the_unchanged_block():
         "verify_startup_readiness",
         "verify_two_variances",
     ]
+
+
+def test_vector_context_includes_actual_target_curve_entry_and_recommendations():
+    source = (ROOT / "tests/e2e/bo_vector_history.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    entry = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "verify_bo_vector_history"
+    )
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "verify_target_curve_recommendation"
+        for node in ast.walk(entry)
+    )
+    target = (ROOT / "tests/e2e/bo_target_curve_recommendation.py").read_text(encoding="utf-8")
+    assert "curve_policy=True" in target
+    assert "verify_bo_vector_entry" in target
+    assert "verify_desirability_review" in target
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "verify_persistent_planning"
+        for node in ast.walk(entry)
+    )
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "verify_augmentation"
+        for node in ast.walk(entry)
+    )
+    assert any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "verify_mixed_workflow"
+        for node in ast.walk(entry)
+    )
 
 
 def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():

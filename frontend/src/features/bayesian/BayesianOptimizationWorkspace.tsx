@@ -2,12 +2,26 @@ import { useCallback, useMemo, useState } from "react";
 
 import { getAnalysisRunErrorDetails } from "../../analysisRunErrors";
 import { useI18n } from "../../i18n/LocaleProvider";
+import { mixedMessages } from "../../i18n/boMixed";
+import { BayesianMixedStudyBuilder } from "./BayesianMixedStudyBuilder";
+import { BayesianMixedStudyWorkspace } from "./BayesianMixedStudyWorkspace";
+import { BayesianMixedPlanningPanel } from "./BayesianMixedPlanningPanel";
+import { BayesianMixedSavedBatch } from "./BayesianMixedSavedBatch";
 import { BayesianRecommendationPanel } from "./BayesianRecommendationPanel";
 import { BayesianStudyBuilder } from "./BayesianStudyBuilder";
 import { BayesianStudyCatalog } from "./BayesianStudyCatalog";
 import { BayesianStudyClosePanel } from "./BayesianStudyClosePanel";
 import { BayesianStudyDeletionPanel } from "./BayesianStudyDeletionPanel";
 import { BayesianStudySummary } from "./BayesianStudySummary";
+import { BayesianVectorStudySnapshot } from "./BayesianVectorStudySnapshot";
+import { BayesianVectorObservationEntry } from "./BayesianVectorObservationEntry";
+import { BayesianDesirabilityRecommendationPanel } from "./BayesianDesirabilityRecommendationPanel";
+import { BayesianPlanningPanel } from "./BayesianPlanningPanel";
+import { BayesianPlanningSavedBatch } from "./BayesianPlanningSavedBatch";
+import { BayesianAugmentationPanel, type AugmentationManualSeed } from "./BayesianAugmentationPanel";
+import { BayesianAugmentationSavedBatch } from "./BayesianAugmentationSavedBatch";
+import { buildDesirabilityRequest } from "./bayesianDesirabilityDraft";
+import { useBayesianDesirabilityRecommendation } from "./hooks/useBayesianDesirabilityRecommendation";
 import { BayesianTrialTable } from "./BayesianTrialTable";
 import { BayesianReplicatePanel } from "./BayesianReplicatePanel";
 import { useBayesianReplicateState } from "./hooks/useBayesianReplicateState";
@@ -21,6 +35,7 @@ import { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
 import { useBayesianStudyLifecycleState } from "./hooks/useBayesianStudyLifecycleState";
 
 export function BayesianOptimizationWorkspace() {
+  const { locale } = useI18n(), mixedText = mixedMessages(locale);
   const initialQuery = useMemo(
     () => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search),
     [],
@@ -28,13 +43,27 @@ export function BayesianOptimizationWorkspace() {
   const initialStudyId = validBayesianId(initialQuery.get("study_id"));
   const initialRecommendationId = validBayesianId(initialQuery.get("recommendation_id"));
   const initialBatchId = validBayesianId(initialQuery.get("batch_id"));
+  const initialPlanningBatchId = validBayesianId(initialQuery.get("planning_batch_id"));
+  const initialAugmentationBatchId = validBayesianId(initialQuery.get("augmentation_batch_id"));
+  const initialMixedBatchId = validBayesianId(initialQuery.get("mixed_planning_batch_id"));
   const recommendationQueryConflict =
-    initialRecommendationId !== null && initialBatchId !== null;
+    [initialRecommendationId, initialBatchId, initialPlanningBatchId, initialAugmentationBatchId, initialMixedBatchId].filter(value => value !== null).length > 1 ||
+    (initialQuery.has("planning_batch_id") && initialPlanningBatchId === null) ||
+    (initialQuery.has("augmentation_batch_id") && initialAugmentationBatchId === null) ||
+    (initialQuery.has("mixed_planning_batch_id") && initialMixedBatchId === null);
   const [requestedRecommendationId, setRequestedRecommendationId] =
     useState(recommendationQueryConflict ? null : initialRecommendationId);
   const [requestedBatchId, setRequestedBatchId] = useState(
     recommendationQueryConflict ? null : initialBatchId,
   );
+  const [requestedPlanningBatchId, setRequestedPlanningBatchId] = useState(recommendationQueryConflict ? null : initialPlanningBatchId);
+  const [planningConfirming, setPlanningConfirming] = useState(false);
+  const [augmentationConfirming, setAugmentationConfirming] = useState(false);
+  const [requestedAugmentationBatchId, setRequestedAugmentationBatchId] = useState(recommendationQueryConflict ? null : initialAugmentationBatchId);
+  const [manualSeed, setManualSeed] = useState<AugmentationManualSeed | null>(null);
+  const [requestedMixedBatchId, setRequestedMixedBatchId] = useState(recommendationQueryConflict ? null : initialMixedBatchId);
+  const [mixedBusy, setMixedBusy] = useState(false), [mixedConfirming, setMixedConfirming] = useState(false), [mixedCreating, setMixedCreating] = useState(false);
+  const [builderMode, setBuilderMode] = useState<"numeric" | "mixed">("numeric");
   const [builderOpen, setBuilderOpen] = useState(initialStudyId === null);
   const catalog = useBayesianStudyCatalogState(initialStudyId);
   const draft = useBayesianStudyDraftState();
@@ -42,29 +71,59 @@ export function BayesianOptimizationWorkspace() {
   const selectRecommendation = useCallback((recommendationId: string | null) => {
     setRequestedRecommendationId(recommendationId);
     setRequestedBatchId(null);
+    setRequestedPlanningBatchId(null);
+    setRequestedAugmentationBatchId(null);
+    setRequestedMixedBatchId(null);
     replaceBayesianQuery({
       batch_id: null,
+      planning_batch_id: null,
+      augmentation_batch_id: null,
       recommendation_id: recommendationId,
     });
   }, []);
   const selectBatch = useCallback((batchId: string | null) => {
     setRequestedBatchId(batchId);
     setRequestedRecommendationId(null);
+    setRequestedPlanningBatchId(null);
+    setRequestedAugmentationBatchId(null);
+    setRequestedMixedBatchId(null);
     replaceBayesianQuery({
       batch_id: batchId,
+      planning_batch_id: null,
+      augmentation_batch_id: null,
       recommendation_id: null,
     });
   }, []);
+  const selectPlanningBatch = useCallback((batchId: string) => {
+    setRequestedMixedBatchId(null);
+    setRequestedPlanningBatchId(batchId); setRequestedAugmentationBatchId(null); setRequestedBatchId(null); setRequestedRecommendationId(null);
+    replaceBayesianQuery({ planning_batch_id: batchId, augmentation_batch_id: null, batch_id: null, recommendation_id: null });
+  }, []);
+  const selectAugmentationBatch = useCallback((batchId: string) => {
+    setRequestedMixedBatchId(null);
+    setRequestedAugmentationBatchId(batchId); setRequestedPlanningBatchId(null); setRequestedBatchId(null); setRequestedRecommendationId(null);
+    replaceBayesianQuery({ augmentation_batch_id: batchId, planning_batch_id: null, batch_id: null, recommendation_id: null });
+  }, []);
+  const study =
+    lifecycle.study?.study_id === catalog.selectedStudyId ? lifecycle.study : null;
+  const mixedStudy = lifecycle.mixedStudy?.study_id === catalog.selectedStudyId ? lifecycle.mixedStudy : null;
+  const scalarStudy = study?.objective.goal_type !== "desirability" ? study : null;
   const recommendation = useBayesianRecommendationState({
-    selectedStudyId: catalog.selectedStudyId,
-    sourceHistoryKey: lifecycle.study === null ? null : `${lifecycle.study.study_id}:${lifecycle.study.observation_history.history_revision_id}:${lifecycle.study.observation_history.observation_history_sha256}`,
+    selectedStudyId: scalarStudy?.study_id ?? null,
+    sourceHistoryKey: scalarStudy === null ? null : `${scalarStudy.study_id}:${scalarStudy.observation_history.history_revision_id}:${scalarStudy.observation_history.observation_history_sha256}`,
     requestedBatchId,
     requestedRecommendationId,
     onBatchSelected: selectBatch,
     onRecommendationSelected: selectRecommendation,
   });
-  const study =
-    lifecycle.study?.study_id === catalog.selectedStudyId ? lifecycle.study : null;
+  const desirability = useBayesianDesirabilityRecommendation({
+    study: study?.objective.goal_type === "desirability" ? study : null,
+    requestedBatchId,
+    onBatchSelected: selectBatch,
+  });
+  const planningFit = useMemo(() => study?.objective.goal_type === "desirability"
+    ? buildDesirabilityRequest(study, desirability.draft, "planning").request : null,
+  [study, desirability.draft]);
   const selectedRecommendation =
     recommendation.recommendation?.study_id === catalog.selectedStudyId
       ? recommendation.recommendation
@@ -73,7 +132,7 @@ export function BayesianOptimizationWorkspace() {
     recommendation.batch?.study_id === catalog.selectedStudyId
       ? recommendation.batch
       : null;
-  const retention = useBayesianRetentionState(study);
+  const retention = useBayesianRetentionState(study ?? mixedStudy);
   const replicates = useBayesianReplicateState(study);
   const requestInFlight =
     catalog.isLoading ||
@@ -84,6 +143,12 @@ export function BayesianOptimizationWorkspace() {
     recommendation.isRestoring ||
     recommendation.isRecommending ||
     recommendation.isConfirming ||
+    desirability.isRestoring ||
+    desirability.isReviewing ||
+    desirability.isConfirming ||
+    planningConfirming ||
+    augmentationConfirming ||
+    mixedBusy || mixedConfirming || mixedCreating ||
     replicates.isRunning ||
     retention.isChecking ||
     retention.isDeleting;
@@ -98,6 +163,8 @@ export function BayesianOptimizationWorkspace() {
     (recommendationQueryConflict
       ? "bayesian_recommendation_query_conflict"
       : null) ??
+    ((study !== null && requestedMixedBatchId !== null) || (mixedStudy !== null && [requestedRecommendationId, requestedBatchId, requestedPlanningBatchId, requestedAugmentationBatchId].some(value => value !== null))
+      ? "bayesian_recommendation_query_conflict" : null) ??
     lifecycle.error ??
     recommendation.error ??
     retention.error ??
@@ -107,10 +174,15 @@ export function BayesianOptimizationWorkspace() {
     catalog.onSelect(studyId);
     setRequestedRecommendationId(null);
     setRequestedBatchId(null);
+    setRequestedPlanningBatchId(null);
+    setRequestedAugmentationBatchId(null); setManualSeed(null);
+    setRequestedMixedBatchId(null);
     setBuilderOpen(studyId === null);
     replaceBayesianQuery({
       study_id: studyId,
       batch_id: null,
+      planning_batch_id: null,
+      augmentation_batch_id: null,
       recommendation_id: null,
     });
   }
@@ -129,10 +201,15 @@ export function BayesianOptimizationWorkspace() {
     setBuilderOpen(false);
     setRequestedRecommendationId(null);
     setRequestedBatchId(null);
+    setRequestedPlanningBatchId(null);
+    setRequestedAugmentationBatchId(null); setManualSeed(null);
+    setRequestedMixedBatchId(null);
     recommendation.clearRecommendation();
     replaceBayesianQuery({
       study_id: created.study_id,
       batch_id: null,
+      planning_batch_id: null,
+      augmentation_batch_id: null,
       recommendation_id: null,
     });
   }
@@ -158,6 +235,30 @@ export function BayesianOptimizationWorkspace() {
     if (created) await lifecycle.refreshStudy();
   }
 
+  async function confirmDesirability() {
+    if (await desirability.confirm()) await lifecycle.refreshStudy();
+  }
+
+  async function refreshDesirability() {
+    await lifecycle.refreshStudy();
+    desirability.refresh();
+  }
+  function planningConfirmed(batchId: string) {
+    selectPlanningBatch(batchId);
+    void lifecycle.refreshStudy();
+    void catalog.onRefresh();
+  }
+  function augmentationConfirmed(batchId: string) {
+    selectAugmentationBatch(batchId);
+    void lifecycle.refreshStudy();
+    void catalog.onRefresh();
+  }
+  function mixedConfirmed(batchId: string) {
+    setRequestedMixedBatchId(batchId); setRequestedAugmentationBatchId(null); setRequestedPlanningBatchId(null); setRequestedBatchId(null); setRequestedRecommendationId(null);
+    replaceBayesianQuery({ mixed_planning_batch_id: batchId, augmentation_batch_id: null, planning_batch_id: null, batch_id: null, recommendation_id: null });
+    void lifecycle.refreshStudy(); void catalog.onRefresh();
+  }
+
   async function createReplicates(retry = false) {
     const created = await replicates.submit(recommendation.totalTrialBudget, retry);
     if (created) await lifecycle.refreshStudy();
@@ -181,10 +282,15 @@ export function BayesianOptimizationWorkspace() {
     catalog.onRefresh();
     setRequestedRecommendationId(null);
     setRequestedBatchId(null);
+    setRequestedPlanningBatchId(null);
+    setRequestedAugmentationBatchId(null); setManualSeed(null);
+    setRequestedMixedBatchId(null);
     setBuilderOpen(true);
     replaceBayesianQuery({
       study_id: null,
       batch_id: null,
+      planning_batch_id: null,
+      augmentation_batch_id: null,
       recommendation_id: null,
     });
   }
@@ -206,7 +312,10 @@ export function BayesianOptimizationWorkspace() {
         }}
       />
 
-      {builderOpen ? (
+      {builderOpen && <label>{mixedText.studyMode}<select aria-label={mixedText.studyMode} disabled={requestInFlight} value={builderMode} onChange={event => setBuilderMode(event.currentTarget.value as "numeric" | "mixed")}><option value="numeric">{mixedText.numericMode}</option><option value="mixed">{mixedText.mixedMode}</option></select></label>}
+      {builderOpen && builderMode === "mixed" && <BayesianMixedStudyBuilder ownerKey={`mixed-builder:${catalog.selectedStudyId ?? "new"}`} disabled={requestInFlight}
+        onBusyChange={setMixedCreating} onCancel={() => setBuilderOpen(false)} onCreated={created => { selectStudy(created.study_id); setBuilderOpen(false); catalog.onResetToFirstPage(); }} />}
+      {builderOpen && builderMode === "numeric" ? (
         <BayesianStudyBuilder
           draft={draft}
           isCreating={lifecycle.isCreating}
@@ -219,6 +328,13 @@ export function BayesianOptimizationWorkspace() {
         />
       ) : null}
 
+      {mixedStudy !== null && <>
+        <BayesianMixedStudyWorkspace study={mixedStudy} disabled={requestInFlight} onCommitted={lifecycle.acceptMixedCommit} onRefresh={() => { void lifecycle.refreshStudy(); void catalog.onRefresh(); }} onBusyChange={setMixedBusy} />
+        <BayesianMixedPlanningPanel study={mixedStudy} disabled={requestInFlight} onConfirmed={mixedConfirmed} onConfirmingChange={setMixedConfirming} />
+        {requestedMixedBatchId !== null && <BayesianMixedSavedBatch study={mixedStudy} batchId={requestedMixedBatchId} />}
+        <BayesianStudyDeletionPanel study={mixedStudy} state={retention} disabled={requestInFlight} onDeleted={handleDeleted} />
+      </>}
+
       {error !== null ? <BayesianError code={error} /> : null}
       {lifecycle.isRestoring || recommendation.isRestoring ? (
         <div className="notice-box" role="status">
@@ -228,6 +344,22 @@ export function BayesianOptimizationWorkspace() {
 
       {study !== null ? (
         <>
+          {study.objective.goal_type === "desirability" ? (
+            <>
+            <BayesianVectorStudySnapshot study={study} />
+            <BayesianVectorObservationEntry key={study.study_id} study={study}
+              onCommitted={lifecycle.acceptVectorCommit} onRefresh={() => void lifecycle.refreshStudy()} disabled={requestInFlight} />
+            <BayesianDesirabilityRecommendationPanel study={study} state={desirability}
+              disabled={catalog.isLoading || lifecycle.isRestoring || lifecycle.isSavingTrial || retention.isDeleting || retention.isChecking || planningConfirming || augmentationConfirming}
+              onConfirm={() => void confirmDesirability()} onRefresh={() => void refreshDesirability()} />
+            <BayesianPlanningPanel study={study} fitRequest={planningFit} disabled={requestInFlight}
+              onConfirmed={planningConfirmed} onConfirmingChange={setPlanningConfirming} manualSeed={manualSeed} />
+            <BayesianAugmentationPanel study={study} disabled={requestInFlight} onConfirmed={augmentationConfirmed}
+              onConfirmingChange={setAugmentationConfirming} onManual={setManualSeed} />
+            {requestedPlanningBatchId !== null && <BayesianPlanningSavedBatch study={study} batchId={requestedPlanningBatchId} />}
+            {requestedAugmentationBatchId !== null && <BayesianAugmentationSavedBatch study={study} batchId={requestedAugmentationBatchId} />}
+            </>
+          ) : <>
           <BayesianStudySummary study={study} />
           <BayesianTrialTable
             study={study}
@@ -296,6 +428,7 @@ export function BayesianOptimizationWorkspace() {
             onCancelClose={() => lifecycle.setPendingStudyClose(false)}
             onPrepareSuccessor={prepareSuccessor}
           />
+          </>}
           <BayesianStudyDeletionPanel
             study={study}
             state={retention}
@@ -324,9 +457,10 @@ function BayesianError({ code }: { code: string }) {
 function replaceBayesianQuery(values: Record<string, string | null>) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
+  if (!("mixed_planning_batch_id" in values)) url.searchParams.delete("mixed_planning_batch_id");
   Object.entries(values).forEach(([key, value]) => {
     if (value === null) url.searchParams.delete(key);
     else url.searchParams.set(key, value);
   });
-  window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }

@@ -83,7 +83,7 @@ def test_offline_backup_restores_replicate_ownership_and_idempotency(tmp_path):
         before = client.get(f"/api/v1/bayesian-studies/{study['study_id']}").json()
     archive = tmp_path / "synthetic-replicate-backup.zip"
     manifest = backup_workspace(source, archive)
-    assert manifest["metadata_schema_version"] == 25
+    assert manifest["metadata_schema_version"] == metadata.SCHEMA_VERSION
     assert manifest["database"]["row_counts"]["bayesian_replicate_requests"] == 1
     archive_hash = hashlib.sha256(archive.read_bytes()).hexdigest()
     destination = tmp_path / "restored workspace"
@@ -265,7 +265,7 @@ def test_schema23_migration_preserves_original_trials_and_checksums(tmp_path, mo
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
     metadata.initialize_metadata_store(tmp_path)
     with sqlite3.connect(metadata.metadata_db_path(tmp_path)) as db:
-        assert db.execute("PRAGMA user_version").fetchone()[0] == 25
+        assert db.execute("PRAGMA user_version").fetchone()[0] == metadata.SCHEMA_VERSION
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         columns = {row[1] for row in db.execute("PRAGMA table_info(bayesian_trials)")}
         assert "replicate_of_trial_id" in columns

@@ -1,0 +1,15 @@
+.bo-curve-preview { margin-block: 16px; border-top: 1px solid var(--border-color, #d5dce2); padding-block: 12px; }
+.bo-curve-preview > label { display: block; margin-block: 12px; }
+.bo-curve-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; margin-block: 12px; }
+.bo-curve-fields label { display: grid; grid-template-rows: 1fr auto; gap: 6px; min-inline-size: 0; }
+.bo-curve-fields input { width: 100%; min-width: 0; }
+.bo-curve-policy { min-inline-size: 0; }
+.bo-curve-policy fieldset { border: 0; padding: 0; margin: 12px 0; min-inline-size: 0; }
+.bo-curve-policy legend { font-weight: 600; overflow-wrap: anywhere; }
+.bo-curve-policy .bo-curve-fields { grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); }
+.bo-curve-policy .bo-curve-fields select { inline-size: 100%; min-inline-size: 0; }
+.bo-curve-preview .chart-frame { max-inline-size: 760px; }
+.bo-curve-gaussian { stroke: #126b70; fill: #126b70; }
+.bo-curve-linear { stroke: #b24d23; fill: #b24d23; }
+.interactive-data-line.bo-curve-linear { stroke-dasharray: 5 3; fill: none; }
+.interactive-data-line.bo-curve-gaussian { fill: none; }

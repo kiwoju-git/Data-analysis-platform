@@ -13,6 +13,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianReplicateCreateResponse,
     BayesianReplicateTrialResponse,
 )
+from app.api.v1.schemas.bo_mixed_studies import MixedReplicateCreateResponse
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import canonical_json_bytes, utc_now
@@ -34,8 +35,14 @@ def create_bayesian_replicates(
     study_id: UUID,
     trial_id: UUID,
     body: BayesianReplicateCreateRequest,
-) -> BayesianReplicateCreateResponse:
+) -> BayesianReplicateCreateResponse | MixedReplicateCreateResponse:
     from app.services.bayesian_studies import _trial_response, get_bayesian_study
+    from app.services.bo_mixed_studies import is_mixed_study
+
+    if is_mixed_study(settings, str(study_id)):
+        from app.services.bo_mixed_replicates import create_mixed_replicates
+
+        return create_mixed_replicates(settings, study_id, trial_id, body)
 
     study = get_bayesian_study(settings, study_id)
     parent = get_bayesian_trial_record(settings.workspace_root, str(trial_id))

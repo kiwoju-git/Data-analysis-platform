@@ -1,10 +1,30 @@
 # Reviewed BO Workflow Stages
 
-BASE_SHA: `757554df78e49e0321965c2d92223c41c05b7275`.
+Stage1 BASE_SHA: `757554df78e49e0321965c2d92223c41c05b7275`.
 
 The existing UI, noise-aware latent EI/ETI, joint MC batch policy, immutable
 history and legacy readers are retained. This is a staged implementation of
 the JMP-inspired workflow, not a numerical JMP compatibility claim.
+
+Current integration: API39/metadata32, BO method0.15.0. The remaining
+[completion gates](bo_completion_gates.md) connect persistent candidate tables,
+manual ordered selection, saved-model Profiler, separate augmentation and typed
+nominal/ordinal studies. Current-run validation is recorded in that ledger;
+integration in source is not itself a final browser/CI pass.
+
+The earlier [stored target-curve recommendations](bo_target_curve_recommendation_gate.md)
+checkpoint was API37/metadata30. Explicit peak-one Gaussian targets connect to immutable
+study6, q1..8 review/confirmation, measured entry, restore and reports. DS-linear
+remains the default. This follows the separate
+[target curve comparison preview](bo_target_curve_preview_gate.md) and builds on
+[workshop-led fit quality](bo_fit_quality_gate.md) and
+[Stage3h public ordered batches](bo_desirability_public_batch.md).
+The hypothetical preview remains non-persistent and never supplies GP predictions.
+Candidate tables and augmentation are extended by the current integration;
+numerical JMP parity remains unverified.
+Stage1 evidence and rollback below are historical, not the
+current contract or current test evidence. Stage-specific ledgers define which
+later behavior has actually been implemented and verified.
 
 ## Stage 1 Acceptance
 
@@ -34,11 +54,36 @@ memory. One review calculation is admitted at a time; a second returns the
 explicit `bayesian_review_busy` code without starting another worker. Cache
 expiry/oldest-entry eviction cannot delete an already committed result.
 
-## Following Stages (Not Implemented Here)
+## Stage Roadmap And Historical Boundaries
 
 1. Versioned numeric kernel choices are now tracked in
    [Stage 2](bo_kernel_alignment.md), including current-run evidence.
 2. Multiresponse goal/desirability contracts and immutable observation mappings.
+   [Stage 3a](bo_desirability_foundation.md) adds a locally validated pure
+   calculation foundation only; no multiresponse API/UI is enabled yet.
+   [Stage 3b](bo_desirability_recommendation_core.md) connects raw-response models,
+   joint desirability incumbent and q1 mixed candidate search through a bounded
+   internal worker. [Stage 3c](bo_multiresponse_lifecycle.md) adds versioned vector
+   persistence, exact history reports and read-only UI restoration.
+   [Stage 3d](bo_multiresponse_ui.md) adds explicit goal setup and measured-vector
+   entry with reviewed, source-locked idempotent saves.
+   [Stage 3e](bo_desirability_review.md) now connects q1 multiresponse candidate
+   review/confirmation, exact-source restore and managed reports. At that gate,
+   API33/meta27 distinguished q1 from unsupported multiresponse batches.
+   [Stage 3f](bo_desirability_batch_acquisition.md) adds an internal correlated
+   latent conditional-MC/Beta scorer with independent numeric tests. It does not
+   expose q>1 review, confirmation, reports or UI at that stage.
+   [Stage 3g](bo_desirability_batch_search.md) connects internal q1..8 executable
+   mixed search, combined budgets and the same bounded worker. Public q>1 was
+   still disabled at that gate. The planned next gate was the complete ordered
+   review/confirm/actual observation/restore/report/UI workflow, not another
+   isolated math extension.
+   No scalar history is repurposed. Stage-specific evidence is in each document.
+   [Stage 3h](bo_desirability_public_batch.md) is the public ordered-batch gate:
+   review all q1..8 candidates, atomically confirm, enter individual actual
+   vectors, restore partially completed batches and report the exact saved
+   batch. API34/meta28 and a new version tuple retain the old q1 contract.
+   Its current execution ledger, not earlier-stage passes, determines completion.
 3. Persistent candidate-set revisions, imported candidates, manual selection,
    profiler and explicitly named augmentation policies.
 4. Nominal/ordinal kernel families after their mathematical and storage
@@ -50,7 +95,7 @@ JMP 19.2 documented candidate workflows are the UX reference:
 https://www.jmp.com/support/help/en/19.2/jmp/candidate-set.shtml
 https://www.jmp.com/support/help/en/19.2/jmp/current-batch.shtml
 
-## Evidence
+## Historical Stage1 Evidence
 
 Implementation and current-run tests are recorded below as they execute.
 Prior research tests are not evidence for this change. Linux publication is
@@ -99,7 +144,7 @@ deferred; source/build/browser/CI/archive evidence must remain distinguished.
   based on previous runs. Linux prerelease publication is intentionally deferred
   by the owner's instruction.
 
-## Reproduction And Rollback
+## Historical Stage1 Reproduction And Rollback
 
 Use the repository's locked bootstrap and check scripts. Focused PowerShell:
 
@@ -121,7 +166,11 @@ and a new synthetic temporary workspace, not user data or an installed release.
 
 Revert only this feature's commit with `git revert <feature-commit>`. Runtime,
 frontend and backend changes form one contract and must be reverted together.
-There is no metadata migration. Confirmed recommendations retain the existing
+Stage1 had no metadata migration. Its confirmed recommendations retain the existing
 method0.7.0/config2/result2/model3/item2 formats and remain readable by the prior
 source. Unconfirmed reviews are transient and are lost on restart. Do not delete
 workspaces, models, trials or results as part of a code rollback.
+
+Do not apply that no-migration statement to Stage3h. The current public batch
+gate adds metadata28 and a new version tuple; follow its explicit
+[compatibility and rollback boundaries](bo_desirability_public_batch.md#rollback).

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 31,
-  "metadata_schema_version": 25,
+  "api_contract_version": 39,
+  "metadata_schema_version": 32,
   "methods": [
     {
       "method_id": "eda.descriptive",
@@ -2894,7 +2894,7 @@
     },
     {
       "method_id": "doe.bayesian_optimization",
-      "method_version": "0.8.0",
+      "method_version": "0.15.0",
       "module_id": "doe",
       "label_ko": "베이지안 최적화",
       "label_en": "Bayesian Optimization",
@@ -2917,10 +2917,11 @@
           "method_id": "doe.bayesian_optimization",
           "summary_type": "bayesian_history",
           "accepted_schemas": [
-            1
+            1,
+            2
           ],
           "renderer_id": "dedicated_bayesian",
-          "renderer_version": "1.3.0",
+          "renderer_version": "1.10.0",
           "variants": [
             {
               "variant_id": "bayesian",

@@ -70,7 +70,7 @@ _EXPORT_KINDS = {
     "pls_completed_prediction": "completed-prediction.json",
     "managed_source_html_report": "managed-report.html",
 }
-SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22, 23, 24, 25})
+SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset({20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32})
 
 
 def _check_limits(limits: BackupLimits) -> None:
@@ -259,6 +259,17 @@ def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimi
     ]
     if connection.execute("PRAGMA user_version").fetchone()[0] >= 24:
         hash_columns.append(("bayesian_replicate_requests", "request_json", "request_sha256"))
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 31:
+        hash_columns.extend(
+            [
+                ("bayesian_planning_models", "config_json", "config_sha256"),
+                ("bayesian_planning_models", "snapshot_json", "snapshot_sha256"),
+                ("bayesian_candidate_revisions", "config_json", "config_sha256"),
+                ("bayesian_candidate_revisions", "rows_json", "rows_sha256"),
+                ("bayesian_planning_selections", "config_json", "config_sha256"),
+                ("bayesian_planning_selections", "result_json", "result_sha256"),
+            ]
+        )
     for table, content_column, hash_column in hash_columns:
         if connection.execute(
             f"SELECT 1 FROM {table} WHERE length(CAST({content_column} AS BLOB)) > ? LIMIT 1",

@@ -1,10 +1,13 @@
 import type { BayesianStudyResponse } from "../../api";
+import type { BayesianStudyDeletionCounts } from "../../api/types/bayesian";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { planningMessages } from "../../i18n/boPlanning";
 import type { useBayesianRetentionState } from "./hooks/useBayesianRetentionState";
 import { BayesianStudyDeletionConfirmation } from "./BayesianTransitionConfirmations";
 
 type RetentionState = ReturnType<typeof useBayesianRetentionState>;
 
-export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }: { study: BayesianStudyResponse; state: RetentionState; disabled: boolean; onDeleted: () => void }) {
+export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }: { study: Pick<BayesianStudyResponse, "study_id" | "name" | "status">; state: RetentionState; disabled: boolean; onDeleted: () => void }) {
   if (study.status === "active") return null;
   const preflight = state.preflight?.study_id === study.study_id ? state.preflight : null;
   return (
@@ -16,6 +19,7 @@ export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }
         <div className="info-box" aria-label="Bayesian study 삭제 영향">
           <strong>삭제 대상 metadata {preflight.counts.metadata_record_count}건 · 파일 {preflight.counts.file_count}개</strong>
           <p>Trial {preflight.counts.trial_count}건, history revision {preflight.counts.history_revision_count}건, 기존 단일 추천 {preflight.counts.recommendation_count}건, batch {preflight.counts.recommendation_batch_count}건 / item {preflight.counts.recommendation_batch_item_count}건을 함께 삭제합니다.</p>
+          <PlanningDeletionCounts counts={preflight.counts} />
           {preflight.successor_study_count > 0 ? <p>Successor study {preflight.successor_study_count}개가 참조하여 삭제할 수 없습니다.</p> : null}
           {preflight.blockers.length > 0 ? <p>삭제 차단 사유: {preflight.blockers.join(", ")}</p> : <button type="button" className="secondary-button" disabled={state.isDeleting} onClick={() => state.setPendingDeletion(true)}>불가역 삭제 확인</button>}
         </div>
@@ -31,4 +35,14 @@ export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }
       ) : null}
     </section>
   );
+}
+
+export function PlanningDeletionCounts({ counts }: { counts: Pick<BayesianStudyDeletionCounts, "planning_model_count" | "candidate_set_count" | "candidate_revision_count" | "planning_selection_count" | "planning_confirmation_count"> }) {
+  const { locale } = useI18n(), text = planningMessages(locale);
+  const rows = [[text.deletionModels, counts.planning_model_count], [text.deletionCandidateSets, counts.candidate_set_count],
+    [text.deletionCandidateRevisions, counts.candidate_revision_count], [text.deletionSelections, counts.planning_selection_count], [text.deletionConfirmations, counts.planning_confirmation_count]] as const;
+  if (rows.every(([, count]) => count === undefined)) return null;
+  return <section aria-label={text.deletionPlanning}><h5>{text.deletionPlanning}</h5><dl className="bo-planning-source">
+    {rows.map(([label, count]) => <div key={label}><dt>{label}</dt><dd>{count === undefined ? "-" : count}</dd></div>)}
+  </dl></section>;
 }

@@ -22,7 +22,41 @@ Matern5/2, Matern3/2 and Exponential choices while preserving the reviewed batch
 flow. Its formula, parameterization and current-run evidence are separate from
 this historical research ledger. It does not add multiresponse desirability.
 
+The local [Stage 3a foundation](bo_desirability_foundation.md) now validates an
+explicit Derringer-Suich linear policy, independent Gaussian desirability moments
+and Beta-approximation EI. It is not JMP's undocumented curve formula. At that
+gate it was not connected to multiresponse study storage, recommendation APIs or UI.
+
+The local [Stage 3b core](bo_desirability_recommendation_core.md) now connects
+per-response raw GP fits, the joint expected-desirability incumbent, Beta EI and
+q1 mixed search through a bounded worker. Its independent numerical and native
+worker checks are not multiresponse persistence/browser or JMP output parity.
+
+Subsequent Stage3c/d add immutable response-vector storage and measured-entry UI.
+[Stage3e](bo_desirability_review.md) now connects that core to q1 candidate review,
+explicit atomic confirmation, exact-source restoration and stored report output.
+Its current-run verification is separate from this historical ledger. Multiple
+response GPs and desirability follow the documented workflow, but our public
+DS-linear curves, independent response assumption and Beta moment matching are
+explicit product policies, not verified JMP result equivalence. Multiresponse
+batches and augmentation strategies remain unsupported.
+
+[Stage3f](bo_desirability_batch_acquisition.md) adds a local internal conditional
+MC/Beta marginal scorer using spatial joint latent draws. It is neither exact
+joint EI nor one of JMP's named augmentation strategies. Public multiresponse
+batch support remains disabled until search, storage, reports and UI are joined
+and verified; the existing q1 workflow is retained.
+
 ## 1. Versions And Evidence
+
+Current local target-curve gate (2026-11-10):
+[stored Gaussian target preferences](bo_target_curve_recommendation_gate.md)
+connect explicit asymmetric side ordinates and peak1 to study6 and q1..8
+recommendations. Maximize/minimize retain DS-linear; response independence,
+Beta matching and conditional MC remain disclosed approximations. This is the
+next step after the workshop audit and preview, not a claim of complete JMP
+control-point or output equivalence. Historical stage-specific statements above
+are superseded only for the features explicitly listed in the current gate.
 
 - The JMP sources below are the versioned English **19.2** documentation. This
   identifies the reference manual, not the locally installed JMP version or a
@@ -224,7 +258,11 @@ degeneracy, budget and q=1 analytic-parity tests. The baseline ETI helper accept
 a scalar distance; per-sample radii need explicit handling rather than an
 accidental scalar comparison against an array.
 
-## 7. Explicit Non-Claims And Remaining Gates
+## 7. Historical Research Non-Claims And Remaining Gates
+
+This section records the research-stage boundary. Subsequent implementation
+evidence below and the current Stage3e contract supersede its pending feature
+statements, not its limitations on actual JMP numerical parity.
 
 - No actual JMP output comparison, certification or guarantee of identical
   hyperparameters, uncertainty, acquisition values or recommended coordinates.
@@ -245,6 +283,48 @@ accidental scalar comparison against an array.
   claims. The formula probes in this document establish none of those gates.
 
 ## 8. Subsequent Implementation Evidence
+
+Local Stage3c persists immutable multiple response goals and measured vectors
+with exact history/restore/report semantics. Subsequent local
+[Stage3d](bo_multiresponse_ui.md) adds UI goal definition and measured-response
+entry. [Stage3e](bo_desirability_review.md) connects q1 multiresponse review,
+explicit trial confirmation, exact-source restoration and managed reporting;
+multiresponse q>1 was unsupported at Stage3e. The lifecycle and Stage3e execution
+ledgers supersede historical pending statements only within their explicit scope. Public
+Derringer-Suich curves remain distinct from JMP's curve details; no actual JMP
+same-input output fixture or numerical parity claim has been added.
+
+[Stage3g](bo_desirability_batch_search.md) adds internal multiresponse q1..8
+ordered search with common-draw planning, combined budgets and bounded worker
+validation. At Stage3g, public q>1 review/confirmation/restore/report/UI remained
+the next vertical gate. This is not JMP MaxPro, Refine Model or Confirm & Challenge;
+those options must not be marked implemented by this internal calculation.
+
+Stage3h connects that internal policy to the public ordered-batch workflow;
+see [the public batch contract and current evidence](bo_desirability_public_batch.md).
+The official JMP19.2 Bayesian Optimization and Candidate Set pages were read
+again on2026-11-09. They describe per-response GP fitting, candidate/batch
+review, collected responses and model updates. They also distinguish MaxPro
+exploration, Refine Model and Confirm and Challenge Optima. Our conditional
+MC/Beta policy is not any of those named strategies. We preserve selection
+order and confirm the whole calculated batch; imported candidate tables,
+manual subsets/reordering and the three JMP augmentation strategies remain
+separate future gates. There is still no actual JMP same-input output fixture.
+Sources: [JMP workflow](https://www.jmp.com/support/help/en/19.2/jmp/bayesian-optimization.shtml),
+[JMP candidate set](https://www.jmp.com/support/help/en/19.2/jmp/candidate-set.shtml).
+
+The subsequent local workshop audit, summarized in the
+[public findings](jmp_workshop_public_findings.md), read the
+provided deck, instructions and literal journal tables without executing JSL.
+It motivated further local-fit verification. The
+[fit-quality gate](bo_fit_quality_gate.md) adds opt-in bounded multiscale starts
+and stored initial/best/terminal LML charts, including no-refit HTML. This is our
+explicit initialization policy, not recovered JMP optimizer internals. The
+sample-specific inputs and derived comparisons remain private; synthetic
+independent Cholesky verifies likelihood calculations, not JMP recommendation
+parity. A matching JMP runtime/options/output comparison remains unperformed.
+The workshop curve formulas and import/profiler/candidate workflows require
+their own subsequent contracts; fit diagnostics do not complete those features.
 
 The BO implementation now has the product-specific common surrogate, EI/ETI, correlated conditional
 MC acquisition, exact-replicate view and mixed search described above. The new BO policy is method

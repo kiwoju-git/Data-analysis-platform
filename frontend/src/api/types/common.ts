@@ -23,6 +23,15 @@ export interface RuntimeCapabilities {
   bayesian_batch_recommendation?: boolean;
   bayesian_recommendation_review?: boolean;
   bayesian_numeric_kernels?: boolean;
+  bayesian_response_vector_lifecycle?: boolean;
+  bayesian_multiresponse_recommendation?: boolean;
+  bayesian_multiresponse_batch?: boolean;
+  bayesian_fit_quality?: boolean;
+  bayesian_target_curve_preview?: boolean;
+  bayesian_versioned_target_curves?: boolean;
+  bayesian_persistent_planning?: boolean;
+  bayesian_augmentation?: boolean;
+  bayesian_mixed_factor_planning?: boolean;
   bayesian_objective_goal_modes?: boolean;
   gaussian_process_regression?: boolean;
 }

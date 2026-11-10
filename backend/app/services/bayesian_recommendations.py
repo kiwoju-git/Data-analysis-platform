@@ -61,7 +61,10 @@ def create_bayesian_recommendation(
     study_id: UUID,
     body: BayesianRecommendationCreateRequest,
 ) -> BayesianRecommendationResponse:
+    from app.services.bayesian_studies import require_scalar_bayesian_objective
+
     study = get_bayesian_study(settings, study_id)
+    require_scalar_bayesian_objective(study.objective)
     if study.status != "active":
         raise _optimization_error("bayesian_study_closed")
     if str(body.expected_history_revision_id) != str(study.observation_history.history_revision_id):

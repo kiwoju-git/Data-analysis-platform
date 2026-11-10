@@ -49,7 +49,23 @@ from app.api.v1.schemas.bayesian import (
     BayesianTrialListResponse,
     BayesianTrialResponse,
     BayesianTrialTransitionResponse,
+    BayesianVectorObservationBatchItem,
+    BayesianVectorReplicateTrialResponse,
+    BayesianVectorTrialResponse,
     minimum_bayesian_initial_design_size,
+)
+from app.api.v1.schemas.bo_curve_policy import (
+    AnyDesirabilityObjective as BayesianDesirabilityObjective,
+)
+from app.api.v1.schemas.bo_curve_policy import (
+    BayesianVersionedCurveObjective,
+    study_objective_type,
+)
+from app.api.v1.schemas.bo_mixed_studies import (
+    MixedObservationBatchResponse,
+    MixedStudyCloseResponse,
+    MixedTrialListResponse,
+    MixedTrialTransitionResponse,
 )
 from app.core.config import Settings
 from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
@@ -62,6 +78,11 @@ from app.services.analysis_run_execution import (
 )
 from app.services.bayesian_recommendation_consistency import (
     validate_bayesian_recommendation_record,
+)
+from app.services.bo_lifecycle import (
+    load_lifecycle_study,
+    observation_batch_response,
+    trial_transition_response,
 )
 from app.statistics.doe_factor_domain import DoeFactorDomain
 from app.statistics.latin_hypercube import (
@@ -114,7 +135,25 @@ BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
-    {"0.1.0", "0.2.0", "0.2.1", "0.2.2", "0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.7.0", "0.8.0"}
+    {
+        "0.1.0",
+        "0.2.0",
+        "0.2.1",
+        "0.2.2",
+        "0.3.0",
+        "0.4.0",
+        "0.5.0",
+        "0.6.0",
+        "0.7.0",
+        "0.8.0",
+        "0.9.0",
+        "0.10.0",
+        "0.11.0",
+        "0.12.0",
+        "0.13.0",
+        "0.14.0",
+        "0.15.0",
+    }
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
 BAYESIAN_LIFECYCLE_EVENT_SCHEMA_VERSION: Final[Literal[2]] = 2
@@ -134,7 +173,7 @@ class _ValidatedStudy:
     study: BayesianStudyRecord
     version: BayesianStudyVersionRecord
     factors: list[BayesianFactorResponse]
-    objective: BayesianObjectiveResponse
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
     initial_design: BayesianInitialDesignResponse
     trials: list[BayesianTrialRecord]
@@ -186,6 +225,14 @@ def create_bayesian_study(
             status_code=status.HTTP_409_CONFLICT,
         )
     objective = _validated_objective_payload(body)
+    study_schema = (
+        6
+        if isinstance(objective, BayesianVersionedCurveObjective)
+        else 5
+        if isinstance(objective, BayesianDesirabilityObjective)
+        else 4
+    )
+    history_schema = 2 if study_schema in {5, 6} else 1
     constraints = _validated_constraint_payload(body, factors)
     initial_design_policy = body.initial_design_policy
     if initial_design_policy is None:
@@ -269,7 +316,7 @@ def create_bayesian_study(
         objective=objective,
         constraints=constraints,
         initial_design=initial_design,
-        study_schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
+        study_schema_version=study_schema,
     )
     definition_sha256 = _sha256(definition_payload)
     now = utc_now()
@@ -291,12 +338,12 @@ def create_bayesian_study(
         study_version_id=study_version_id,
         study_id=study_id,
         version_number=1,
-        schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
+        schema_version=study_schema,
         factors_json=_json_dumps([item.model_dump(mode="json") for item in factors]),
         objective_json=_json_dumps(
             _objective_payload(
                 objective,
-                study_schema_version=BAYESIAN_STUDY_SCHEMA_VERSION,
+                study_schema_version=study_schema,
             )
         ),
         constraints_json=_json_dumps([item.model_dump(mode="json") for item in constraints]),
@@ -324,6 +371,7 @@ def create_bayesian_study(
         completed_trials=[],
         previous_history_sha256=None,
         created_at=now,
+        schema_version=history_schema,
     )
     insert_bayesian_study_bundle(
         settings.workspace_root,
@@ -358,6 +406,10 @@ def bayesian_initial_design_csv(
     settings: Settings,
     study_id: UUID,
 ) -> tuple[bytes, str]:
+    from app.services.bo_mixed_studies import is_mixed_study, mixed_initial_design_csv
+
+    if is_mixed_study(settings, str(study_id)):
+        return mixed_initial_design_csv(settings, study_id)
     study = get_bayesian_study(settings, study_id)
     initial_trials = sorted(
         (trial for trial in study.trials if trial.origin == "initial_design"),
@@ -369,12 +421,34 @@ def bayesian_initial_design_csv(
         _csv_cell(f"{factor.name} [{factor.unit}]" if factor.unit else factor.name)
         for factor in study.factors
     ]
+    vector_objective = (
+        study.objective if isinstance(study.objective, BayesianDesirabilityObjective) else None
+    )
+    response_headers = (
+        [
+            _csv_cell(f"{r.name} [{r.unit}]" if r.unit else r.name)
+            for r in vector_objective.responses
+        ]
+        if vector_objective is not None
+        else ["Objective"]
+    )
     writer.writerow(
         ["Trial", "Trial ID", "Origin", "State"]
         + factor_headers
-        + ["Objective", "Objective status"]
+        + response_headers
+        + ["Objective status"]
     )
     for trial in initial_trials:
+        response_cells = (
+            [
+                trial.response_values[r.response_id]
+                if isinstance(trial, BayesianVectorTrialResponse)
+                else ""
+                for r in vector_objective.responses
+            ]
+            if vector_objective is not None
+            else ["" if trial.objective_value is None else trial.objective_value]
+        )
         writer.writerow(
             [
                 trial.trial_number,
@@ -388,8 +462,8 @@ def bayesian_initial_design_csv(
                     )
                     for factor in study.factors
                 ],
-                "" if trial.objective_value is None else trial.objective_value,
-                "recorded" if trial.objective_value is not None else "pending",
+                *response_cells,
+                "recorded" if trial.state == "completed" else trial.state,
             ]
         )
     return output.getvalue().encode("utf-8-sig"), f"bayesian-initial-design-{study_id}.csv"
@@ -398,8 +472,19 @@ def bayesian_initial_design_csv(
 def list_bayesian_studies(
     settings: Settings, *, offset: int, limit: int
 ) -> BayesianStudyListResponse:
+    from app.services.bo_mixed_studies import (
+        is_mixed_study,
+        load_validated_mixed_study,
+        mixed_study_summary,
+    )
+
     records = list_bayesian_study_records(settings.workspace_root, offset=offset, limit=limit)
-    items = [_study_summary(_load_validated_study(settings, record.study_id)) for record in records]
+    items = [
+        mixed_study_summary(load_validated_mixed_study(settings, record.study_id))
+        if is_mixed_study(settings, record.study_id)
+        else _study_summary(_load_validated_study(settings, record.study_id))
+        for record in records
+    ]
     return BayesianStudyListResponse(
         total=count_bayesian_study_records(settings.workspace_root),
         offset=offset,
@@ -414,9 +499,20 @@ def list_bayesian_trials(
     *,
     offset: int,
     limit: int,
-) -> BayesianTrialListResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+) -> BayesianTrialListResponse | MixedTrialListResponse:
+    bundle = load_lifecycle_study(settings, str(study_id))
     page = bundle.trials[offset : offset + limit]
+    if bundle.version.schema_version == 7:
+        from app.services.bo_mixed_studies import mixed_trial_response
+
+        return MixedTrialListResponse(
+            study_id=study_id,
+            study_version_id=bundle.version.study_version_id,
+            total=len(bundle.trials),
+            offset=offset,
+            limit=limit,
+            items=[mixed_trial_response(bundle, item) for item in page],
+        )
     return BayesianTrialListResponse(
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
@@ -434,6 +530,8 @@ def complete_bayesian_trial(
     body: BayesianObservationCreateRequest,
 ) -> BayesianTrialTransitionResponse:
     bundle = _load_validated_study(settings, str(study_id))
+    if isinstance(bundle.objective, BayesianDesirabilityObjective):
+        raise _observation_mode_error()
     if bundle.study.status != "active":
         raise _study_closed_error()
     trial = _trial_for_transition(bundle, str(trial_id))
@@ -497,15 +595,15 @@ def complete_bayesian_observations_batch(
     settings: Settings,
     study_id: UUID,
     body: BayesianObservationBatchCreateRequest,
-) -> BayesianObservationBatchCreateResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+) -> BayesianObservationBatchCreateResponse | MixedObservationBatchResponse:
+    bundle = load_lifecycle_study(settings, str(study_id))
     if str(body.expected_study_version_id) != bundle.version.study_version_id:
         raise ApiError(
             code="bayesian_study_version_stale",
             message="Study 버전이 변경되어 관측값을 다시 확인해야 합니다.",
             status_code=status.HTTP_409_CONFLICT,
         )
-    requested = {str(item.trial_id): float(item.objective_value) for item in body.observations}
+    requested = _requested_observations(bundle, body)
 
     replay_history = get_bayesian_history_revision_record(
         settings.workspace_root,
@@ -541,7 +639,7 @@ def complete_bayesian_observations_batch(
         }
         if any(
             trial_id not in completed_by_id
-            or completed_by_id[trial_id].objective_value != objective
+            or _trial_observation(completed_by_id[trial_id]) != objective
             for trial_id, objective in requested.items()
         ):
             raise ApiError(
@@ -549,9 +647,8 @@ def complete_bayesian_observations_batch(
                 message="같은 request ID가 다른 관측 저장 요청에 사용되었습니다.",
                 status_code=status.HTTP_409_CONFLICT,
             )
-        return BayesianObservationBatchCreateResponse(
-            batch_schema_version=1,
-            study=_study_response(bundle),
+        return observation_batch_response(
+            bundle,
             completed_trial_ids=[item.trial_id for item in body.observations],
             completed_trial_count=len(body.observations),
             observation_history=_history_response(replay_history),
@@ -593,7 +690,16 @@ def complete_bayesian_observations_batch(
                 status_code=status.HTTP_409_CONFLICT,
             )
         _validate_recommendation_trial_history(settings, bundle, trial)
-        selected.append(replace(trial, state="completed", objective_value=objective))
+        selected.append(
+            replace(
+                trial,
+                state="completed",
+                objective_value=None if isinstance(objective, dict) else objective,
+                response_values_json=_json_dumps(objective)
+                if isinstance(objective, dict)
+                else None,
+            )
+        )
 
     now = utc_now()
     selected = [replace(item, closed_at=now) for item in selected]
@@ -607,6 +713,7 @@ def complete_bayesian_observations_batch(
         previous_history_sha256=bundle.current_history.observation_history_sha256,
         created_at=now,
         history_revision_id=str(body.request_id),
+        schema_version=bundle.current_history.schema_version,
     )
     try:
         complete_bayesian_trial_batch_records(
@@ -638,15 +745,20 @@ def complete_bayesian_observations_batch(
             ) from exc
         raise _history_stale_error() from exc
 
-    updated = _load_validated_study(settings, str(study_id))
-    return BayesianObservationBatchCreateResponse(
-        batch_schema_version=1,
-        study=_study_response(updated),
+    updated = load_lifecycle_study(settings, str(study_id))
+    saved_history = next(
+        (item for item in updated.histories if item.history_revision_id == str(body.request_id)),
+        None,
+    )
+    if saved_history is None:
+        raise _artifact_error()
+    return observation_batch_response(
+        updated,
         completed_trial_ids=[item.trial_id for item in body.observations],
         completed_trial_count=len(body.observations),
-        observation_history=_history_response(new_history),
+        observation_history=_history_response(saved_history),
         request_id=body.request_id,
-        created_at=now,
+        created_at=saved_history.created_at,
     )
 
 
@@ -711,8 +823,8 @@ def abandon_bayesian_trial(
     study_id: UUID,
     trial_id: UUID,
     body: BayesianTrialAbandonRequest | None = None,
-) -> BayesianTrialTransitionResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+) -> BayesianTrialTransitionResponse | MixedTrialTransitionResponse:
+    bundle = load_lifecycle_study(settings, str(study_id))
     if bundle.study.status != "active":
         raise _study_closed_error()
     request = body or BayesianTrialAbandonRequest()
@@ -774,19 +886,15 @@ def abandon_bayesian_trial(
                 status_code=status.HTTP_409_CONFLICT,
             ) from exc
         raise _trial_state_error() from exc
-    return BayesianTrialTransitionResponse(
-        study_id=study_id,
-        trial=_trial_response(abandoned),
-        observation_history=_history_response(bundle.current_history),
-    )
+    return trial_transition_response(bundle, abandoned)
 
 
 def close_bayesian_study(
     settings: Settings,
     study_id: UUID,
     body: BayesianStudyCloseRequest,
-) -> BayesianStudyCloseResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
+    bundle = load_lifecycle_study(settings, str(study_id))
     if bundle.study.status != "active":
         if bundle.lifecycle_event is not None and _close_request_matches_event(
             bundle.lifecycle_event, body
@@ -871,7 +979,7 @@ def close_bayesian_study(
         raise _close_conflict_error() from exc
     if not _close_request_matches_event(stored, body):
         raise _close_conflict_error()
-    return _close_response(_load_validated_study(settings, str(study_id)))
+    return _close_response(load_lifecycle_study(settings, str(study_id)))
 
 
 def canonical_bayesian_lifecycle_event_sha256(
@@ -909,7 +1017,7 @@ def get_bayesian_study_deletion_preflight(
     settings: Settings,
     study_id: UUID,
 ) -> BayesianStudyDeletionPreflightResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+    bundle = load_lifecycle_study(settings, str(study_id))
     preflight, _ = _build_bayesian_study_deletion_preflight(settings, bundle)
     return preflight
 
@@ -921,7 +1029,7 @@ def delete_bayesian_study(
 ) -> BayesianStudyDeleteResponse:
     if body.confirmation_study_id != study_id:
         raise _deletion_confirmation_error()
-    bundle = _load_validated_study(settings, str(study_id))
+    bundle = load_lifecycle_study(settings, str(study_id))
     preflight, graph = _build_bayesian_study_deletion_preflight(settings, bundle)
     if body.expected_deletion_manifest_sha256 != preflight.deletion_manifest_sha256:
         raise _deletion_confirmation_error()
@@ -982,7 +1090,7 @@ def list_bayesian_history(
     offset: int,
     limit: int,
 ) -> BayesianHistoryListResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+    bundle = load_lifecycle_study(settings, str(study_id))
     descending = list(reversed(bundle.histories))
     page = descending[offset : offset + limit]
     return BayesianHistoryListResponse(
@@ -998,7 +1106,7 @@ def list_bayesian_history(
 def get_bayesian_history(
     settings: Settings, study_id: UUID, history_revision_id: UUID
 ) -> BayesianHistoryRevisionResponse:
-    bundle = _load_validated_study(settings, str(study_id))
+    bundle = load_lifecycle_study(settings, str(study_id))
     record = get_bayesian_history_revision_record(settings.workspace_root, str(history_revision_id))
     if record is None or record.study_version_id != bundle.version.study_version_id:
         raise ApiError(
@@ -1020,19 +1128,25 @@ def get_bayesian_history(
 
 
 def canonical_bayesian_observation_history_sha256(
-    *, definition_sha256: str, completed_trials: list[BayesianTrialRecord]
+    *, definition_sha256: str, completed_trials: list[BayesianTrialRecord], schema_version: int = 1
 ) -> str:
+    if schema_version not in {1, 2}:
+        raise ValueError("unsupported Bayesian history schema")
     ordered = sorted(completed_trials, key=lambda item: item.trial_number)
     return _sha256(
         {
-            "schema_version": BAYESIAN_HISTORY_SCHEMA_VERSION,
+            "schema_version": schema_version,
             "definition_sha256": definition_sha256,
             "completed_observations": [
                 {
                     "trial_id": item.trial_id,
                     "trial_number": item.trial_number,
                     "coordinates_sha256": item.coordinates_sha256,
-                    "objective_value": item.objective_value,
+                    **(
+                        {"objective_value": item.objective_value}
+                        if schema_version == 1
+                        else {"response_values": _trial_observation(item)}
+                    ),
                 }
                 for item in ordered
             ],
@@ -1078,14 +1192,19 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         version is None
         or version.study_id != study.study_id
         or version.version_number != study.current_version
-        or version.schema_version not in {1, 2, 3, 4}
+        or version.schema_version not in {1, 2, 3, 4, 5, 6}
     ):
         raise _metadata_error()
     try:
         factors = [
             BayesianFactorResponse.model_validate(item) for item in _json_list(version.factors_json)
         ]
-        objective = BayesianObjectiveResponse.model_validate(_json_dict(version.objective_json))
+        objective_type = (
+            study_objective_type(version.schema_version)
+            if version.schema_version in {5, 6}
+            else BayesianObjectiveResponse
+        )
+        objective = objective_type.model_validate(_json_dict(version.objective_json))
         constraints = [
             BayesianLinearConstraintResponse.model_validate(item)
             for item in _json_list(version.constraints_json)
@@ -1140,7 +1259,7 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         ):
             raise _artifact_error()
     elif initial_design.policy == LHS_INITIAL_DESIGN_POLICY:
-        if version.schema_version not in {2, 3, 4} or constraints:
+        if version.schema_version not in {2, 3, 4, 5, 6} or constraints:
             raise _artifact_error()
         expected_actual, expected_normalized = _validate_stored_lhs_initial_design(
             factors=factors,
@@ -1286,7 +1405,9 @@ def _validated_factor_payload(
 
 def _validated_objective_payload(
     body: BayesianStudyCreateRequest,
-) -> BayesianObjectiveResponse:
+) -> BayesianObjectiveResponse | BayesianDesirabilityObjective:
+    if isinstance(body.objective, BayesianDesirabilityObjective):
+        return body.objective.model_copy(deep=True)
     name = body.objective.name.strip()
     if not name:
         raise ApiError(
@@ -1465,18 +1586,20 @@ def _new_history_record(
     previous_history_sha256: str | None,
     created_at: str,
     history_revision_id: str | None = None,
+    schema_version: int = 1,
 ) -> BayesianHistoryRevisionRecord:
     ordered = sorted(completed_trials, key=lambda item: item.trial_number)
     return BayesianHistoryRevisionRecord(
         history_revision_id=history_revision_id or str(uuid4()),
         study_version_id=study_version_id,
         revision_number=revision_number,
-        schema_version=BAYESIAN_HISTORY_SCHEMA_VERSION,
+        schema_version=schema_version,
         completed_trial_ids_json=_json_dumps([item.trial_id for item in ordered]),
         completed_trial_count=len(ordered),
         observation_history_sha256=canonical_bayesian_observation_history_sha256(
             definition_sha256=definition_sha256,
             completed_trials=ordered,
+            schema_version=schema_version,
         ),
         previous_history_sha256=previous_history_sha256,
         created_at=created_at,
@@ -1609,6 +1732,16 @@ def _validate_trials(
     expected_actual: list[dict[str, float]],
     expected_normalized: list[dict[str, float]],
 ) -> None:
+    response_ids = (
+        {
+            r.response_id
+            for r in study_objective_type(version.schema_version)
+            .model_validate_json(version.objective_json)
+            .responses
+        }
+        if version.schema_version in {5, 6}
+        else None
+    )
     factor_ids = {item.factor_id for item in factors}
     if [item.trial_number for item in trials] != list(range(1, len(trials) + 1)):
         raise _artifact_error()
@@ -1695,17 +1828,28 @@ def _validate_trials(
         seen_coordinates.add(coordinate_fingerprint)
         prior_trials[trial.trial_id] = trial
         if trial.state == "pending" and (
-            trial.objective_value is not None or trial.closed_at is not None
+            trial.objective_value is not None
+            or trial.response_values_json is not None
+            or trial.closed_at is not None
         ):
             raise _artifact_error()
-        if trial.state == "completed" and (
-            trial.objective_value is None
-            or not math.isfinite(trial.objective_value)
-            or trial.closed_at is None
-        ):
-            raise _artifact_error()
+        if trial.state == "completed":
+            observation = _trial_observation(trial)
+            if trial.closed_at is None:
+                raise _artifact_error()
+            if response_ids is not None:
+                if not isinstance(observation, dict) or set(observation) != response_ids:
+                    raise _artifact_error()
+            elif (
+                isinstance(observation, dict)
+                or observation is None
+                or not math.isfinite(observation)
+            ):
+                raise _artifact_error()
         if trial.state == "abandoned" and (
-            trial.objective_value is not None or trial.closed_at is None
+            trial.objective_value is not None
+            or trial.response_values_json is not None
+            or trial.closed_at is None
         ):
             raise _artifact_error()
 
@@ -1735,7 +1879,7 @@ def _validate_histories(
             raise _artifact_error() from exc
         if (
             history.study_version_id != version.study_version_id
-            or history.schema_version != BAYESIAN_HISTORY_SCHEMA_VERSION
+            or history.schema_version != (2 if version.schema_version in {5, 6, 7} else 1)
             or history.completed_trial_count != len(completed_ids)
             or history.previous_history_sha256 != previous_sha
             or len(completed_ids) != len(set(completed_ids))
@@ -1757,6 +1901,7 @@ def _validate_histories(
         expected_sha = canonical_bayesian_observation_history_sha256(
             definition_sha256=version.definition_sha256,
             completed_trials=[completed_by_id[trial_id] for trial_id in completed_ids],
+            schema_version=history.schema_version,
         )
         if history.observation_history_sha256 != expected_sha:
             raise _artifact_error()
@@ -1769,12 +1914,16 @@ def _validate_histories(
 def _validate_recommendations(
     version: BayesianStudyVersionRecord,
     factors: list[BayesianFactorResponse],
-    objective: BayesianObjectiveResponse,
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective,
     constraints: list[BayesianLinearConstraintResponse],
     trials: list[BayesianTrialRecord],
     histories: list[BayesianHistoryRevisionRecord],
     recommendations: list[BayesianRecommendationRecord],
 ) -> None:
+    if isinstance(objective, BayesianDesirabilityObjective):
+        if recommendations:
+            raise _artifact_error()
+        return
     if recommendations and (objective.goal_type or objective.direction) == "match_target":
         raise _artifact_error()
     recommendation_trials = {
@@ -1824,7 +1973,7 @@ def _validate_recommendation_batches(
     version: BayesianStudyVersionRecord,
     method_version: str,
     factors: list[BayesianFactorResponse],
-    objective: BayesianObjectiveResponse,
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective,
     constraints: list[BayesianLinearConstraintResponse],
     trials: list[BayesianTrialRecord],
     histories: list[BayesianHistoryRevisionRecord],
@@ -1837,6 +1986,41 @@ def _validate_recommendation_batches(
     pending_batch_count = 0
     total_items = 0
     for batch in batches:
+        if isinstance(objective, BayesianDesirabilityObjective):
+            from app.services.bayesian_desirability_recommendations import (
+                validate_desirability_record,
+            )
+
+            if batch.result_schema_version not in {4, 5, 6, 7, 8, 9}:
+                raise _artifact_error()
+            from app.services.bo_augmentation_batches import validate_augmentation_batch_record
+            from app.services.bo_planning_batches import validate_planning_batch_record
+
+            validate_vector = (
+                validate_augmentation_batch_record
+                if batch.result_schema_version == 9
+                else validate_planning_batch_record
+                if batch.result_schema_version == 8
+                else validate_desirability_record
+            )
+            vector = validate_vector(
+                settings,
+                version=version,
+                factors=factors,
+                objective=objective,
+                constraints=constraints,
+                trials=trials,
+                history=history_by_id.get(batch.source_history_revision_id),
+                record=batch,
+            )
+            vector_ids = {str(item.trial.trial_id) for item in vector.items}
+            if len(vector_ids) != batch.batch_size or vector_ids & mapped_trial_ids:
+                raise _artifact_error()
+            mapped_trial_ids.update(vector_ids)
+            total_items += batch.batch_size
+            if any(trial_by_id[key].state == "pending" for key in vector_ids):
+                pending_batch_count += 1
+            continue
         if batch.result_schema_version in {2, 3}:
             from app.services.bayesian_noise_recommendations import validate_noise_record
 
@@ -2086,6 +2270,11 @@ def _build_bayesian_study_deletion_preflight(
         recommendation_batch_count=graph.recommendation_batch_count,
         recommendation_batch_item_count=graph.recommendation_batch_item_count,
         replicate_request_count=graph.replicate_request_count,
+        planning_model_count=graph.planning_model_count,
+        candidate_set_count=graph.candidate_set_count,
+        candidate_revision_count=graph.candidate_revision_count,
+        planning_selection_count=graph.planning_selection_count,
+        planning_confirmation_count=graph.planning_confirmation_count,
         lifecycle_event_count=graph.lifecycle_event_count,
         metadata_record_count=(
             1
@@ -2097,6 +2286,11 @@ def _build_bayesian_study_deletion_preflight(
             + graph.recommendation_batch_count
             + graph.recommendation_batch_item_count
             + graph.replicate_request_count
+            + graph.planning_model_count
+            + 2 * graph.candidate_set_count
+            + graph.candidate_revision_count
+            + graph.planning_selection_count
+            + graph.planning_confirmation_count
             + graph.lifecycle_event_count
             + graph.report_count
         ),
@@ -2135,6 +2329,7 @@ def _build_bayesian_study_deletion_preflight(
             ),
             "successor_study_ids": list(graph.successor_study_ids),
             "reports_manifest_sha256": graph.reports_manifest_sha256,
+            "planning_manifest_sha256": graph.planning_manifest_sha256,
             "counts": counts.model_dump(mode="json"),
         }
     )
@@ -2162,7 +2357,7 @@ def _study_response(bundle: _ValidatedStudy) -> BayesianStudyResponse:
         study_id=UUID(bundle.study.study_id),
         study_version_id=UUID(bundle.version.study_version_id),
         version_number=bundle.version.version_number,
-        study_schema_version=cast(Literal[1, 2, 3, 4], bundle.version.schema_version),
+        study_schema_version=cast(Literal[1, 2, 3, 4, 5, 6], bundle.version.schema_version),
         method_id=BAYESIAN_METHOD_ID,
         method_version=bundle.study.method_version,
         name=bundle.study.name,
@@ -2223,6 +2418,17 @@ def _study_summary(bundle: _ValidatedStudy) -> BayesianStudySummaryResponse:
 
 
 def _trial_response(trial: BayesianTrialRecord) -> BayesianAnyTrialResponse:
+    if trial.response_values_json is not None:
+        values = _trial_observation(trial)
+        if not isinstance(values, dict):
+            raise _artifact_error()
+        base = _trial_response(replace(trial, response_values_json=None)).model_dump(mode="python")
+        vector_type = (
+            BayesianVectorReplicateTrialResponse
+            if trial.origin == "replicate"
+            else BayesianVectorTrialResponse
+        )
+        return vector_type.model_validate({**base, "response_values": values})
     if trial.origin == "replicate":
         return BayesianReplicateTrialResponse(
             trial_id=UUID(trial.trial_id),
@@ -2260,7 +2466,7 @@ def _history_response(
         history_revision_id=UUID(history.history_revision_id),
         study_version_id=UUID(history.study_version_id),
         revision_number=history.revision_number,
-        schema_version=cast(Literal[1], history.schema_version),
+        schema_version=cast(Literal[1, 2], history.schema_version),
         completed_trial_ids=[
             UUID(item) for item in _json_string_list(history.completed_trial_ids_json)
         ],
@@ -2307,9 +2513,16 @@ def _lifecycle_event_response(
     )
 
 
-def _close_response(bundle: _ValidatedStudy) -> BayesianStudyCloseResponse:
+def _close_response(bundle: Any) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
     if bundle.lifecycle_event is None:
         raise _artifact_error()
+    if bundle.version.schema_version == 7:
+        from app.services.bo_mixed_studies import mixed_study_response
+
+        return MixedStudyCloseResponse(
+            study=mixed_study_response(bundle),
+            lifecycle_event=_lifecycle_event_response(bundle.lifecycle_event),
+        )
     return BayesianStudyCloseResponse(
         study=_study_response(bundle),
         lifecycle_event=_lifecycle_event_response(bundle.lifecycle_event),
@@ -2335,7 +2548,7 @@ def _definition_payload(
     *,
     method_version: str,
     factors: list[BayesianFactorResponse],
-    objective: BayesianObjectiveResponse,
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective,
     constraints: list[BayesianLinearConstraintResponse],
     initial_design: BayesianInitialDesignResponse,
     study_schema_version: int,
@@ -2396,10 +2609,18 @@ def _initial_design_definition_payload(
 
 
 def _objective_payload(
-    objective: BayesianObjectiveResponse,
+    objective: BayesianObjectiveResponse | BayesianDesirabilityObjective,
     *,
     study_schema_version: int,
 ) -> dict[str, Any]:
+    if isinstance(objective, BayesianDesirabilityObjective):
+        if study_schema_version != (
+            6 if isinstance(objective, BayesianVersionedCurveObjective) else 5
+        ):
+            raise ValueError("response vector curve schema mismatch")
+        return objective.model_dump(
+            mode="json", exclude={"unit", "direction", "target_value", "target_tolerance"}
+        )
     if study_schema_version <= 2:
         direction = objective.direction or objective.goal_type
         if direction not in {"minimize", "maximize"}:
@@ -2482,6 +2703,7 @@ def _recommendation_blockers(
         "bayesian_optimization_pending_recommendation_exists",
         "bayesian_optimization_budget_exhausted",
         "bayesian_study_not_active",
+        "bayesian_multiresponse_recommendation_not_enabled",
     ]
 ]:
     blockers: list[
@@ -2490,6 +2712,7 @@ def _recommendation_blockers(
             "bayesian_optimization_pending_recommendation_exists",
             "bayesian_optimization_budget_exhausted",
             "bayesian_study_not_active",
+            "bayesian_multiresponse_recommendation_not_enabled",
         ]
     ] = []
     if bundle.study.status != "active":
@@ -2524,6 +2747,77 @@ def _json_list(payload: str) -> list[dict[str, Any]]:
     if not isinstance(parsed, list) or not all(isinstance(item, dict) for item in parsed):
         raise TypeError("expected JSON object list")
     return parsed
+
+
+def require_scalar_bayesian_objective(objective: object) -> None:
+    """Keep the existing scalar fit/review contracts away from measured vectors."""
+    if isinstance(objective, BayesianDesirabilityObjective):
+        raise ApiError(
+            code="bayesian_multiresponse_recommendation_not_enabled",
+            message="Use the versioned desirability review contract for response vectors.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+
+def _observation_mode_error() -> ApiError:
+    return ApiError(
+        code="bayesian_observation_mode_invalid",
+        message="The observation format must match the stored study response policy.",
+        status_code=status.HTTP_409_CONFLICT,
+    )
+
+
+def _requested_observations(
+    bundle: _ValidatedStudy, body: BayesianObservationBatchCreateRequest
+) -> dict[str, float | dict[str, float]]:
+    response_ids = (
+        {r.response_id for r in bundle.objective.responses}
+        if isinstance(bundle.objective, BayesianDesirabilityObjective)
+        else None
+    )
+    requested: dict[str, float | dict[str, float]] = {}
+    for item in body.observations:
+        if isinstance(item, BayesianVectorObservationBatchItem):
+            if response_ids is None:
+                raise _observation_mode_error()
+            if set(item.response_values) != response_ids:
+                raise ApiError(
+                    code="bayesian_observation_response_values_invalid",
+                    message="Every trial must contain exactly the study's measured response IDs.",
+                    status_code=status.HTTP_409_CONFLICT,
+                )
+            requested[str(item.trial_id)] = dict(item.response_values)
+        else:
+            if response_ids is not None:
+                raise _observation_mode_error()
+            requested[str(item.trial_id)] = float(item.objective_value)
+    return requested
+
+
+def _trial_observation(trial: BayesianTrialRecord) -> float | dict[str, float] | None:
+    if trial.response_values_json is None:
+        return trial.objective_value
+    if trial.objective_value is not None:
+        raise _artifact_error()
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate response ID")
+            result[key] = value
+        return result
+
+    try:
+        from pydantic import TypeAdapter
+
+        from app.api.v1.schemas.bayesian_desirability import ResponseValues
+
+        return TypeAdapter(ResponseValues).validate_python(
+            json.loads(trial.response_values_json, object_pairs_hook=unique_object)
+        )
+    except (ValueError, TypeError) as exc:
+        raise _artifact_error() from exc
 
 
 def _json_dict(payload: str) -> dict[str, Any]:

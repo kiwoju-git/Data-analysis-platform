@@ -75,7 +75,7 @@ def test_kernel_review_spawn_confirm_restore_report(tmp_path, monkeypatch, kind,
             assert "radial_scaled_euclidean_v1" in rendered
             assert "factor_bounds_normalized_0_1" in rendered
             assert report.payload["attachment"]["shared_model"] == model
-            assert report.definition.renderer_version == "1.3.0"
+            assert report.definition.renderer_version == "1.10.0"
             request = {"source": source.model_dump(mode="json"), "locale": locale}
             capability = client.post("/api/v1/reports/capability", json=request)
             assert capability.status_code == 200, capability.json()
@@ -186,28 +186,62 @@ def test_populated_metadata24_migration_preserves_legacy_hashes(tmp_path, monkey
     from app.storage.workspace_backup import backup_workspace, restore_workspace
 
     root = tmp_path / "workspace with spaces"
-    settings = Settings(workspace_root=root)
+    fixture_root = tmp_path / "synthetic scalar fixture source"
+    with TestClient(create_app(Settings(workspace_root=fixture_root))) as client:
+        study = _completed_study(client)
+        base = f"/api/v1/bayesian-studies/{study['study_id']}"
+        result = client.post(f"{base}/recommendation-batches", json=_noise_request(study))
+        assert result.status_code == 201, result.json()
+        batch = result.json()
+        assert study["study_schema_version"] == 4
+        assert study["observation_history"]["schema_version"] == 1
+        assert (
+            batch["config_schema_version"],
+            batch["result_schema_version"],
+            batch["model_schema_version"],
+            batch["item_schema_version"],
+        ) == (2, 2, 3, 2)
+    # Build a genuine v24 database containing only its columns. The current
+    # application requires migration and must not run against an unmigrated DB.
     with monkeypatch.context() as old:
         old.setattr(
             metadata, "MIGRATIONS", tuple(m for m in metadata.MIGRATIONS if m.version <= 24)
         )
         old.setattr(metadata, "SCHEMA_VERSION", 24)
-        with TestClient(create_app(settings)) as client:
-            study = _completed_study(client)
-            base = f"/api/v1/bayesian-studies/{study['study_id']}"
-            result = client.post(f"{base}/recommendation-batches", json=_noise_request(study))
-            assert result.status_code == 201, result.json()
-            batch = result.json()
-    tables = (
-        "bayesian_recommendation_batches",
-        "bayesian_recommendation_batch_items",
+        metadata.initialize_metadata_store(root)
+    fixture_tables = (
+        "bayesian_studies",
+        "bayesian_study_versions",
         "bayesian_trials",
         "bayesian_observation_history_revisions",
-        "bayesian_study_versions",
+        "bayesian_observation_history_heads",
+        "bayesian_recommendation_batches",
+        "bayesian_recommendation_batch_items",
     )
+    legacy_columns = {}
+    with (
+        sqlite3.connect(metadata_db_path(fixture_root)) as source,
+        sqlite3.connect(metadata_db_path(root)) as destination,
+    ):
+        destination.execute("PRAGMA foreign_keys=ON")
+        for table in fixture_tables:
+            columns = [row[1] for row in destination.execute(f"PRAGMA table_info({table})")]
+            legacy_columns[table] = ",".join(columns)
+            rows = source.execute(
+                f"SELECT {legacy_columns[table]} FROM {table} ORDER BY 1"
+            ).fetchall()
+            placeholders = ",".join("?" for _ in columns)
+            destination.executemany(
+                f"INSERT INTO {table} ({legacy_columns[table]}) VALUES ({placeholders})",
+                rows,
+            )
+        assert destination.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert "response_values_json" not in legacy_columns["bayesian_trials"]
+    tables = fixture_tables
     with sqlite3.connect(metadata_db_path(root)) as connection:
         before = {
-            table: connection.execute(f"SELECT * FROM {table}").fetchall() for table in tables
+            table: connection.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
+            for table in tables
         }
         assert connection.execute("PRAGMA user_version").fetchone()[0] == 24
     archive = tmp_path / "metadata24.zip"
@@ -220,10 +254,21 @@ def test_populated_metadata24_migration_preserves_legacy_hashes(tmp_path, monkey
         assert read.status_code == 200, read.json()
         assert read.json() == batch
         with sqlite3.connect(metadata_db_path(restored)) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 25
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 32
             assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
             for table in tables:
-                assert before[table] == connection.execute(f"SELECT * FROM {table}").fetchall()
+                assert (
+                    before[table]
+                    == connection.execute(
+                        f"SELECT {legacy_columns[table]} FROM {table} ORDER BY 1"
+                    ).fetchall()
+                )
+            assert (
+                connection.execute(
+                    "SELECT count(*) FROM bayesian_trials WHERE response_values_json IS NOT NULL"
+                ).fetchone()[0]
+                == 0
+            )
         trial = batch["items"][0]["trial"]
         done = client.put(
             f"{base}/trials/{trial['trial_id']}/observation",

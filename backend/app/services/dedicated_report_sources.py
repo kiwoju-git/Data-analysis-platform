@@ -425,6 +425,25 @@ def list_dedicated_report_sources(
     )
 
 
+def bayesian_batch_source_descriptor(
+    settings: Settings, study_id: str, batch_id: str
+) -> ReportSourceDescriptor:
+    """Resolve an exact owned batch without scanning unrelated catalog pages."""
+    with sqlite3.connect(metadata_db_path(settings.workspace_root)) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT 'bo_batch' AS kind,b.source_history_revision_id AS id,"
+            "b.created_at,b.batch_id AS extra FROM bayesian_recommendation_batches b "
+            "JOIN bayesian_study_versions v ON v.study_version_id=b.study_version_id "
+            "WHERE b.batch_id=? AND v.study_id=?",
+            (batch_id, study_id),
+        ).fetchone()
+        if row is None:
+            raise invalid("report_source_not_found")
+        item = _catalog_descriptor(connection, row)
+        return item.model_copy(update={"stale": _source_is_stale(connection, item.source)})
+
+
 def _catalog_page(
     connection: sqlite3.Connection, kind: str, count: int, offset: int
 ) -> list[sqlite3.Row]:
@@ -631,7 +650,32 @@ def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> Rep
             attachment=attachment,
         )
     )
-    return _descriptor(source, result["name"], created, "/analysis/doe/doe.bayesian_optimization")
+    descriptor = _descriptor(
+        source, result["name"], created, "/analysis/doe/doe.bayesian_optimization"
+    )
+    if kind == "bo_batch":
+        batch = connection.execute(
+            "SELECT result_schema_version FROM bayesian_recommendation_batches WHERE batch_id=?",
+            (extra,),
+        ).fetchone()
+        if batch is not None and batch["result_schema_version"] in {8, 9, 10}:
+            query_key = {
+                8: "planning_batch_id",
+                9: "augmentation_batch_id",
+                10: "mixed_planning_batch_id",
+            }[batch["result_schema_version"]]
+            descriptor = descriptor.model_copy(
+                update={
+                    "open_target": "/analysis/doe/doe.bayesian_optimization?"
+                    + urlencode(
+                        {
+                            "study_id": str(source.study_id),
+                            query_key: str(extra),
+                        }
+                    ),
+                }
+            )
+    return descriptor
 
 
 def report_source_is_stale(settings: Settings, source: ReportSourceRef) -> bool:

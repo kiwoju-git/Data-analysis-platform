@@ -17,6 +17,10 @@ from app.api.v1.schemas.bayesian import (
     BayesianRecommendationBatchCreateRequest,
     BayesianRecommendationBatchResponse,
 )
+from app.api.v1.schemas.bo_curve_policy import (
+    AnyDesirabilityObjective as BayesianDesirabilityObjective,
+)
+from app.api.v1.schemas.bo_curve_policy import study_objective_type
 from app.api.v1.schemas.doe import (
     DoeFactorResponse,
     LatinHypercubeDesignOptionsResponse,
@@ -48,6 +52,7 @@ from app.storage.bayesian_studies import (
     get_bayesian_study_version_record,
     get_bayesian_trial_record,
     list_bayesian_recommendation_batch_item_records,
+    list_bayesian_trial_records,
 )
 from app.storage.metadata import (
     get_experiment_design_record,
@@ -213,6 +218,12 @@ def read_lhs(settings: Settings, source: LhsDesignReportSource) -> tuple[dict[st
 def read_bayesian(
     settings: Settings, source: BayesianHistoryReportSource
 ) -> tuple[dict[str, Any], str, str]:
+    from app.services.bo_mixed_studies import is_mixed_study
+
+    if is_mixed_study(settings, str(source.study_id)):
+        from app.services.bo_mixed_report_source import read_mixed_bayesian
+
+        return read_mixed_bayesian(settings, source)
     root = settings.workspace_root
     study = get_bayesian_study_record(root, str(source.study_id))
     with sqlite3.connect(metadata_db_path(root)) as connection:
@@ -235,14 +246,24 @@ def read_bayesian(
         or study.method_version not in SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
         or version.study_id != study.study_id
         or history.study_version_id != version.study_version_id
-        or version.schema_version not in {1, 2, 3, 4}
-        or history.schema_version != 1
+        or version.schema_version not in {1, 2, 3, 4, 5, 6}
+        or history.schema_version != (2 if version.schema_version in {5, 6} else 1)
         or version.definition_sha256 != source.definition_sha256
         or history.observation_history_sha256 != source.expected_source_sha256
     ):
         raise invalid("report_source_changed")
     factors = [BayesianFactorResponse.model_validate(item) for item in parsed(version.factors_json)]
-    objective = BayesianObjectiveResponse.model_validate(parsed(version.objective_json))
+    objective_type = (
+        study_objective_type(version.schema_version)
+        if version.schema_version in {5, 6}
+        else BayesianObjectiveResponse
+    )
+    objective = objective_type.model_validate(parsed(version.objective_json))
+    if (
+        isinstance(objective, BayesianDesirabilityObjective)
+        and source.attachment.kind == "recommendation"
+    ):
+        raise invalid("report_source_kind_mismatch")
     constraints = [
         BayesianLinearConstraintResponse.model_validate(item)
         for item in parsed(version.constraints_json)
@@ -276,7 +297,18 @@ def read_bayesian(
         ):
             raise invalid()
         validated = _verified_trial(trial, version.definition_sha256, factors)
-        finite(validated.objective_value)
+        if isinstance(objective, BayesianDesirabilityObjective):
+            from app.services.bayesian_studies import _trial_observation
+
+            values = _trial_observation(trial)
+            if not isinstance(values, dict) or set(values) != {
+                r.response_id for r in objective.responses
+            }:
+                raise invalid("report_source_changed")
+        else:
+            if trial.response_values_json is not None:
+                raise invalid("report_source_changed")
+            finite(validated.objective_value)
         observations.append(validated)
         observation_records.append(trial)
     if (
@@ -284,7 +316,9 @@ def read_bayesian(
         or [item.trial_number for item in observations]
         != sorted(item.trial_number for item in observations)
         or canonical_bayesian_observation_history_sha256(
-            definition_sha256=version.definition_sha256, completed_trials=observation_records
+            definition_sha256=version.definition_sha256,
+            completed_trials=observation_records,
+            schema_version=history.schema_version,
         )
         != history.observation_history_sha256
     ):
@@ -325,6 +359,10 @@ def read_bayesian(
             factors,
             len(observations),
             str(objective.goal_type or objective.direction),
+            version=version,
+            history=history,
+            objective=objective,
+            constraints=constraints,
         )
     return (
         {
@@ -386,6 +424,11 @@ def _batch_snapshot(
     factors: list[BayesianFactorResponse],
     observation_count: int,
     objective_goal: str,
+    *,
+    version: Any,
+    history: Any,
+    objective: Any,
+    constraints: list[Any],
 ) -> dict[str, Any]:
     ref = source.attachment
     assert ref.kind == "batch"
@@ -406,6 +449,60 @@ def _batch_snapshot(
     config = parsed(record.config_json)
     request: Any
     response: Any
+    if record.result_schema_version in {4, 5, 6, 7, 8, 9}:
+        from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
+        from app.api.v1.schemas.bo_planning_batch import PlanningBatchResponse
+        from app.services.bayesian_desirability_recommendations import validate_desirability_record
+        from app.services.bo_augmentation_batches import validate_augmentation_batch_record
+        from app.services.bo_planning_batches import validate_planning_batch_record
+
+        trials = list_bayesian_trial_records(
+            settings.workspace_root, version.study_version_id, limit=200
+        )
+        for stored_trial in trials:
+            _verified_trial(stored_trial, source.definition_sha256, factors)
+        validator = (
+            validate_augmentation_batch_record
+            if record.result_schema_version == 9
+            else (
+                validate_planning_batch_record
+                if record.result_schema_version == 8
+                else validate_desirability_record
+            )
+        )
+        saved = validator(
+            settings,
+            version=version,
+            factors=factors,
+            objective=objective,
+            constraints=constraints,
+            trials=trials,
+            history=history,
+            record=record,
+        )
+        if (
+            objective_goal != "desirability"
+            or saved.result_sha256 != ref.result_payload_sha256
+            or (
+                (
+                    observation_count
+                    if saved.model is None
+                    else saved.model.observation_view.raw_observation_count
+                )
+                if isinstance(saved, AugmentationBatchResponse)
+                else (
+                    saved.observation_view.raw_observation_count
+                    if isinstance(saved, PlanningBatchResponse)
+                    else saved.calculation.observation_view.raw_observation_count
+                )
+            )
+            != observation_count
+        ):
+            raise invalid("report_source_changed")
+        payload = saved.model_dump(mode="json", exclude={"is_latest", "batch_state"})
+        for item in payload["items"]:
+            item.pop("current_trial", None)
+        return payload
     if record.result_schema_version in {2, 3}:
         from app.api.v1.schemas.bayesian_noise import (
             parse_current_batch_request,

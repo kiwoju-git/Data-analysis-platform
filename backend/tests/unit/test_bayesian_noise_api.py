@@ -319,7 +319,9 @@ def test_new_batch_does_not_rewrite_legacy_snapshot(tmp_path):
         assert '"schema_version":2' not in before[0]
 
 
-@pytest.mark.parametrize("study_version", ["0.6.0", "0.7.0", "0.8.0"])
+@pytest.mark.parametrize(
+    "study_version", ["0.6.0", "0.7.0", "0.8.0", "0.9.0", "0.10.0", "0.11.0", "0.12.0"]
+)
 def test_current_and_legacy_study_use_versioned_recommendations_and_close(
     tmp_path, monkeypatch, study_version
 ):
@@ -328,10 +330,10 @@ def test_current_and_legacy_study_use_versioned_recommendations_and_close(
     from app.analyses import registry
 
     method_id = "doe.bayesian_optimization"
-    assert registry.METHOD_VERSIONS[method_id] == "0.8.0"
+    assert registry.METHOD_VERSIONS[method_id] == "0.12.0"
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         with monkeypatch.context() as legacy:
-            if study_version != "0.8.0":
+            if study_version != "0.12.0":
                 legacy.setitem(registry.METHOD_VERSIONS, method_id, study_version)
                 legacy.setitem(
                     registry.METHOD_BY_ID,

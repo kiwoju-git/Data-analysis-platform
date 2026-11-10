@@ -7,6 +7,7 @@ import { RuntimeCompatibilityGate } from "./RuntimeMismatchPage";
 import {
   evaluateRuntimeCompatibility,
   EXPECTED_API_CONTRACT_VERSION,
+  MINIMUM_METADATA_SCHEMA_VERSION,
 } from "./runtimeCompatibility";
 
 describe("runtime compatibility", () => {
@@ -19,6 +20,9 @@ describe("runtime compatibility", () => {
   });
 
   it("blocks old contracts, missing capabilities, and known commit mismatches", () => {
+    expect(
+      evaluateRuntimeCompatibility(runtimeInfo({ metadata_schema_version: 28 })),
+    ).toMatchObject({ compatible: false, code: "metadata_schema_version_mismatch" });
     expect(
       evaluateRuntimeCompatibility(runtimeInfo({ metadata_schema_version: 22 })),
     ).toMatchObject({ compatible: false, code: "metadata_schema_version_mismatch" });
@@ -38,6 +42,17 @@ describe("runtime compatibility", () => {
       compatible: false,
       code: "runtime_capability_missing",
       missingCapabilities: ["dataset_version_metadata"],
+    });
+    expect(
+      evaluateRuntimeCompatibility(
+        runtimeInfo({
+          capabilities: { ...runtimeInfo().capabilities, bayesian_fit_quality: false },
+        }),
+      ),
+    ).toMatchObject({
+      compatible: false,
+      code: "runtime_capability_missing",
+      missingCapabilities: ["bayesian_fit_quality"],
     });
     expect(
       evaluateRuntimeCompatibility(runtimeInfo({ build_commit: "backend-build" }), "frontend-build"),
@@ -102,7 +117,7 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
     service: "datalab-studio-api",
     app_version: "0.1.0",
     api_contract_version: EXPECTED_API_CONTRACT_VERSION,
-    metadata_schema_version: 25,
+    metadata_schema_version: MINIMUM_METADATA_SCHEMA_VERSION,
     build_commit: "unknown",
     capabilities: {
       asset_management: true,
@@ -123,6 +138,15 @@ function runtimeInfo(overrides: Partial<RuntimeInfoResponse> = {}): RuntimeInfoR
       bayesian_batch_recommendation: true,
       bayesian_recommendation_review: true,
       bayesian_numeric_kernels: true,
+      bayesian_response_vector_lifecycle: true,
+      bayesian_multiresponse_recommendation: true,
+      bayesian_multiresponse_batch: true,
+      bayesian_fit_quality: true,
+      bayesian_target_curve_preview: true,
+      bayesian_versioned_target_curves: true,
+      bayesian_persistent_planning: true,
+      bayesian_augmentation: true,
+      bayesian_mixed_factor_planning: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },

@@ -1,5 +1,5 @@
-$script:ExpectedApiContractVersion = 31
-$script:MinimumMetadataSchemaVersion = 25
+$script:ExpectedApiContractVersion = 39
+$script:MinimumMetadataSchemaVersion = 32
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
@@ -19,6 +19,15 @@ $script:RequiredRuntimeCapabilities = @(
     "bayesian_batch_recommendation",
     "bayesian_recommendation_review",
     "bayesian_numeric_kernels",
+    "bayesian_response_vector_lifecycle",
+    "bayesian_multiresponse_recommendation",
+    "bayesian_multiresponse_batch",
+    "bayesian_fit_quality",
+    "bayesian_target_curve_preview",
+    "bayesian_versioned_target_curves",
+    "bayesian_persistent_planning",
+    "bayesian_augmentation",
+    "bayesian_mixed_factor_planning",
     "bayesian_objective_goal_modes"
 )
 

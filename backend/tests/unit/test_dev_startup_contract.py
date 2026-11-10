@@ -83,11 +83,11 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert f"$script:ExpectedApiContractVersion = {API_CONTRACT_VERSION}" in helper_text
-    assert "$script:MinimumMetadataSchemaVersion = 25" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 32" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
     )
-    assert "MINIMUM_METADATA_SCHEMA_VERSION = 25" in frontend_runtime
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 32" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -96,6 +96,10 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert '"bayesian_lhs_initial_design"' in helper_text
     assert '"bayesian_batch_recommendation"' in helper_text
     assert '"bayesian_numeric_kernels"' in helper_text
+    assert '"bayesian_response_vector_lifecycle"' in helper_text
+    assert '"bayesian_multiresponse_recommendation"' in helper_text
+    assert '"bayesian_multiresponse_batch"' in helper_text
+    assert '"bayesian_fit_quality"' in helper_text
     assert '"bayesian_objective_goal_modes"' in helper_text
     assert "/api/v1/runtime-info" in diagnostics_text
     assert "/api/v1/analysis-methods" in diagnostics_text
@@ -122,7 +126,20 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
 
 @pytest.mark.parametrize(
     "schema,expected",
-    [(21, "False"), (22, "False"), (23, "False"), (24, "False"), (25, "True"), (26, "True")],
+    [
+        (21, "False"),
+        (22, "False"),
+        (23, "False"),
+        (24, "False"),
+        (25, "False"),
+        (26, "False"),
+        (27, "False"),
+        (28, "False"),
+        (29, "False"),
+        (30, "False"),
+        (31, "False"),
+        (32, "True"),
+    ],
 )
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
     assert _runtime_compatibility(API_CONTRACT_VERSION, schema) == expected
@@ -137,15 +154,37 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
     ],
 )
 def test_dev_runtime_helper_requires_exact_api_contract(api_version: int, expected: str) -> None:
-    assert _runtime_compatibility(api_version, 25) == expected
+    assert _runtime_compatibility(api_version, 32) == expected
 
 
-def _runtime_compatibility(api_version: int, schema: int) -> str:
+def test_dev_runtime_helper_requires_multiresponse_recommendation_capability() -> None:
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 32, omit_multiresponse=True) == "False"
+
+
+def test_dev_runtime_helper_requires_fit_quality_capability() -> None:
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 32, omit_fit_quality=True) == "False"
+
+
+def _runtime_compatibility(
+    api_version: int,
+    schema: int,
+    *,
+    omit_multiresponse: bool = False,
+    omit_fit_quality: bool = False,
+) -> str:
     repo_root = Path(__file__).resolve().parents[3]
+    capability_override = (
+        "$capabilities.Remove('bayesian_multiresponse_recommendation'); "
+        if omit_multiresponse
+        else ""
+    )
+    if omit_fit_quality:
+        capability_override += "$capabilities.Remove('bayesian_fit_quality'); "
     command = (
         f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
         "$capabilities = @{}; "
         "foreach ($name in $script:RequiredRuntimeCapabilities) { $capabilities[$name] = $true }; "
+        f"{capability_override}"
         "$runtime = [pscustomobject]@{ service='datalab-studio-api'; "
         f"api_contract_version={api_version}; metadata_schema_version={schema}; "
         "capabilities=[pscustomobject]$capabilities; build_commit='test' }; "

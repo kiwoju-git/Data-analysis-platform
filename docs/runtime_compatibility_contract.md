@@ -1,5 +1,99 @@
 # Runtime Compatibility Contract
 
+## Augmentation and Mixed Planning (API39)
+
+Current frontend and Windows launcher require API39/metadata32, including
+`bayesian_augmentation` and `bayesian_mixed_factor_planning`. Mixed studies use
+definition7/history2; explicit typed-factor planning uses snapshot2, candidate3,
+selection3 and batch10/item5 (method0.15.0). Numeric augmentation batches use
+schema9/item4 (method0.14.0). Existing numeric planning/BO readers remain separate.
+Migration32 extends planning/candidate/selection/batch constraints, retaining old
+JSON bytes and hashes. It does not rewrite user studies, observations or models.
+This is a source development contract; Linux publication is deferred.
+
+Code rollback does not downgrade metadata32. Older code requires a verified
+pre-migration offline backup restored into a different, empty destination.
+Do not delete current workspaces or regenerate old recommendations for rollback.
+
+## Persistent Planning (API38, Historical)
+
+That gate's frontend/Windows launch required API38/metadata31 and the
+`bayesian_persistent_planning` capability. Source-locked fitted snapshots,
+candidate revisions and manual ordered selections use explicit bounded JSON
+records. Schema8 manual batches use BO method0.13.0 and retain the original
+source/model/candidate identities. Migration31 adds planning ownership tables
+and extends the batch CHECK without rewriting older JSON or checksums.
+Earlier code cannot open metadata31. Code revert is not a database downgrade;
+use a separately verified pre-migration offline backup to run older code.
+
+## Stored Target Curves (API37)
+
+The preceding frontend/Windows launch required API37/metadata30 and
+`bayesian_versioned_target_curves=true`, in addition to the retained capabilities.
+Explicit Gaussian-target study6 uses history2 and request/config/result7,
+review5, shared model7 and item4 (BO method0.12.0). Legacy DS study5 retains
+request4/5/6; changing a preview never rewrites a stored study or recommendation.
+Migration30 extends only the existing batch version CHECK and preserves JSON,
+hashes and owner relationships. Older code cannot open metadata30; use a verified
+offline backup restored to a separate empty destination, not a code-only rollback.
+See [current gate and evidence](bo_target_curve_recommendation_gate.md).
+
+## Target Curve Preview and Opt-In BO Fit Quality (API36, Historical)
+
+That gate's frontend/Windows launch required API36/metadata29 and
+`bayesian_fit_quality=true`. API 36 additionally requires
+`bayesian_target_curve_preview=true` for the non-persistent target curve comparison;
+see `bo_target_curve_preview_gate.md`. Metadata stays 29. Existing stored BO policy
+and result schemas are unchanged by this preview. The optional multiscale initialization policy uses
+request/config/result6, review4, aggregate model6, per-response model5 and
+method0.11.0; batch item4 and study/history contracts are unchanged. Legacy
+initialization remains the UI default and retains its prior calculation policy.
+Migration29 extends only the batch version CHECK; old JSON/hash bytes remain
+unchanged. Backup accepts metadata29, but older code cannot open it. Use a
+verified pre-upgrade offline backup restored to a new empty destination for an
+older binary. See [fit-quality contract and executed evidence](bo_fit_quality_gate.md).
+The sections below describe historical transitions, not current requirements.
+
+## Ordered Multiresponse Batches (API34)
+
+Stage3h frontend/Windows launch required API34/metadata28 and
+`bayesian_multiresponse_batch=true`. Existing q1 request/result4 remains intact.
+New ordered batches use request/config/result5, review3, method0.10.0,
+shared model5 and item4. Study5/history2 and scalar contracts are unchanged.
+Migration28 extends existing CHECK constraints for the new exact tuple without
+rewriting prior JSON/hash bytes. Current-trial states are read-only overlays,
+not updates to immutable recommendation payloads. Older code cannot open28;
+use a verified pre-upgrade offline backup restored to a new empty destination.
+See [Stage3h contracts and current execution evidence](bo_desirability_public_batch.md).
+The following sections retain their historical boundaries.
+
+## Desirability Review And Confirmation (API33)
+
+Stage3e frontend/Windows launch required API33/metadata27. The capability
+`bayesian_multiresponse_recommendation=true` exposes only source-locked q1
+review/confirmation and saved result reads. `bayesian_multiresponse_batch=false`
+explicitly excludes q>1. Scalar recommendations retain their existing schemas.
+New vector recommendations use method0.9.0/config4/result4/model5/item3;
+study5/history2 are unchanged. Migration27 extends existing batch/item CHECK
+constraints and copies all prior JSON/hash bytes unchanged. Backup accepts
+schemas20..27 without migrating on restore. Older code cannot open27; use a
+verified pre-upgrade offline backup restored to a new empty destination.
+See [Stage3e contracts and execution evidence](bo_desirability_review.md).
+The sections below describe historical transitions, not current requirements.
+
+## Measured Response Vectors (API32)
+
+Stage3c frontend/Windows launch required API32/metadata26 and
+`bayesian_response_vector_lifecycle`. The separate capability
+`bayesian_multiresponse_recommendation` was false: read-only UI/API history support
+does not enable a recommendation workflow. Scalar study4/history1 hashes remain
+unchanged; vector study5/history2 explicitly stores complete actual response maps.
+Migration26 adds nullable `bayesian_trials.response_values_json`, preserving all
+old columns/files. Backup accepts schemas20..26 and never migrates on restore.
+Old code cannot open26; keep a pre-upgrade offline backup. BO method0.8.0 and
+existing model formats are unchanged. See [Stage3c](bo_multiresponse_lifecycle.md).
+Older sections below describe their historical versions, not current requirements.
+
 ## Numeric BO Kernels (API31)
 
 API31 requires `bayesian_numeric_kernels`. Current frontend/Windows launch require

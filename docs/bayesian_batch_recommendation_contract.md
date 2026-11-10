@@ -1,10 +1,11 @@
 # Bayesian Batch Recommendation Contract
 
-Last updated: 2026-11-07
+Last updated: 2026-11-09
 
-## Current V2 Policy
+## Current Scalar V2 Policy
 
-The API31 UI first generates a temporary candidate review. Only the explicit
+The scalar UI review workflow introduced through API30/31 first generates a
+temporary candidate review. Only the explicit
 confirmation command registers its entire ordered batch as pending experiments.
 The existing direct-create API remains supported. Review/confirmation does not
 change V2 mathematics or any saved schema; see
@@ -26,6 +27,18 @@ defaults to0 and is separate from duplicate tolerance. Infeasible or over-budget
 batches are rejected atomically; no partial pending trials are committed.
 New result predictions use the real-data base posterior; planning conditional
 uncertainty is separately labeled. Exact qNEI/JMP numerical equivalence is not claimed.
+
+API33 also stores multiresponse q1 recommendations in the same atomic batch/item
+tables under a distinct result4/model5/item3/policy tuple. They use the separate
+[desirability review contract](bo_desirability_review.md), not this scalar MC
+policy. Generic batch GET/list/latest responses include both versioned families;
+the scalar creation API and scalar UI reject a vector result instead of casting
+it to a scalar shape. API34 extends this union with method0.10.0,
+config5/result5/model5/item4 ordered multiresponse batches. The distinct
+conditional MC/Beta calculation, whole-batch confirmation, immutable source
+cutoff, partial current-trial overlay and exact report are specified in
+[Stage3h](bo_desirability_public_batch.md). It does not replace this scalar policy
+or reinterpret existing q1 result4 artifacts.
 
 The following sections specify the retained **legacy V1** mean-fantasy policy.
 They are not the current UI defaults, and no old artifact is recalculated.

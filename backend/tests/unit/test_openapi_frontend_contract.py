@@ -927,6 +927,68 @@ FRONTEND_ROUTE_CONTRACTS = [
                 "BayesianRecommendationBatchResponse",
                 "BayesianNoiseBatchResponse",
                 "BayesianKernelBatchResponse",
+                "DesirabilityBatchResponse",
+                "DesirabilityOrderedBatchResponse",
+                "DesirabilityFitBatchResponse",
+                "DesirabilityCurveBatchResponse",
+            }
+        ),
+        parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianDesirabilityReviews",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/desirability-reviews",
+        success_status="200",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {
+                "DesirabilityReviewResponse",
+                "DesirabilityOrderedReviewResponse",
+                "DesirabilityFitReviewResponse",
+                "DesirabilityCurveReviewResponse",
+            }
+        ),
+        parameters=frozenset({("study_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianDesirabilityReviewConfirm",
+        method="post",
+        path="/api/v1/bayesian-studies/{study_id}/desirability-reviews/{review_id}/confirm",
+        success_status="201",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {
+                "DesirabilityBatchResponse",
+                "DesirabilityOrderedBatchResponse",
+                "DesirabilityFitBatchResponse",
+                "DesirabilityCurveBatchResponse",
+            }
+        ),
+        parameters=frozenset({("study_id", "path"), ("review_id", "path")}),
+        request_media_types=frozenset({"application/json"}),
+    ),
+    OperationContract(
+        route_name="bayesianLatestDesirabilityRecommendation",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/desirability-recommendations/latest",
+        success_status="200",
+        response_schema="DesirabilityAnyLatestResponse",
+        parameters=frozenset({("study_id", "path")}),
+    ),
+    OperationContract(
+        route_name="bayesianDesirabilityRecommendation",
+        method="get",
+        path="/api/v1/bayesian-studies/{study_id}/desirability-recommendations/{batch_id}",
+        success_status="200",
+        response_schema=None,
+        response_any_of_refs=frozenset(
+            {
+                "DesirabilityBatchResponse",
+                "DesirabilityOrderedBatchResponse",
+                "DesirabilityFitBatchResponse",
+                "DesirabilityCurveBatchResponse",
             }
         ),
         parameters=frozenset({("study_id", "path"), ("batch_id", "path")}),
@@ -1533,7 +1595,18 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
         required_fields=frozenset(
             {"factors", "objective", "initial_design_seed", "initial_design_size"}
         ),
-        property_refs=(("objective", "BayesianObjectiveRequest"),),
+        property_any_of_refs=(
+            (
+                "objective",
+                frozenset(
+                    {
+                        "BayesianObjectiveRequest",
+                        "BayesianDesirabilityObjective",
+                        "BayesianVersionedCurveObjective",
+                    }
+                ),
+            ),
+        ),
         array_item_refs=(
             ("factors", "BayesianFactorRequest"),
             ("constraints", "BayesianLinearConstraintRequest"),
@@ -1594,11 +1667,20 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             }
         ),
         property_refs=(
-            ("objective", "BayesianObjectiveResponse"),
             ("initial_design", "BayesianInitialDesignResponse"),
             ("observation_history", "BayesianHistoryRevisionResponse"),
         ),
         property_any_of_refs=(
+            (
+                "objective",
+                frozenset(
+                    {
+                        "BayesianObjectiveResponse",
+                        "BayesianDesirabilityObjective",
+                        "BayesianVersionedCurveObjective",
+                    }
+                ),
+            ),
             ("lifecycle_event", frozenset({"BayesianStudyLifecycleEventResponse"})),
         ),
         array_item_refs=(
@@ -1606,7 +1688,17 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
             ("constraints", "BayesianLinearConstraintResponse"),
         ),
         array_item_any_of_refs=(
-            ("trials", frozenset({"BayesianTrialResponse", "BayesianReplicateTrialResponse"})),
+            (
+                "trials",
+                frozenset(
+                    {
+                        "BayesianTrialResponse",
+                        "BayesianReplicateTrialResponse",
+                        "BayesianVectorTrialResponse",
+                        "BayesianVectorReplicateTrialResponse",
+                    }
+                ),
+            ),
         ),
         property_consts=(("method_id", "doe.bayesian_optimization"),),
     ),
@@ -1857,7 +1949,7 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "created_at",
             }
         ),
-        property_consts=(("schema_version", 1),),
+        property_enums=(("schema_version", frozenset({1, 2})),),
     ),
     SchemaComponentContract(
         name="BayesianObservationCreateRequest",
@@ -2002,6 +2094,12 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "bayesian_recommendation_review",
                 "bayesian_numeric_kernels",
                 "bayesian_objective_goal_modes",
+                "bayesian_response_vector_lifecycle",
+                "bayesian_multiresponse_recommendation",
+                "bayesian_multiresponse_batch",
+                "bayesian_fit_quality",
+                "bayesian_target_curve_preview",
+                "bayesian_versioned_target_curves",
             }
         ),
         required_fields=frozenset(
@@ -2026,6 +2124,12 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "bayesian_recommendation_review",
                 "bayesian_numeric_kernels",
                 "bayesian_objective_goal_modes",
+                "bayesian_response_vector_lifecycle",
+                "bayesian_multiresponse_recommendation",
+                "bayesian_multiresponse_batch",
+                "bayesian_fit_quality",
+                "bayesian_target_curve_preview",
+                "bayesian_versioned_target_curves",
             }
         ),
     ),
@@ -3584,6 +3688,78 @@ def test_dataset_schema_update_requires_lowercase_source_hash(
     assert schema["additionalProperties"] is False
 
 
+def test_fit_quality_contract_is_explicit_and_preserves_legacy_shapes(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schemas = openapi_schema["components"]["schemas"]
+    request = schemas["DesirabilityFitReviewRequest"]
+    assert request["additionalProperties"] is False
+    assert "fit_policy" in request["required"]
+    assert request["properties"]["schema_version"]["const"] == 6
+    assert _schema_ref_name(request["properties"]["fit_policy"]) == "BayesianFitPolicy"
+    policy = schemas["BayesianFitPolicy"]
+    assert policy["additionalProperties"] is False
+    assert set(policy["required"]) == {"kind", "deterministic_start_count"}
+    assert policy["properties"]["kind"]["const"] == "bounded_multiscale_starts_v1"
+    assert policy["properties"]["deterministic_start_count"]["minimum"] == 1
+    assert policy["properties"]["deterministic_start_count"]["maximum"] == 3
+    for name, version in (
+        ("DesirabilityReviewRequest", 4),
+        ("DesirabilityOrderedReviewRequest", 5),
+    ):
+        assert schemas[name]["properties"]["schema_version"]["const"] == version
+        assert "fit_policy" not in schemas[name]["properties"]
+    response = schemas["DesirabilityFitBatchResponse"]["properties"]
+    for field_name, value in (
+        ("method_version", "0.11.0"),
+        ("config_schema_version", 6),
+        ("result_schema_version", 6),
+        ("model_schema_version", 6),
+        ("item_schema_version", 4),
+    ):
+        assert response[field_name]["const"] == value
+    assert _schema_ref_name(response["calculation"]) == "DesirabilityFitCalculationResult"
+    assert schemas["DesirabilityFitReviewResponse"]["properties"]["schema_version"]["const"] == 4
+    fitted = schemas["DesirabilityFittedRawModel"]
+    assert fitted["properties"]["schema_version"]["const"] == 5
+    assert "fit_diagnostics" in fitted["required"]
+    assert schemas["DesirabilityRawResponseModel"]["properties"]["schema_version"]["const"] == 4
+    assert "fit_diagnostics" not in schemas["DesirabilityRawResponseModel"]["properties"]
+
+
+def test_target_curve_contract_is_explicit_and_legacy_objectives_are_unchanged(
+    openapi_schema: dict[str, Any],
+) -> None:
+    schemas = openapi_schema["components"]["schemas"]
+    controls = schemas["GaussianTargetControls"]
+    assert controls["additionalProperties"] is False
+    assert set(controls["required"]) == {"policy", "lower_desirability", "upper_desirability"}
+    for key in ("lower_desirability", "upper_desirability"):
+        assert controls["properties"][key]["exclusiveMinimum"] == 0
+        assert controls["properties"][key]["exclusiveMaximum"] == 1
+    assert "curve" not in schemas["DesirabilityResponseGoal"]["properties"]
+    assert (
+        schemas["BayesianDesirabilityObjective"]["properties"]["curve_policy"]["const"]
+        == "derringer_suich_linear_v1"
+    )
+    new = schemas["BayesianVersionedCurveObjective"]
+    assert new["properties"]["curve_policy"]["const"] == "per_response_target_gaussian_or_ds_v1"
+    request = schemas["DesirabilityCurveReviewRequest"]
+    assert request["properties"]["schema_version"]["const"] == 7
+    assert "fit_policy" in request["required"]
+    assert "objective" not in request["properties"]
+    assert schemas["DesirabilityCurveReviewResponse"]["properties"]["schema_version"]["const"] == 5
+    response = schemas["DesirabilityCurveBatchResponse"]["properties"]
+    for name, value in (
+        ("method_version", "0.12.0"),
+        ("config_schema_version", 7),
+        ("result_schema_version", 7),
+        ("model_schema_version", 7),
+        ("item_schema_version", 4),
+    ):
+        assert response[name]["const"] == value
+
+
 def test_bayesian_versioned_response_and_replicate_contracts(
     openapi_schema: dict[str, Any],
 ) -> None:
@@ -3593,9 +3769,20 @@ def test_bayesian_versioned_response_and_replicate_contracts(
             "BayesianRecommendationBatchResponse",
             "BayesianNoiseBatchResponse",
             "BayesianKernelBatchResponse",
+            "DesirabilityBatchResponse",
+            "DesirabilityOrderedBatchResponse",
+            "DesirabilityFitBatchResponse",
+            "DesirabilityCurveBatchResponse",
         }
     )
-    trials = frozenset({"BayesianTrialResponse", "BayesianReplicateTrialResponse"})
+    trials = frozenset(
+        {
+            "BayesianTrialResponse",
+            "BayesianReplicateTrialResponse",
+            "BayesianVectorTrialResponse",
+            "BayesianVectorReplicateTrialResponse",
+        }
+    )
     assert (
         _schema_any_of_ref_names(
             schemas["BayesianAnyBatchListResponse"]["properties"]["items"]["items"]
@@ -3605,7 +3792,7 @@ def test_bayesian_versioned_response_and_replicate_contracts(
     latest = schemas["BayesianAnyLatestBatchResponse"]["properties"]["item"]
     assert _schema_any_of_ref_names(latest) == batches
     assert {"type": "null"} in latest["anyOf"]
-    assert len(latest["anyOf"]) == 4
+    assert len(latest["anyOf"]) == len(batches) + 1
     assert (
         _schema_any_of_ref_names(
             schemas["BayesianTrialListResponse"]["properties"]["items"]["items"]
@@ -3649,6 +3836,18 @@ def test_bayesian_versioned_response_and_replicate_contracts(
         "exponential",
     }
     assert "replicate_of_trial_id" not in schemas["BayesianTrialResponse"]["properties"]
+    assert "response_values" not in schemas["BayesianTrialResponse"]["properties"]
+    for name in ("BayesianVectorTrialResponse", "BayesianVectorReplicateTrialResponse"):
+        assert "response_values" in schemas[name]["required"]
+        assert schemas[name]["properties"]["objective_value"]["type"] == "null"
+        values = schemas[name]["properties"]["response_values"]
+        assert values["minProperties"] == 1 and values["maxProperties"] == 4
+        assert values["patternProperties"] == {r"^[A-Za-z][A-Za-z0-9_]{0,63}$": {"type": "number"}}
+    objective = schemas["BayesianDesirabilityObjective"]
+    assert objective["additionalProperties"] is False
+    assert objective["properties"]["goal_type"]["const"] == "desirability"
+    assert objective["properties"]["curve_policy"]["const"] == "derringer_suich_linear_v1"
+    assert objective["properties"]["responses"]["maxItems"] == 4
     replicate = schemas["BayesianReplicateTrialResponse"]
     assert replicate["properties"]["origin"]["const"] == "replicate"
     assert "replicate_of_trial_id" in replicate["required"]

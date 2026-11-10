@@ -7,6 +7,10 @@ import {
   DoeFormSection,
 } from "../../doe/DoeFormPrimitives";
 import { DoeSettingsTable } from "../../doe/DoeSettingsTable";
+import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { boText } from "./boNoisePolicy";
+import "./bayesianVectorEntry.css";
 
 type DraftState = ReturnType<typeof useBayesianStudyDraftState>;
 
@@ -23,8 +27,10 @@ export function BayesianStudyBuilder({
   onCreate: () => void;
   onCancel: () => void;
 }) {
+  const { locale } = useI18n();
   return (
     <section aria-labelledby="bayesian-study-builder-title">
+      <fieldset className="bo-vector-form" disabled={isCreating}>
       <div className="panel-heading">
         <div>
           <h4 id="bayesian-study-builder-title">
@@ -42,6 +48,14 @@ export function BayesianStudyBuilder({
       <DoeSettingsTable
         ariaLabel="Bayesian 스터디 기본 설정"
         fields={[
+          {
+            key: "response-mode", label: boText(locale, "반응 구성", "Response mode"), controlId: "bayesian-response-mode",
+            control: <select id="bayesian-response-mode" value={draft.responseMode} disabled={draft.predecessorStudyId !== null}
+              onChange={event => draft.setResponseMode(event.currentTarget.value as "scalar" | "vector")}>
+              <option value="scalar">{boText(locale, "단일 반응 BO", "Single-response BO")}</option>
+              <option value="vector">{boText(locale, "다중 반응 desirability", "Multiresponse desirability")}</option>
+            </select>,
+          },
           {
             key: "name",
             label: "스터디 이름",
@@ -66,7 +80,7 @@ export function BayesianStudyBuilder({
               />
             ),
           },
-          {
+          ...(draft.responseMode === "scalar" ? [{
             key: "unit",
             label: "반응 단위",
             controlId: "bayesian-objective-unit",
@@ -100,10 +114,11 @@ export function BayesianStudyBuilder({
                 <option value="match_target">목표값 맞추기</option>
               </select>
             ),
-          },
+          }] : []),
         ]}
       />
-      {draft.goalType === "match_target" ? (
+      {draft.responseMode === "vector" ? <BayesianResponseGoals draft={draft} /> : null}
+      {draft.responseMode === "scalar" && draft.goalType === "match_target" ? (
         <DoeSettingsTable
           ariaLabel="Bayesian 목표값 설정"
           fields={[
@@ -264,6 +279,7 @@ export function BayesianStudyBuilder({
           {draft.predecessorStudyId === null ? "새 스터디 만들기 닫기" : "후속 스터디 생성 취소"}
         </button>
       </DoeActionBar>
+      </fieldset>
     </section>
   );
 }

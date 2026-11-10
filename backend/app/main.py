@@ -10,6 +10,8 @@ from app.api.v1.analysis_methods import router as analysis_methods_router
 from app.api.v1.analysis_runs import router as analysis_runs_router
 from app.api.v1.assets import router as assets_router
 from app.api.v1.bayesian_studies import router as bayesian_studies_router
+from app.api.v1.bo_mixed_workflow import router as bo_mixed_workflow_router
+from app.api.v1.bo_planning import router as bo_planning_router
 from app.api.v1.datasets import router as datasets_router
 from app.api.v1.datasets import version_router as dataset_versions_router
 from app.api.v1.doe_designs import router as doe_designs_router
@@ -115,6 +117,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(reports_router, prefix="/api/v1")
     app.include_router(assets_router, prefix="/api/v1")
     app.include_router(bayesian_studies_router, prefix="/api/v1")
+    app.include_router(bo_planning_router, prefix="/api/v1")
+    app.include_router(bo_mixed_workflow_router, prefix="/api/v1")
     app.include_router(datasets_router, prefix="/api/v1")
     app.include_router(dataset_versions_router, prefix="/api/v1")
     app.include_router(doe_designs_router, prefix="/api/v1")

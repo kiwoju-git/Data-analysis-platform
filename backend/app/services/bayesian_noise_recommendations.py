@@ -70,9 +70,10 @@ def _sha(value: Any) -> str:
 def create_noise_single(
     settings: Settings, study_id: UUID, body: BayesianCurrentSingleRequest
 ) -> BayesianCurrentBatchResponse:
-    from app.services.bayesian_studies import get_bayesian_study
+    from app.services.bayesian_studies import get_bayesian_study, require_scalar_bayesian_objective
 
     study = get_bayesian_study(settings, study_id)
+    require_scalar_bayesian_objective(study.objective)
     search = body.search.model_dump(mode="json")
     xi = search.pop("xi")
     for old, new in (
@@ -156,9 +157,10 @@ def create_noise_batch(
 def validated_noise_source(
     settings: Settings, study_id: UUID, body: BayesianCurrentBatchRequest
 ) -> tuple[Any, dict[str, Any]]:
-    from app.services.bayesian_studies import get_bayesian_study
+    from app.services.bayesian_studies import get_bayesian_study, require_scalar_bayesian_objective
 
     study = get_bayesian_study(settings, study_id)
+    require_scalar_bayesian_objective(study.objective)
     history = study.observation_history
     if study.status != "active":
         raise _error("bayesian_study_closed")

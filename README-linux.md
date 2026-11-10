@@ -1,5 +1,11 @@
 # Statistical Twin Linux Prerelease
 
+This page documents the earlier2026.10.8 archive. It is **not** a Linux release of
+the current BO API39/metadata32 source changes. The owner has deferred the next
+Linux build/publication. Do not reuse an older installation with a workspace
+upgraded by the new source: code rollback is not a metadata downgrade. Keep a
+verified pre-upgrade offline backup and restore into a separate empty directory.
+
 Full application, not a presentation-only build. Validated target: Ubuntu 24.04,
 x86_64, CPython 3.12, CPU only. This archive does **not** bundle Python.
 Python 3.12 with venv/pip must already be installed. Node.js, Git, sudo and an
@@ -8,7 +14,7 @@ Internet connection are not required for archive installation or runtime.
 ## Install and Run
 
 Use a new empty download directory, not the previous installation directory.
-The next release candidate is
+The earlier release reference is
 [2026.10.8 Gage part-ID](https://github.com/kiwoju-git/Data-analysis-platform/releases/tag/linux-gage-part-id-2026.10.8).
 Publication is complete only when that page contains the exact-source successful
 gate report and matching archive/checksum assets. An absent page is not a release.
