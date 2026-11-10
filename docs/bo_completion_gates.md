@@ -252,6 +252,24 @@ explicit synthetic API setup/mutation calls receive the header. A separate AST
 regression covers these manual mutation calls. Full development-proxy and final
 native/browser/archive reruns remain required after this correction.
 
+### BO Catalog Readiness
+
+The first local development-proxy rerun on sourcea76681a passed the Origin
+boundary, then failed the q1 review button's five-second enabled assertion.
+Its actual child-page trace recorded two catalog requests taking3,545ms and
+5,992ms; the captured failure DOM subsequently showed the button enabled and
+no page errors. This is recorded as a test readiness failure, not an inferred
+application crash or evidence that every latency cause has been resolved.
+
+The new BO-only readiness wrapper checks existing shell/runtime/locale/route
+readiness, then the visible catalog, absence of its loading status, and absence
+of its error alert. It retains the existing15-second per-assertion readiness
+timeout, not a shared total deadline, and does not raise button timeouts or
+change application request guards. Other route and race-test helpers are
+unchanged. Ten focused readiness/Origin tests passed locally. Independent
+source review found the existing late-response, lost-response, restore and
+locale/resize assertions preserved. The complete browser rerun remains required.
+
 The owner explicitly requested all of these remaining gates, not only a release
 of the current target-curve checkpoint. Do not mark this plan complete while
 candidate/profiler/augmentation/category work is still missing.

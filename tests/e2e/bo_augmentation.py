@@ -8,7 +8,11 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from app_readiness import diagnosed_page, wait_for_app_ready, wait_for_layout_settled
+from app_readiness import (
+    diagnosed_page,
+    wait_for_bayesian_ready,
+    wait_for_layout_settled,
+)
 from playwright.sync_api import Browser, expect, sync_playwright
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
@@ -89,7 +93,7 @@ def verify_augmentation(browser: Browser, base: str, output: Path) -> dict:
             base + ROUTE + "?study_id=" + study["study_id"],
             wait_until="domcontentloaded",
         )
-        wait_for_app_ready(page, "en", ROUTE)
+        wait_for_bayesian_ready(page, "en", ROUTE)
         panel = page.get_by_role("region", name="Experimental augmentation", exact=True)
         panel.get_by_label("Candidate table name", exact=True).fill(
             "Synthetic independent table"
@@ -140,7 +144,7 @@ def verify_augmentation(browser: Browser, base: str, output: Path) -> dict:
             + batch["batch_id"]
         )
         page.reload(wait_until="domcontentloaded")
-        wait_for_app_ready(page, "en", ROUTE)
+        wait_for_bayesian_ready(page, "en", ROUTE)
         count = len(writes)
         for locale, button, title in (
             ("ko", "KOR", "저장된 실험 보강 배치"),

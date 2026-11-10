@@ -290,6 +290,17 @@ def wait_for_app_ready(
             assert query in actual.query.split("&"), (expected_route, page.url)
 
 
+def wait_for_bayesian_ready(
+    page: Page, expected_locale: str, expected_route: str, *, timeout_ms: int = 15_000
+) -> None:
+    """The BO route's source catalog must finish before mutation controls are usable."""
+    wait_for_app_ready(page, expected_locale, expected_route, timeout_ms=timeout_ms)
+    catalog = page.locator('section[aria-labelledby="bayesian-study-catalog-title"]')
+    expect(catalog).to_be_visible(timeout=timeout_ms)
+    expect(catalog.get_by_role("status")).to_have_count(0, timeout=timeout_ms)
+    expect(catalog.get_by_role("alert")).to_have_count(0, timeout=timeout_ms)
+
+
 def wait_for_layout_settled(page: Page) -> None:
     """Wait for applied viewport styles and the real drawer transition, not a timer."""
     page.evaluate("""async () => {
