@@ -270,6 +270,43 @@ unchanged. Ten focused readiness/Origin tests passed locally. Independent
 source review found the existing late-response, lost-response, restore and
 locale/resize assertions preserved. The complete browser rerun remains required.
 
+### Final-Source Local And Native Checkpoint
+
+Source68c9247 completed the full development-proxy BO journey after the readiness
+correction. The production UI was then rebuilt and a fresh API process started
+against the isolated synthetic workspace; runtime-info reported that exact
+source commit, API39 and metadata32. Its complete built-UI BO journey passed,
+including q1/q2, stored target curves, candidate pagination/manual order/undo,
+Profiler, augmentation, mixed-factor creation and actual response entry,
+KO/EN1024/1440, exact restore and checksum-verified offline reports. Persistent
+and mixed Profiler journeys each fit once; separate augmentation did not fit.
+All recorded pageerror lists were empty. A batch saved before the API restart
+also reopened with the same result checksum and zero API writes.
+
+The full local Windows `context` suite passed with a fresh synthetic workspace.
+Its first startup attempt failed before application checks because Windows
+rejected frontend port5199 with `EACCES`. The original logs were retained.
+No firewall or guard was changed; the successful run used explicitly verified
+available loopback ports8678/8679. The suite included the existing analysis,
+Report Center, RSM and replicate contexts, the complete BO workflow, API
+translation/data preservation, chart formatting, feedback privacy, English
+system text and result-layout/browser-zoom checks. Owned test processes exited.
+
+PR6 run42758704635 on head68c9247 passed Python3.11 with4,305 tests/26 skipped
+in707.42s. Linux3.12 passed4,305 backend tests/26 skipped in761.16s and1,357
+frontend tests across153 files in23.72s, plus source lifecycle and browser E2E.
+Both native GP resource jobs and dependency-security passed. Windows full
+checks, its browser partitions and final archive/release-ready status were still
+pending at this documentation checkpoint; consult the final PR checks rather
+than treating this partial ledger as their completion. GitHub PR jobs check out
+a merge ref: this run's source evidence identifies301c3df1f7e55a422e9d4dd9a974f3e2da0b92ec,
+not the PR head. Archive identity must use its actual recorded source commit.
+
+The follow-up documentation correction only clarifies historical versus current
+support in `jmp_gp_bo_alignment.md`; it does not change executable source,
+dependencies, tolerances or schemas. Its resulting commit still runs the normal
+required CI gates. Main integration is not claimed before those gates pass.
+
 The owner explicitly requested all of these remaining gates, not only a release
 of the current target-curve checkpoint. Do not mark this plan complete while
 candidate/profiler/augmentation/category work is still missing.

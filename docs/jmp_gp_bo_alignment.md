@@ -1,5 +1,13 @@
 # JMP GP And BO Alignment
 
+Current integration: API39 / metadata32 / BO method0.15.0. Persistent candidate
+tables, ordered manual selection, saved-model Profiler, separate product-specific
+augmentation policies and typed nominal/ordinal workflows are integrated; see
+[current scope and validation](bo_completion_gates.md). Earlier unsupported
+statements below describe dated checkpoints, not current availability. JMP
+numerical parity is not claimed. Final CI/main status is tracked through that
+ledger and PR6; Linux Release publication remains deferred.
+
 Research date: 2026-10-21. Baseline source:
 `3284a359c31ccfb738ddf16078440f674d52f42f` (API contract 25).
 
@@ -49,7 +57,7 @@ and verified; the existing q1 workflow is retained.
 
 ## 1. Versions And Evidence
 
-Current local target-curve gate (2026-11-10):
+Earlier local target-curve gate (2026-11-10):
 [stored Gaussian target preferences](bo_target_curve_recommendation_gate.md)
 connect explicit asymmetric side ordinates and peak1 to study6 and q1..8
 recommendations. Maximize/minimize retain DS-linear; response independence,
