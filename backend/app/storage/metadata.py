@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
+from app.storage.bo_auto_evidence_schema import BO_AUTO_EVIDENCE_MIGRATION_SQL
 from app.storage.bo_planning_schema import BO_PLANNING_MIGRATION_SQL
 from app.storage.bo_planning_v2_schema import BO_PLANNING_V2_MIGRATION_SQL
 
-SCHEMA_VERSION: Final = 32
+SCHEMA_VERSION: Final = 33
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -2094,6 +2095,12 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         name="bayesian_source_owned_augmentation",
         requires_foreign_keys_off=True,
         sql=BO_PLANNING_V2_MIGRATION_SQL,
+    ),
+    Migration(
+        version=33,
+        name="bayesian_numeric_auto_evidence",
+        requires_foreign_keys_off=True,
+        sql=BO_AUTO_EVIDENCE_MIGRATION_SQL,
     ),
 )
 

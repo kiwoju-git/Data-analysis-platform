@@ -658,11 +658,13 @@ def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> Rep
             "SELECT result_schema_version FROM bayesian_recommendation_batches WHERE batch_id=?",
             (extra,),
         ).fetchone()
-        if batch is not None and batch["result_schema_version"] in {8, 9, 10}:
+        if batch is not None and batch["result_schema_version"] in {8, 9, 10, 11, 12}:
             query_key = {
                 8: "planning_batch_id",
                 9: "augmentation_batch_id",
                 10: "mixed_planning_batch_id",
+                11: "augmentation_batch_id",
+                12: "mixed_planning_batch_id",
             }[batch["result_schema_version"]]
             descriptor = descriptor.model_copy(
                 update={

@@ -4,6 +4,7 @@ from html import escape
 from typing import Any
 
 from app.i18n.report_text import ReportLocale, report_text
+from app.services.bo_auto_evidence_report import auto_evidence_markup
 from app.services.report_contract import ReportSection
 from app.services.stored_report_primitives import report_table
 
@@ -15,6 +16,7 @@ def augmentation_report_section(
         return report_text(locale, en=en, ko=ko)
 
     selection = attachment["calculation"]
+    evidence = selection.get("auto_evidence")
     trace, source = selection["augmentation"], attachment["source"]
     goals = {row["response_id"]: row for row in attachment["objective"]["responses"]}
     markup = report_table(
@@ -32,6 +34,8 @@ def augmentation_report_section(
             [text("Evaluation budget", "평가 예산"), trace["max_evaluations"]],
         ],
     )
+    if evidence is not None:
+        markup += auto_evidence_markup(evidence, goals, locale)
     uncertainty = trace.get("response_uncertainty")
     if uncertainty:
         markup += report_table(

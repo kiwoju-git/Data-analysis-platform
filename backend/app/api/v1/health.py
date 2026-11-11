@@ -48,6 +48,8 @@ class RuntimeCapabilities(BaseModel):
     bayesian_persistent_planning: bool
     bayesian_augmentation: bool
     bayesian_mixed_factor_planning: bool
+    bayesian_auto_strategy_advice: bool
+    bayesian_auto_selection_evidence: bool
     bayesian_objective_goal_modes: bool
 
 

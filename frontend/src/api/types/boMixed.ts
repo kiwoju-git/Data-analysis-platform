@@ -3,7 +3,7 @@ import type { BayesianDesirabilityObjective, BayesianFactorRequest, BayesianFact
 import type { PlanningFitOptions } from "./boPlanning";
 import type { DesirabilityPlanning, DesirabilityQ1Calculation } from "./bayesianDesirability";
 import type { CandidateRevisionSummaryV2, CandidateRow } from "./boPlanning";
-import type { AugmentationPolicy, AugmentationTrace } from "./boAugmentation";
+import type { AugmentationPolicy, AugmentationTrace, AutoEvidenceRequest, AutoStrategyEvidence } from "./boAugmentation";
 
 export type MixedCorrelationPolicy = "equal_positive_correlation_v1" | "unequal_hyperspherical_correlation_v1" | "ordinal_monotone_latent_rbf_v1";
 export interface MixedCategoricalFactorRequest {
@@ -95,12 +95,15 @@ export interface MixedCandidateCreateRequest extends MixedSourceRequest {
 }
 export interface MixedCandidateSummary extends Omit<CandidateRevisionSummaryV2, "schema_version"> { schema_version: 3; ordinal_rank_distance: boolean }
 export interface MixedCandidatePage { revision: MixedCandidateSummary; offset: number; limit: number; items: MixedCandidateRow[] }
-export interface MixedSelectionRequest extends MixedSourceRequest {
+interface LegacyMixedSelectionRequest extends MixedSourceRequest {
   schema_version: 3; request_id: string; kind: "manual_ordered" | "augmentation"; candidate_revision_id: string; expected_rows_sha256: string;
   model_id: string | null; expected_model_sha256: string | null; row_ids: string[]; policy: AugmentationPolicy | null;
   batch_size: number; total_trial_budget: number; duplicate_tolerance: number; ordinal_rank_distance: boolean; min_batch_distance: number;
   sample_count: number; max_evaluations: number; max_moment_evaluations: number; time_budget_ms: number;
 }
+export type MixedSelectionRequest = LegacyMixedSelectionRequest | (Omit<LegacyMixedSelectionRequest, "schema_version" | "kind"> & {
+  schema_version: 5; kind: "augmentation"; auto_strategy: AutoEvidenceRequest;
+});
 export interface MixedSelectionItem extends EvaluatedMixedCandidateRow {
   acquisition: NonNullable<EvaluatedMixedCandidateRow["acquisition"]>; rank: number; nearest_selected_distance: number | null;
   planning: Omit<DesirabilityPlanning, "search_seed" | "sampler"> & { sampler: DesirabilityPlanning["sampler"] & { coordinate_encoding: "numeric_normalized_category_index_v1" } };
@@ -110,13 +113,16 @@ export interface MixedManualCalculation {
   distance_policy: MixedCandidateRow["distance_policy"]; ordinal_rank_distance: boolean; items: MixedSelectionItem[];
   moment_evaluations: number; max_moment_evaluations: number;
 }
-export interface MixedAugmentationCalculation {
+interface LegacyMixedAugmentationCalculation {
   schema_version: 3; augmentation: AugmentationTrace; selected_rows: (MixedCandidateRow | EvaluatedMixedCandidateRow)[];
   source_row_count: number; prediction_evaluations: number; max_moment_evaluations: number; time_budget_ms: number; model_refit: false;
 }
+export type MixedAugmentationCalculation = LegacyMixedAugmentationCalculation | (Omit<LegacyMixedAugmentationCalculation, "schema_version"> & {
+  schema_version: 4; auto_evidence: AutoStrategyEvidence;
+});
 export type MixedSelectionCalculation = MixedManualCalculation | MixedAugmentationCalculation;
 export interface MixedSelectionResponse {
-  schema_version: 3; selection_id: string; study_id: string; study_version_id: string; model_id: string | null;
+  schema_version: 3 | 5; selection_id: string; study_id: string; study_version_id: string; model_id: string | null;
   candidate_revision_id: string; config_sha256: string; result_sha256: string; request: MixedSelectionRequest;
   calculation: MixedSelectionCalculation; created_at: string; source_is_current: boolean; confirmed_batch_id: string | null;
 }
@@ -124,8 +130,8 @@ export interface MixedSelectionSummary extends Pick<MixedSelectionResponse, "sch
   kind: MixedSelectionRequest["kind"]; policy: AugmentationPolicy | null; selected_count: number;
 }
 export interface MixedBatchResponse {
-  method_id: "doe.bayesian_optimization"; method_version: "0.15.0";
-  config_schema_version: 10; result_schema_version: 10; model_schema_version: 10; item_schema_version: 5;
+  method_id: "doe.bayesian_optimization"; method_version: "0.15.0" | "0.16.0";
+  config_schema_version: 10 | 12; result_schema_version: 10 | 12; model_schema_version: 10 | 12; item_schema_version: 5;
   batch_policy: "source_owned_mixed_planning_v1"; batch_size: number;
   batch_id: string; study_id: string; study_version_id: string; source_history_revision_id: string;
   source_observation_history_sha256: string; definition_sha256: string;

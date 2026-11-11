@@ -1599,6 +1599,8 @@ function runtimeInfo(
       bayesian_persistent_planning: true,
       bayesian_augmentation: true,
       bayesian_mixed_factor_planning: true,
+      bayesian_auto_strategy_advice: true,
+      bayesian_auto_selection_evidence: true,
       bayesian_objective_goal_modes: true,
       gaussian_process_regression: true,
     },

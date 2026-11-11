@@ -10,26 +10,33 @@ from app.api.v1.schemas.bo_mixed_planning import (
     MixedPlanningSelectionCalculation,
 )
 from app.api.v1.schemas.bo_mixed_workflow import (
+    MIXED_SELECTION_REQUEST,
     MixedAugmentationCalculation,
+    MixedAutoAugmentationCalculation,
+    MixedAutoSelectionRequest,
     MixedSelectionCalculation,
+    MixedSelectionInput,
     MixedSelectionList,
-    MixedSelectionRequest,
     MixedSelectionResponse,
     MixedSelectionSummary,
 )
 from app.core.config import Settings
 from app.services.analysis_run_execution import utc_now
 from app.services.bayesian_noise_recommendations import _error
+from app.services.bo_auto_evidence import evidence_identity, validate_auto_evidence
 from app.services.bo_mixed_candidates import mixed_excluded, read_mixed_candidate
 from app.services.bo_mixed_models import calculation_factors, read_mixed_model, require_mixed_source
 from app.services.bo_mixed_studies import get_mixed_study
 from app.services.bo_planning import _current, _not_found, _run
+from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.storage import bo_planning as storage
 from app.storage.bayesian_studies import BayesianStorageConflict
 
-_RESULT: TypeAdapter[MixedPlanningSelectionCalculation | MixedAugmentationCalculation] = (
-    TypeAdapter(MixedSelectionCalculation)
-)
+_RESULT: TypeAdapter[
+    MixedPlanningSelectionCalculation
+    | MixedAugmentationCalculation
+    | MixedAutoAugmentationCalculation
+] = TypeAdapter(MixedSelectionCalculation)
 
 
 def selection_rows(result: Any) -> list[Any]:
@@ -38,14 +45,14 @@ def selection_rows(result: Any) -> list[Any]:
 
 def read_mixed_selection(
     settings: Settings, study: Any, selection_id: UUID
-) -> tuple[dict[str, Any], MixedSelectionRequest, Any]:
+) -> tuple[dict[str, Any], MixedSelectionInput, Any]:
     try:
         record = storage.get_planning_selection(
             settings.workspace_root, str(selection_id), str(study.study_version_id)
         )
         if record is None:
             raise _not_found()
-        body = MixedSelectionRequest.model_validate_json(record["config_json"])
+        body = MIXED_SELECTION_REQUEST.validate_json(record["config_json"])
         result = _RESULT.validate_json(record["result_json"])
         require_mixed_source(study, body, current=False)
         candidate, rows, candidate_body = read_mixed_candidate(
@@ -54,7 +61,8 @@ def read_mixed_selection(
         by_id = {row.row_id: row for row in rows}
         selected = selection_rows(result)
         if (
-            record["schema_version"] != 3
+            record["schema_version"] != body.schema_version
+            or (body.schema_version == 5) != isinstance(result, MixedAutoAugmentationCalculation)
             or record["request_id"] != str(body.request_id)
             or record["model_id"] != (str(body.model_id) if body.model_id else None)
             or record["candidate_revision_id"] != str(body.candidate_revision_id)
@@ -114,7 +122,7 @@ def read_mixed_selection(
                     )
                 ):
                     raise ValueError
-        if result.schema_version == 3:
+        if isinstance(result, MixedAugmentationCalculation | MixedAutoAugmentationCalculation):
             expected_source = augmentation_source(body)
             if (
                 result.augmentation.source.model_dump(mode="json") != expected_source
@@ -126,20 +134,54 @@ def read_mixed_selection(
                 or result.augmentation.max_evaluations != body.max_evaluations
             ):
                 raise ValueError
+        if isinstance(body, MixedAutoSelectionRequest):
+            if not isinstance(result, MixedAutoAugmentationCalculation):
+                raise ValueError
+            routing = mixed_routing_context(settings, study, candidate, body)
+            assert body.policy is not None
+            validate_auto_evidence(
+                result.auto_evidence,
+                body.auto_strategy,
+                identity=routing["identity"],
+                snapshot=routing["snapshot"],
+                policy=body.policy,
+            )
         return record, body, result
     except BayesianStorageConflict as exc:
         raise _error(exc.code) from exc
-    except (ValueError, TypeError, KeyError, AttributeError):
+    except (ValueError, TypeError, KeyError, AttributeError, BayesianOptimizationError):
         raise _error("bayesian_planning_artifact_invalid") from None
 
 
-def augmentation_source(body: MixedSelectionRequest) -> dict[str, Any]:
+def augmentation_source(body: MixedSelectionInput) -> dict[str, Any]:
     return {
         "model_snapshot_id": str(body.model_id) if body.model_id else None,
         "model_snapshot_sha256": body.expected_model_sha256,
         "candidate_revision_id": str(body.candidate_revision_id),
         "candidate_revision_sha256": body.expected_rows_sha256,
         "history_sha256": body.expected_history_sha256,
+    }
+
+
+def mixed_routing_context(
+    settings: Settings, study: Any, candidate: dict[str, Any], body: MixedAutoSelectionRequest
+) -> dict[str, Any]:
+    model, snapshot, _ = read_mixed_model(settings, study, body.auto_strategy.routing_model_id)
+    if (
+        model["schema_version"] != 2
+        or model["snapshot_sha256"] != body.auto_strategy.expected_model_sha256
+        or any(
+            model[key] != candidate[key]
+            for key in ("definition_sha256", "source_history_revision_id", "history_sha256")
+        )
+        or (body.model_id is not None and body.model_id != body.auto_strategy.routing_model_id)
+    ):
+        raise _error("bayesian_planning_model_mismatch")
+    return {
+        "snapshot": snapshot,
+        "identity": evidence_identity(str(study.study_id), model),
+        "reference": body.auto_strategy.model_dump(mode="json"),
+        "mixed": True,
     }
 
 
@@ -154,6 +196,7 @@ def get_mixed_selection(
         "history_sha256": body.expected_history_sha256,
     }
     return MixedSelectionResponse(
+        schema_version=body.schema_version,
         selection_id=selection_id,
         study_id=study_id,
         study_version_id=study.study_version_id,
@@ -170,7 +213,7 @@ def get_mixed_selection(
 
 
 def create_mixed_selection(
-    settings: Settings, study_id: UUID, body: MixedSelectionRequest
+    settings: Settings, study_id: UUID, body: MixedSelectionInput
 ) -> MixedSelectionResponse:
     study = get_mixed_study(settings, study_id)
     config = body.model_dump(mode="json")
@@ -182,7 +225,9 @@ def create_mixed_selection(
             kind="selection",
         )
         if old is not None:
-            if old["schema_version"] != 3 or old["config_sha256"] != storage.planning_sha(config):
+            if old["schema_version"] != body.schema_version or old[
+                "config_sha256"
+            ] != storage.planning_sha(config):
                 raise _error("bayesian_planning_request_conflict")
             return get_mixed_selection(settings, study_id, UUID(old["selection_id"]))
         require_mixed_source(study, body)
@@ -254,7 +299,15 @@ def create_mixed_selection(
                     )
                 },
             }
-            result = _run("mixed_augmentation", payload, time_budget_ms=body.time_budget_ms)
+            if isinstance(body, MixedAutoSelectionRequest):
+                payload["routing"] = mixed_routing_context(settings, study, candidate, body)
+            result = _run(
+                "auto_mixed_augmentation"
+                if isinstance(body, MixedAutoSelectionRequest)
+                else "mixed_augmentation",
+                payload,
+                time_budget_ms=body.time_budget_ms,
+            )
             selected = result["selected_rows"]
         for item in selected:
             row = by_id[item["row_id"]]
@@ -269,7 +322,7 @@ def create_mixed_selection(
             "model_id": str(body.model_id) if body.model_id else None,
             "candidate_revision_id": str(body.candidate_revision_id),
             "request_id": str(body.request_id),
-            "schema_version": 3,
+            "schema_version": body.schema_version,
             "config_json": storage.planning_json(config),
             "config_sha256": storage.planning_sha(config),
             "result_json": storage.planning_json(result),
@@ -294,7 +347,7 @@ def list_mixed_selections(settings: Settings, study_id: UUID) -> MixedSelectionL
                     **{
                         key: row[key]
                         for key in MixedSelectionSummary.model_fields
-                        if key not in {"schema_version", "study_id", "source_is_current"}
+                        if key not in {"study_id", "source_is_current"}
                     },
                     "study_id": study_id,
                     "source_is_current": _current(study, row, row["source_trial_count"]),

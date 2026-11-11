@@ -49,11 +49,32 @@ PLANNING_ERRORS = frozenset(
         "bayesian_mixed_surrogate_input_invalid",
         "bayesian_mixed_surrogate_snapshot_invalid",
         "bayesian_mixed_snapshot_invalid",
+        "bayesian_loo_diagnostic_invalid",
+        "bayesian_auto_evidence_mismatch",
     }
 )
 
 
 def _calculate(operation: str, payload: dict[str, Any]) -> Any:
+    if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
+        from app.services.bo_auto_evidence import build_auto_evidence
+
+        evidence = build_auto_evidence(**payload["routing"])
+        if evidence["decision"]["recommended_policy"] != payload["policy"]:
+            raise BayesianOptimizationError("bayesian_auto_evidence_mismatch")
+        result = _calculate(
+            "mixed_augmentation" if operation == "auto_mixed_augmentation" else "augmentation",
+            {key: value for key, value in payload.items() if key != "routing"},
+        )
+        return {
+            **result,
+            "schema_version": 4 if operation == "auto_mixed_augmentation" else 2,
+            "auto_evidence": evidence,
+        }
+    if operation == "loo":
+        from app.statistics.bo_loo import planning_loo
+
+        return planning_loo(**payload)
     from app.statistics.bo_candidate_points import (
         generate_candidate_points,
         validated_candidate_rows,
@@ -158,7 +179,11 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
             result = _calculate(operation, payload)
             # Numerical revalidation shares admission, thread limit and the
             # original hard-timeout process, rather than starting a parent fit.
-            if operation == "mixed_fit":
+            if operation == "loo":
+                from app.api.v1.schemas.bo_loo import LooCalculation
+
+                result = LooCalculation.model_validate(result).model_dump(mode="json")
+            elif operation == "mixed_fit":
                 from app.statistics.bo_mixed_planning import restore_mixed_planning_model
 
                 if result["calculation_request"] != payload:
@@ -175,10 +200,25 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
                 from app.services.bo_mixed_workflow_contract import validate_mixed_candidates
 
                 validate_mixed_candidates(payload, result, deadline=deadline)
-            elif operation in {"mixed_selection", "mixed_augmentation"}:
+            elif operation in {"mixed_selection", "mixed_augmentation", "auto_mixed_augmentation"}:
                 from app.services.bo_mixed_workflow_contract import validate_mixed_selection
 
-                validate_mixed_selection(operation, payload, result, deadline=deadline)
+                if operation == "auto_mixed_augmentation":
+                    validate_mixed_selection(
+                        "mixed_augmentation",
+                        {key: value for key, value in payload.items() if key != "routing"},
+                        {
+                            **{
+                                key: value
+                                for key, value in result.items()
+                                if key != "auto_evidence"
+                            },
+                            "schema_version": 3,
+                        },
+                        deadline=deadline,
+                    )
+                else:
+                    validate_mixed_selection(operation, payload, result, deadline=deadline)
             elif operation == "fit":
                 if result["calculation_request"] != payload:
                     raise BayesianOptimizationError("bayesian_planning_snapshot_invalid")
@@ -199,7 +239,7 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
                     result,
                     deadline=deadline,
                 )
-            elif operation == "augmentation":
+            elif operation in {"augmentation", "auto_augmentation"}:
                 from app.services.bo_augmentation_contract import validate_augmentation_binding
 
                 validate_augmentation_binding(
@@ -211,6 +251,21 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
                 )
             else:
                 validate_candidate_generation(payload, result)
+            if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
+                from app.api.v1.schemas.bo_auto_strategy import (
+                    AutoEvidenceRequest,
+                    AutoStrategyEvidence,
+                )
+                from app.services.bo_auto_evidence import validate_auto_evidence
+
+                routing = payload["routing"]
+                validate_auto_evidence(
+                    AutoStrategyEvidence.model_validate(result["auto_evidence"]),
+                    AutoEvidenceRequest.model_validate(routing["reference"]),
+                    identity=routing["identity"],
+                    snapshot=routing["snapshot"],
+                    policy=payload["policy"],
+                )
             if time.perf_counter() >= deadline:
                 raise BayesianOptimizationError("bayesian_optimization_time_budget_exhausted")
         message = {
@@ -249,11 +304,14 @@ def run_planning_operation(
     cancel: threading.Event | None = None,
 ) -> Any:
     if operation not in {
+        "loo",
         "fit",
         "evaluate",
         "selection",
         "candidates",
         "augmentation",
+        "auto_augmentation",
+        "auto_mixed_augmentation",
         "mixed_fit",
         "mixed_evaluate",
         "mixed_candidates",

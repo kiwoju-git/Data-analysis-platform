@@ -1,11 +1,13 @@
 import type { BayesianStudyResponse } from "../../api/types/bayesian";
 import type { AugmentationBatchResponse, AugmentationCalculation, AugmentationPolicy, AugmentationSelectionRequest, AugmentationSelectionResponse } from "../../api/types/boAugmentation";
 import type { CandidatePage, CandidateRow, PlanningModelDetail } from "../../api/types/boPlanning";
+import type { MixedAugmentationCalculation, MixedSelectionRequest, MixedStudyResponse } from "../../api/types/boMixed";
 import type { ReportSourceDescriptor } from "../../api/types/reports";
 import { parseDoeResponseNumber } from "../../doe/doeResponsePaste";
 import { isReportSourceDescriptor } from "../../managedReportSource";
 import { currentPlanningModel, parsePlanningPoint, planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
+import { validAutoStrategy } from "../../api/boAutoStrategy";
 
 export interface AugmentationDraft {
   policy: AugmentationPolicy; batchSize: string; budget: string; distance: string;
@@ -69,7 +71,7 @@ export function validAugmentationPage(page: CandidatePage, study: BayesianStudyR
 }
 export function validAugmentationCalculation(value: AugmentationCalculation, request: AugmentationSelectionRequest, study: BayesianStudyResponse): boolean {
   const trace = value?.augmentation;
-  if (!value || value.schema_version !== 1 || value.model_refit !== false || !trace || trace.schema_version !== 1 || trace.model_refit !== false || trace.fantasy_observations !== false ||
+  if (!validSavedAutoEvidence(value, request, study) || value.model_refit !== false || !trace || trace.schema_version !== 1 || trace.model_refit !== false || trace.fantasy_observations !== false ||
     trace.policy !== request.policy || !trace.source || trace.source.model_snapshot_id !== request.model_id || trace.source.model_snapshot_sha256 !== request.expected_model_sha256 ||
     trace.source.candidate_revision_id !== request.candidate_revision_id || trace.source.candidate_revision_sha256 !== request.expected_rows_sha256 || trace.source.history_sha256 !== request.expected_history_sha256 ||
     !Array.isArray(trace.steps) || trace.steps.length !== request.batch_size || !Array.isArray(trace.selected_row_ids) || trace.selected_row_ids.length !== request.batch_size ||
@@ -96,15 +98,16 @@ export function validAugmentationCalculation(value: AugmentationCalculation, req
   });
 }
 export function validAugmentationSelection(value: AugmentationSelectionResponse, study: BayesianStudyResponse, expected?: AugmentationSelectionRequest): boolean {
-  return !!value && value.schema_version === 2 && value.study_id === study.study_id && value.study_version_id === study.study_version_id && planningId(value.selection_id) &&
+  return !!value && [2, 4].includes(value.schema_version) && value.schema_version === value.request?.schema_version && value.study_id === study.study_id && value.study_version_id === study.study_version_id && planningId(value.selection_id) &&
     planningHash(value.config_sha256) && planningHash(value.result_sha256) && value.model_id === value.request?.model_id &&
     value.candidate_revision_id === value.request?.candidate_revision_id && value.request.expected_study_version_id === study.study_version_id &&
     value.request.expected_definition_sha256 === study.definition_sha256 && (!expected || sameDesirabilityJson(value.request, expected)) &&
     validAugmentationCalculation(value.calculation, value.request, study);
 }
 export function validAugmentationBatch(value: AugmentationBatchResponse, study: BayesianStudyResponse, id: string): boolean {
+  const version = value?.selection_request?.schema_version === 4 ? 11 : 9;
   if (!value || !planningId(id) || value.batch_id !== id || value.source?.selection_id !== id || value.study_id !== study.study_id || value.study_version_id !== study.study_version_id ||
-    value.definition_sha256 !== study.definition_sha256 || value.method_version !== "0.14.0" || value.config_schema_version !== 9 || value.result_schema_version !== 9 || value.model_schema_version !== 9 ||
+    value.definition_sha256 !== study.definition_sha256 || value.method_version !== (version === 11 ? "0.16.0" : "0.14.0") || value.config_schema_version !== version || value.result_schema_version !== version || value.model_schema_version !== version ||
     value.item_schema_version !== 4 || value.batch_policy !== "source_owned_augmentation_v1" || study.objective.goal_type !== "desirability" ||
     !sameDesirabilityJson(value.objective.responses, study.objective.responses) || !planningId(value.source_history_revision_id) ||
     ![value.result_sha256, value.config_sha256, value.source_observation_history_sha256, value.source.rows_sha256, value.source.selection_config_sha256, value.source.selection_result_sha256].every(planningHash) ||
@@ -116,6 +119,23 @@ export function validAugmentationBatch(value: AugmentationBatchResponse, study: 
   return value.items.every((item, index) => item.batch_id === id && item.rank === index + 1 && planningId(item.item_id) && planningId(item.trial.trial_id) &&
     item.current_trial.trial_id === item.trial.trial_id && sameDesirabilityJson(item.trial.actual_coordinates, value.calculation.selected_rows[index].actual_coordinates) &&
     sameDesirabilityJson(item.current_trial.actual_coordinates, item.trial.actual_coordinates));
+}
+export function validSavedAutoEvidence(value: AugmentationCalculation | MixedAugmentationCalculation, request: AugmentationSelectionRequest | MixedSelectionRequest, study: BayesianStudyResponse | MixedStudyResponse): boolean {
+  if (!value || !request) return false;
+  if (request.schema_version === 2 || request.schema_version === 3) return value.schema_version === (request.schema_version === 2 ? 1 : 3) && !("auto_evidence" in value && value.auto_evidence);
+  if (value.schema_version !== (request.schema_version === 4 ? 2 : 4) || !("auto_evidence" in value) || !value.auto_evidence || !request.auto_strategy || study.objective.goal_type !== "desirability") return false;
+  const receipt = value.auto_evidence, diagnostic = receipt.diagnostic, reference = request.auto_strategy;
+  return receipt.schema_version === 1 && reference.schema_version === 1 && !!diagnostic &&
+    !("source_is_current" in diagnostic) && receipt.decision_sha256 === reference.expected_decision_sha256 &&
+    diagnostic.model_id === reference.routing_model_id && diagnostic.model_sha256 === reference.expected_model_sha256 &&
+    diagnostic.history_sha256 === request.expected_history_sha256 && diagnostic.source_history_revision_id === request.expected_history_revision_id &&
+    (request.model_id === null || request.model_id === reference.routing_model_id && request.expected_model_sha256 === reference.expected_model_sha256) && receipt.decision.recommended_policy === request.policy &&
+    validAutoStrategy({ ...receipt, decision_only: true, selection_created: false, apply_allowed: false,
+      diagnostic: { ...diagnostic, source_is_current: false } }, study.study_id, {
+      model_id: reference.routing_model_id, snapshot_sha256: reference.expected_model_sha256,
+      config_sha256: diagnostic.config_sha256, history_sha256: request.expected_history_sha256,
+      source_history_revision_id: request.expected_history_revision_id, source_is_current: false, objective: study.objective,
+    }, study.factors.map(factor => factor.domain_kind ?? "continuous"), reference.r_squared_threshold);
 }
 export function validAugmentationReportSource(descriptor: ReportSourceDescriptor, batch: AugmentationBatchResponse): boolean {
   if (!isReportSourceDescriptor(descriptor) || descriptor.source.kind !== "bayesian_history_revision") return false;

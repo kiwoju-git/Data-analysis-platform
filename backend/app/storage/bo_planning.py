@@ -437,7 +437,7 @@ def insert_planning_selection(root: Path, record: dict[str, Any]) -> str:
 
 
 def _require_selection_source(connection: sqlite3.Connection, record: dict[str, Any]) -> None:
-    if record["schema_version"] in {2, 3}:
+    if record["schema_version"] in {2, 3, 4, 5}:
         _require_augmentation_source(connection, record)
         return
     candidate = connection.execute(
@@ -486,7 +486,7 @@ def _require_augmentation_source(connection: sqlite3.Connection, record: dict[st
     ).fetchone()
     if candidate is None:
         raise BayesianStorageConflict("bayesian_planning_artifact_invalid")
-    if record["schema_version"] == 3 and candidate["schema_version"] != 3:
+    if record["schema_version"] in {3, 5} and candidate["schema_version"] != 3:
         raise BayesianStorageConflict("bayesian_planning_artifact_invalid")
     _documents(dict(candidate), (("config_json", "config_sha256"), ("rows_json", "rows_sha256")))
     if candidate["schema_version"] in {2, 3}:
@@ -517,7 +517,7 @@ def _require_augmentation_source(connection: sqlite3.Connection, record: dict[st
         ).fetchone()
         if (
             model is None
-            or record["schema_version"] == 3
+            or record["schema_version"] in {3, 5}
             and model["schema_version"] != 2
             or config["expected_model_sha256"] != model["snapshot_sha256"]
             or any(
@@ -531,6 +531,26 @@ def _require_augmentation_source(connection: sqlite3.Connection, record: dict[st
         )
     elif config["expected_model_sha256"] is not None:
         raise BayesianStorageConflict("bayesian_planning_model_mismatch")
+    if record["schema_version"] in {4, 5}:
+        routing = config["auto_strategy"]
+        model = connection.execute(
+            "SELECT * FROM bayesian_planning_models WHERE model_id=? AND study_version_id=?",
+            (routing["routing_model_id"], record["study_version_id"]),
+        ).fetchone()
+        if (
+            model is None
+            or model["schema_version"] != (2 if record["schema_version"] == 5 else 1)
+            or model["snapshot_sha256"] != routing["expected_model_sha256"]
+            or any(
+                model[key] != source[key]
+                for key in ("definition_sha256", "source_history_revision_id", "history_sha256")
+            )
+            or (record["model_id"] is not None and record["model_id"] != model["model_id"])
+        ):
+            raise BayesianStorageConflict("bayesian_planning_model_mismatch")
+        _documents(
+            dict(model), (("config_json", "config_sha256"), ("snapshot_json", "snapshot_sha256"))
+        )
     require_current_source(
         connection,
         study_version_id=record["study_version_id"],
@@ -571,7 +591,8 @@ def list_mixed_selection_summaries(root: Path, study_version_id: str) -> list[di
     with sqlite3.connect(metadata_db_path(root)) as connection:
         connection.row_factory = sqlite3.Row
         rows = connection.execute(
-            "SELECT s.selection_id,s.study_version_id,s.model_id,s.candidate_revision_id,"
+            "SELECT s.schema_version,s.selection_id,s.study_version_id,s.model_id,"
+            "s.candidate_revision_id,"
             "s.config_sha256,s.result_sha256,s.created_at,"
             "json_extract(s.config_json,'$.kind') AS kind,"
             "json_extract(s.config_json,'$.policy') AS policy,"
@@ -580,7 +601,7 @@ def list_mixed_selection_summaries(root: Path, study_version_id: str) -> list[di
             "c.batch_id AS confirmed_batch_id FROM bayesian_planning_selections s "
             "JOIN bayesian_candidate_revisions r ON r.revision_id=s.candidate_revision_id "
             "LEFT JOIN bayesian_planning_confirmations c ON c.selection_id=s.selection_id "
-            "WHERE s.study_version_id=? AND s.schema_version=3 "
+            "WHERE s.study_version_id=? AND s.schema_version IN (3,5) "
             "ORDER BY s.created_at DESC,s.selection_id",
             (study_version_id,),
         ).fetchall()

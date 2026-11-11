@@ -302,6 +302,40 @@ def test_vector_context_includes_actual_target_curve_entry_and_recommendations()
     )
 
 
+def test_context_keeps_regular_and_numeric_mixed_auto_evidence_journeys():
+    tree = ast.parse((ROOT / "tests/e2e/bo_vector_history.py").read_text(encoding="utf-8"))
+    entry = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "verify_bo_vector_history"
+    )
+    for name in ("verify_persistent_planning", "verify_mixed_workflow"):
+        calls = [
+            node
+            for node in ast.walk(entry)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == name
+        ]
+        evidence = [
+            node
+            for node in calls
+            if any(
+                keyword.arg == "auto_evidence_only"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in node.keywords
+            )
+        ]
+        ordinary = [
+            node
+            for node in calls
+            if all(keyword.arg != "auto_evidence_only" for keyword in node.keywords)
+        ]
+        assert len(evidence) == 1, name
+        assert len(ordinary) == 1, name
+
+
 def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():
     jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))["jobs"]
     windows = jobs["windows-e2e"]

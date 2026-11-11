@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../../../api/boMixed";
+import type { AutoStrategyView } from "../../../api/boAutoStrategy";
+import type { AugmentationPolicy, AutoEvidenceRequest } from "../../../api/types/boAugmentation";
 import type { EvaluatedMixedCandidateRow, MixedActualPoint, MixedCandidateCreateRequest, MixedCandidatePage, MixedCandidateSource, MixedCandidateSummary, MixedModelCreateRequest, MixedModelDetail, MixedModelSummary, MixedSelectionRequest, MixedSelectionResponse, MixedSelectionSummary, MixedStudyResponse } from "../../../api/types/boMixed";
 import { bayesianRequestId } from "../bayesianRequestId";
 import { augmentationFailureCode } from "../boAugmentationDraft";
@@ -23,6 +25,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   const [models, setModels] = useState<MixedModelSummary[]>([]), [candidates, setCandidates] = useState<MixedCandidateSummary[]>([]), [selections, setSelections] = useState<MixedSelectionSummary[]>([]);
   const [model, setModel] = useState<MixedModelDetail | null>(null), [page, setPage] = useState<MixedCandidatePage | null>(null), [selection, setSelection] = useState<MixedSelectionResponse | null>(null);
   const [fitDraft, setFitDraft] = useState(() => initialMixedFit(study)), [draft, setDraft] = useState(initialMixedSelection);
+  const [autoReference, setAutoReference] = useState<AutoEvidenceRequest | null>(null);
   const [order, setOrder] = useState<{ past: string[][]; current: string[]; future: string[][] }>({ past: [], current: [], future: [] });
   const [profile, setProfile] = useState<MixedProfile | null>(null), [evaluatedPage, setEvaluatedPage] = useState<{ revision: string; offset: number; model: string; rows: EvaluatedMixedCandidateRow[] } | null>(null);
   const [busy, setBusy] = useState<Mutation["kind"] | "read" | "evaluate" | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState<string | null>(null), [retry, setRetry] = useState<Mutation | null>(null);
@@ -36,7 +39,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
       const selectionList = await api.listMixedSelections(study.study_id); if (!current()) return;
       if (modelList.items.some(item => item.schema_version !== 2 || item.study_id !== study.study_id || item.study_version_id !== study.study_version_id) ||
         candidateList.items.some(item => item.schema_version !== 3 || item.study_version_id !== study.study_version_id || item.definition_sha256 !== study.definition_sha256) ||
-        selectionList.items.some(item => item.schema_version !== 3 || item.study_id !== study.study_id || item.study_version_id !== study.study_version_id)) throw new Error("bayesian_mixed_response_mismatch");
+        selectionList.items.some(item => ![3, 5].includes(item.schema_version) || item.study_id !== study.study_id || item.study_version_id !== study.study_version_id)) throw new Error("bayesian_mixed_response_mismatch");
       setModels(modelList.items); setCandidates(candidateList.items); setSelections(selectionList.items);
     } catch (caught) { if (current()) setError(augmentationFailureCode(caught)); }
     finally { if (current()) setLoading(false); }
@@ -44,6 +47,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   const latestRefresh = useRef(refresh); latestRefresh.current = refresh;
   useEffect(() => {
     mounted.current = true; stateOwner.current = token; fence.invalidate(); running.current = false;
+    setAutoReference(null);
     setModel(null); setPage(null); setSelection(null); setProfile(null); setEvaluatedPage(null); setOrder({ past: [], current: [], future: [] }); setFitDraft(initialMixedFit(study)); setDraft(initialMixedSelection());
     setModels([]); setCandidates([]); setSelections([]); setError(null); setRetry(null); if (!commit.pending()) setBusy(null);
     void latestRefresh.current();
@@ -55,7 +59,17 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   function invalidate(clearReview = true) {
     if (!active() || commit.pending()) return false;
     fence.invalidate(); running.current = false; setBusy(null); setError(null); setRetry(null); if (clearReview) setSelection(null);
+    if (clearReview) setAutoReference(null);
     return true;
+  }
+  function applyAuto(policy: AugmentationPolicy, view: AutoStrategyView) {
+    if (!model || !view.apply_allowed || view.decision.recommended_policy !== policy ||
+      view.diagnostic.model_id !== model.model_id || view.diagnostic.model_sha256 !== model.snapshot_sha256 ||
+      view.diagnostic.history_sha256 !== study.observation_history.observation_history_sha256 || !invalidate()) return;
+    setDraft(current => ({ ...current, kind: "augmentation", policy }));
+    setAutoReference({ schema_version: 1, routing_model_id: model.model_id,
+      expected_model_sha256: model.snapshot_sha256, r_squared_threshold: view.decision.threshold,
+      expected_decision_sha256: view.decision_sha256 });
   }
   async function mutate(snapshot: Mutation) {
     if (!active() || disabled || running.current || commit.pending()) return;
@@ -63,6 +77,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
     if (snapshot.kind === "confirm" && committed === null) return;
     const requestToken = fence.begin(), current = () => active() && fence.current(requestToken), ownerCurrent = () => committed === null ? current() : mounted.current && commit.current(committed);
     running.current = true; setBusy(snapshot.kind); setError(null); setRetry(null);
+    if (snapshot.kind === "fit" || snapshot.kind === "candidates") setAutoReference(null);
     try {
       if (snapshot.kind === "fit") {
         const value = await api.createMixedModel(study.study_id, snapshot.request); if (!current()) return;
@@ -138,12 +153,12 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   function submit(make: () => Mutation) {
     try { void mutate(make()); } catch (caught) { if (active()) setError(augmentationFailureCode(caught)); }
   }
-  const fit = mixedFitOptions(study, fitDraft), preview = own ? mixedSelectionRequest(study, page, model, order.current, draft, "00000000-0000-0000-0000-000000000000") : null;
+  const fit = mixedFitOptions(study, fitDraft), preview = own ? mixedSelectionRequest(study, page, model, order.current, draft, "00000000-0000-0000-0000-000000000000", autoReference) : null;
   const canConfirm = own && selection !== null && selection.source_is_current && selection.confirmed_batch_id === null && study.status === "active" && study.pending_trial_count === 0 && selection.request.expected_history_revision_id === study.observation_history.history_revision_id && selection.request.expected_history_sha256 === study.observation_history.observation_history_sha256 && selection.request.expected_trial_count === study.trial_count;
   return { key, model: own ? model : null, page: own ? page : null, selection: own ? selection : null, fitDraft, draft, models: own ? models : [], candidates: own ? candidates : [], selections: own ? selections : [],
     selectedIds: own ? order.current : [], canUndo: own && order.past.length > 0, canRedo: own && order.future.length > 0, profile: own ? profile : null, evaluatedPage: own ? evaluatedPage : null,
     busy: own ? busy : null, loading, error: own ? error : null, canFit: fit !== null && study.status === "active" && study.completed_trial_count >= Math.max(2, study.factors.length + 1), canReview: preview !== null, canConfirm, canRetry: own && retry !== null, isConfirming: commit.pending(),
-    refresh, invalidate, updateFit: (next: MixedFitDraft) => { if (invalidate()) setFitDraft(next); }, updateDraft: (next: MixedSelectionDraft) => { if (invalidate()) setDraft(next); },
+    refresh, invalidate, applyAuto, autoReference: own ? autoReference : null, updateFit: (next: MixedFitDraft) => { if (invalidate()) setFitDraft(next); }, updateDraft: (next: MixedSelectionDraft) => { if (invalidate()) setDraft(next); },
     fit: () => { if (fit) submit(() => ({ kind: "fit", request: { ...mixedSource(study), request_id: bayesianRequestId(), fit } })); },
     createCandidates: (name: string, source: MixedCandidateSource, tolerance: number, ordinal: boolean, append = false) => {
       if (!name.trim() || name.trim().length > 120 || !Number.isFinite(tolerance) || tolerance < 1e-12 || tolerance > .1 || (append && !page) || study.status !== "active") return;

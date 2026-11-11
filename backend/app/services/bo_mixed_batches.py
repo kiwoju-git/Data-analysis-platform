@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from app.api.v1.schemas.bo_mixed_batch import MixedBatchItem, MixedBatchResponse, MixedBatchSource
 from app.api.v1.schemas.bo_mixed_studies import mixed_factor_domains
-from app.api.v1.schemas.bo_mixed_workflow import MixedSelectionRequest
+from app.api.v1.schemas.bo_mixed_workflow import MixedSelectionInput
 from app.api.v1.schemas.bo_planning import PlanningConfirmRequest
 from app.core.config import Settings
 from app.services.analysis_run_execution import APP_VERSION, runtime_build_provenance, utc_now
@@ -34,9 +34,9 @@ from app.storage.bayesian_studies import (
 )
 
 
-def _config(study: Any, request: MixedSelectionRequest, source: MixedBatchSource) -> dict[str, Any]:
+def _config(study: Any, request: MixedSelectionInput, source: MixedBatchSource) -> dict[str, Any]:
     return {
-        "schema_version": 10,
+        "schema_version": 12 if request.schema_version == 5 else 10,
         "study_id": str(study.study_id),
         "study_version_id": str(study.study_version_id),
         "definition_sha256": study.definition_sha256,
@@ -138,6 +138,10 @@ def confirm_mixed_selection(
     }
     result = MixedBatchResponse.model_validate(
         {
+            "method_version": "0.16.0" if request.schema_version == 5 else "0.15.0",
+            "config_schema_version": config["schema_version"],
+            "result_schema_version": config["schema_version"],
+            "model_schema_version": config["schema_version"],
             "batch_id": selection_id,
             "batch_size": request.batch_size,
             "study_id": study_id,
@@ -179,9 +183,9 @@ def confirm_mixed_selection(
         method_version=result.method_version,
         batch_size=request.batch_size,
         batch_policy=result.batch_policy,
-        config_schema_version=10,
-        result_schema_version=10,
-        model_schema_version=10,
+        config_schema_version=result.config_schema_version,
+        result_schema_version=result.result_schema_version,
+        model_schema_version=result.model_schema_version,
         item_schema_version=5,
         config_json=_json(config),
         config_sha256=_sha(config),
@@ -215,7 +219,7 @@ def get_mixed_batch(settings: Settings, study_id: UUID, batch_id: UUID) -> Mixed
     if (
         record is None
         or record.study_version_id != str(study.study_version_id)
-        or record.result_schema_version != 10
+        or record.result_schema_version not in {10, 12}
     ):
         raise _error("bayesian_planning_not_found")
     saved = MixedBatchResponse.model_validate_json(record.result_json)
@@ -272,7 +276,15 @@ def validate_mixed_batch_record(
                 record.item_schema_version,
                 record.batch_policy,
             )
-            == (result.method_id, "0.15.0", 10, 10, 10, 5, "source_owned_mixed_planning_v1")
+            == (
+                result.method_id,
+                result.method_version,
+                result.config_schema_version,
+                result.result_schema_version,
+                result.model_schema_version,
+                5,
+                "source_owned_mixed_planning_v1",
+            )
         )
         require(record.batch_size == result.batch_size and record.batch_id == str(result.batch_id))
         require(str(result.study_version_id) == version.study_version_id)

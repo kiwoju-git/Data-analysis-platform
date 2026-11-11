@@ -9,7 +9,7 @@ from app.api.v1.schemas.bayesian_desirability_recommendations import (
     DesirabilityOrderedBatchItem,
     DesirabilityProvenance,
 )
-from app.api.v1.schemas.bo_augmentation import AugmentationCalculation, AugmentationSelectionRequest
+from app.api.v1.schemas.bo_augmentation import AugmentationRequest, AugmentationResult
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
 from app.api.v1.schemas.bo_planning import PlanningModelDetail, Sha256
 
@@ -28,10 +28,10 @@ class AugmentationBatchSource(BaseModel):
 class AugmentationBatchResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     method_id: Literal["doe.bayesian_optimization"] = "doe.bayesian_optimization"
-    method_version: Literal["0.14.0"] = "0.14.0"
-    config_schema_version: Literal[9] = 9
-    result_schema_version: Literal[9] = 9
-    model_schema_version: Literal[9] = 9
+    method_version: Literal["0.14.0", "0.16.0"] = "0.14.0"
+    config_schema_version: Literal[9, 11] = 9
+    result_schema_version: Literal[9, 11] = 9
+    model_schema_version: Literal[9, 11] = 9
     item_schema_version: Literal[4] = 4
     batch_size: int = Field(ge=1, le=8, strict=True)
     batch_policy: Literal["source_owned_augmentation_v1"] = "source_owned_augmentation_v1"
@@ -44,8 +44,8 @@ class AugmentationBatchResponse(BaseModel):
     source: AugmentationBatchSource
     objective: AnyDesirabilityObjective
     model: PlanningModelDetail | None
-    calculation: AugmentationCalculation
-    selection_request: AugmentationSelectionRequest
+    calculation: AugmentationResult
+    selection_request: AugmentationRequest
     items: list[DesirabilityOrderedBatchItem] = Field(min_length=1, max_length=8)
     config_sha256: Sha256
     result_sha256: Sha256
@@ -59,6 +59,19 @@ class AugmentationBatchResponse(BaseModel):
 
     @model_validator(mode="after")
     def exact_bundle(self) -> "AugmentationBatchResponse":
+        expected = (
+            ("0.16.0", 11, 11, 11, 2)
+            if self.selection_request.schema_version == 4
+            else ("0.14.0", 9, 9, 9, 1)
+        )
+        if (
+            self.method_version,
+            self.config_schema_version,
+            self.result_schema_version,
+            self.model_schema_version,
+            self.calculation.schema_version,
+        ) != expected:
+            raise ValueError("bayesian_augmentation_result_invalid")
         if (
             self.batch_size != len(self.items)
             or self.batch_size != len(self.calculation.selected_rows)

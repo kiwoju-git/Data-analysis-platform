@@ -8,6 +8,7 @@ import { BO_KERNEL_OPTIONS, boKernelLabel } from "./boKernelPolicy";
 import { BayesianFitDiagnostics } from "./BayesianFitDiagnostics";
 import { BayesianCurveSummary } from "./BayesianCurvePolicy";
 import type { DesirabilityDraft, DesirabilityModelDraft } from "./bayesianDesirabilityDraft";
+import { usesBatchDesirabilitySearch, withDesirabilitySearchBudget } from "./bayesianDesirabilityDraft";
 import type { useBayesianDesirabilityRecommendation } from "./hooks/useBayesianDesirabilityRecommendation";
 import "./bayesianDesirability.css";
 
@@ -28,11 +29,14 @@ export function BayesianDesirabilityRecommendationPanel({ study, state, disabled
   if (study.objective.goal_type !== "desirability") return null;
   const busy = state.isReviewing || state.isConfirming || state.isRestoring;
   const blocked = !study.recommendation_available;
+  const batchSearch = usesBatchDesirabilitySearch(study, state.draft);
+  const budgetKey = batchSearch ? "candidateBudget" : "q1CandidateBudget";
   const fieldId = (key: string) => `${id}-${key.replace(/:/g, "-")}`;
   const fieldError = (key: string) => state.errors[key] ? <span id={`${fieldId(key)}-error`} className="field-error">{text[state.errors[key]]}</span> : null;
   function input(key: string, label: string, value: string, edit: (next: string) => void, integer = false) {
-    return <label className="field" htmlFor={fieldId(key)}><span>{label}</span>
+    return <label className="field" htmlFor={fieldId(key)}><span id={`${fieldId(key)}-label`}>{label}</span>
       <input id={fieldId(key)} value={value} inputMode={integer ? "numeric" : "decimal"}
+        aria-labelledby={`${fieldId(key)}-label`}
         aria-invalid={Boolean(state.errors[key])} aria-describedby={state.errors[key] ? `${fieldId(key)}-error` : undefined}
         onChange={event => edit(event.target.value)} />{fieldError(key)}</label>;
   }
@@ -83,6 +87,7 @@ export function BayesianDesirabilityRecommendationPanel({ study, state, disabled
         {input("seed", text.seed, state.draft.seed, value => update("seed", value), true)}
         {input("timeMs", text.time, state.draft.timeMs, value => update("timeMs", value), true)}
         {input("modelEvaluations", text.evaluations, state.draft.modelEvaluations, value => update("modelEvaluations", value), true)}
+        {input("modelIterations", text.modelIterations, state.draft.modelIterations, value => update("modelIterations", value), true)}
         <label className="field" htmlFor={fieldId("fitPolicy")}><span id={`${fieldId("fitPolicy")}-label`}>{text.fitPolicy}</span><select id={fieldId("fitPolicy")} aria-labelledby={`${fieldId("fitPolicy")}-label`} value={state.draft.fitPolicy} onChange={e => update("fitPolicy", e.target.value)}>
           <option value="legacy">{text.legacyFit}</option><option value="bounded_multiscale_starts_v1">{text.multiscaleFit}</option>
         </select></label>
@@ -90,11 +95,18 @@ export function BayesianDesirabilityRecommendationPanel({ study, state, disabled
         {input("randomRestarts", text.randomRestarts, state.draft.randomRestarts, value => update("randomRestarts", value), true)}
       </div>
       {state.draft.fitPolicy !== "legacy" ? <p className="muted">{text.fitNote}</p> : null}
-      {state.draft.batchSize !== "1" || state.draft.fitPolicy !== "legacy" || study.objective.curve_policy === "per_response_target_gaussian_or_ds_v1" ? <fieldset className="bo-desirability-form"><legend>{text.batchSettings}</legend>
+      <fieldset className="bo-desirability-form"><legend>{text.searchSettings}</legend>
+        <div className="option-grid bo-desirability-settings">
+          {input("candidateCount", text.candidateCount, state.draft.candidateCount, value => update("candidateCount", value), true)}
+          {input("localStarts", text.localStarts, state.draft.localStarts, value => update("localStarts", value), true)}
+          {input("localIterations", text.localIterations, state.draft.localIterations, value => update("localIterations", value), true)}
+          {input(budgetKey, text.candidateBudget, state.draft[budgetKey], value => state.edit(withDesirabilitySearchBudget(state.draft, value)), true)}
+        </div>
+      </fieldset>
+      {batchSearch ? <fieldset className="bo-desirability-form"><legend>{text.batchSettings}</legend>
         <div className="option-grid bo-desirability-settings">
           {input("sampleCount", text.sampleCount, state.draft.sampleCount, value => update("sampleCount", value), true)}
           {input("momentBudget", text.momentBudget, state.draft.momentBudget, value => update("momentBudget", value), true)}
-          {input("candidateBudget", text.candidateBudget, state.draft.candidateBudget, value => update("candidateBudget", value), true)}
           {input("minDistance", text.minDistance, state.draft.minDistance, value => update("minDistance", value))}
         </div><p className="muted">{text.batchBudgetNote}</p>
       </fieldset> : null}

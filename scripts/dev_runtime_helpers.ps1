@@ -1,5 +1,5 @@
-$script:ExpectedApiContractVersion = 39
-$script:MinimumMetadataSchemaVersion = 32
+$script:ExpectedApiContractVersion = 42
+$script:MinimumMetadataSchemaVersion = 33
 $script:RequiredRuntimeCapabilities = @(
     "asset_management",
     "dataset_version_metadata",
@@ -28,6 +28,8 @@ $script:RequiredRuntimeCapabilities = @(
     "bayesian_persistent_planning",
     "bayesian_augmentation",
     "bayesian_mixed_factor_planning",
+    "bayesian_auto_strategy_advice",
+    "bayesian_auto_selection_evidence",
     "bayesian_objective_goal_modes"
 )
 

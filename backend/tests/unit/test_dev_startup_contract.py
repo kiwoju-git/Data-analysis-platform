@@ -83,11 +83,11 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert f"$script:ExpectedApiContractVersion = {API_CONTRACT_VERSION}" in helper_text
-    assert "$script:MinimumMetadataSchemaVersion = 32" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 33" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
     )
-    assert "MINIMUM_METADATA_SCHEMA_VERSION = 32" in frontend_runtime
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 33" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -100,6 +100,7 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert '"bayesian_multiresponse_recommendation"' in helper_text
     assert '"bayesian_multiresponse_batch"' in helper_text
     assert '"bayesian_fit_quality"' in helper_text
+    assert '"bayesian_auto_selection_evidence"' in helper_text
     assert '"bayesian_objective_goal_modes"' in helper_text
     assert "/api/v1/runtime-info" in diagnostics_text
     assert "/api/v1/analysis-methods" in diagnostics_text
@@ -138,7 +139,8 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
         (29, "False"),
         (30, "False"),
         (31, "False"),
-        (32, "True"),
+        (32, "False"),
+        (33, "True"),
     ],
 )
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
@@ -154,15 +156,19 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
     ],
 )
 def test_dev_runtime_helper_requires_exact_api_contract(api_version: int, expected: str) -> None:
-    assert _runtime_compatibility(api_version, 32) == expected
+    assert _runtime_compatibility(api_version, 33) == expected
 
 
 def test_dev_runtime_helper_requires_multiresponse_recommendation_capability() -> None:
-    assert _runtime_compatibility(API_CONTRACT_VERSION, 32, omit_multiresponse=True) == "False"
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_multiresponse=True) == "False"
 
 
 def test_dev_runtime_helper_requires_fit_quality_capability() -> None:
-    assert _runtime_compatibility(API_CONTRACT_VERSION, 32, omit_fit_quality=True) == "False"
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_fit_quality=True) == "False"
+
+
+def test_dev_runtime_helper_requires_auto_evidence_capability() -> None:
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_auto_evidence=True) == "False"
 
 
 def _runtime_compatibility(
@@ -171,6 +177,7 @@ def _runtime_compatibility(
     *,
     omit_multiresponse: bool = False,
     omit_fit_quality: bool = False,
+    omit_auto_evidence: bool = False,
 ) -> str:
     repo_root = Path(__file__).resolve().parents[3]
     capability_override = (
@@ -180,6 +187,8 @@ def _runtime_compatibility(
     )
     if omit_fit_quality:
         capability_override += "$capabilities.Remove('bayesian_fit_quality'); "
+    if omit_auto_evidence:
+        capability_override += "$capabilities.Remove('bayesian_auto_selection_evidence'); "
     command = (
         f". '{repo_root / 'scripts/dev_runtime_helpers.ps1'}'; "
         "$capabilities = @{}; "

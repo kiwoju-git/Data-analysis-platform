@@ -24,6 +24,11 @@ export interface DesirabilityDraft {
   sampleCount: string;
   momentBudget: string;
   candidateBudget: string;
+  q1CandidateBudget: string;
+  candidateCount: string;
+  localStarts: string;
+  localIterations: string;
+  modelIterations: string;
   minDistance: string;
   fitPolicy: "legacy" | "bounded_multiscale_starts_v1";
   deterministicStarts: string;
@@ -43,10 +48,20 @@ export function defaultDesirabilityDraft(study: BayesianStudyResponse | null): D
     })) : [],
     aggregation: "retain_raw", xi: "0.01", totalBudget: "40", seed: "42", timeMs: "60000", modelEvaluations: "1000",
     batchSize: "1", sampleCount: "64", momentBudget: "8192", candidateBudget: "1024", minDistance: "0",
+    q1CandidateBudget: "256", candidateCount: "32", localStarts: "0", localIterations: "50", modelIterations: "60",
     fitPolicy: "legacy", deterministicStarts: "1", randomRestarts: "0",
   };
 }
-export type DesirabilityDraftErrors = Record<string, "integer" | "nonnegative" | "positive" | "bounds" | "budget" | "mapping">;
+export type DesirabilityDraftErrors = Record<string, "integer" | "nonnegative" | "positive" | "bounds" | "budget" | "searchBudget" | "mapping">;
+export function usesBatchDesirabilitySearch(study: BayesianStudyResponse, draft: DesirabilityDraft, purpose: "recommendation" | "planning" = "recommendation"): boolean {
+  return purpose === "planning" || draft.batchSize !== "1" || draft.fitPolicy !== "legacy" ||
+    (study.objective.goal_type === "desirability" && study.objective.curve_policy === "per_response_target_gaussian_or_ds_v1");
+}
+export function withDesirabilitySearchBudget(draft: DesirabilityDraft, value: string): DesirabilityDraft {
+  // Preserve historical defaults until edited, then share the explicit budget
+  // with the planning-model request that uses these same settings.
+  return { ...draft, candidateBudget: value, q1CandidateBudget: value };
+}
 function integer(value: string, low: number, high: number): number | null {
   if (!/^\d+$/.test(value.trim())) return null;
   const parsed = Number(value);
@@ -81,11 +96,20 @@ export function buildDesirabilityRequest(study: BayesianStudyResponse, draft: De
   if (batchSize === null) errors.batchSize = "integer";
   if (total === null || total < study.trial_count + (purpose === "planning" ? 0 : (batchSize ?? 1))) errors.totalBudget = "budget";
   const samples = integer(draft.sampleCount, 16, 256), moments = integer(draft.momentBudget, 1, 65536);
-  const candidates = integer(draft.candidateBudget, 32, 160000), distance = strictBoNumber(draft.minDistance);
+  const batchSearch = usesBatchDesirabilitySearch(study, draft, purpose);
+  const budgetKey = batchSearch ? "candidateBudget" : "q1CandidateBudget";
+  const candidates = integer(draft[budgetKey], 32, 160000), distance = strictBoNumber(draft.minDistance);
+  const pool = integer(draft.candidateCount, 32, 4096), localStarts = integer(draft.localStarts, 0, 16);
+  const localIterations = integer(draft.localIterations, 1, 500), modelIterations = integer(draft.modelIterations, 1, 200);
+  if (pool === null) errors.candidateCount = "integer";
+  if (localStarts === null) errors.localStarts = "integer";
+  if (localIterations === null) errors.localIterations = "integer";
+  if (modelIterations === null) errors.modelIterations = "integer";
+  if (candidates === null) errors[budgetKey] = "integer";
+  else if (pool !== null && candidates < pool) errors[budgetKey] = "searchBudget";
   if (batchSize !== null && (purpose === "planning" || batchSize > 1 || draft.fitPolicy !== "legacy" || versionedCurve)) {
     if (samples === null) errors.sampleCount = "integer";
     if (moments === null) errors.momentBudget = "integer";
-    if (candidates === null) errors.candidateBudget = "integer";
     if (distance === null || distance < 0) errors.minDistance = "nonnegative";
   }
   const seed = integer(draft.seed, 0, 2147483647), time = integer(draft.timeMs, 1000, 60000);
@@ -104,7 +128,9 @@ export function buildDesirabilityRequest(study: BayesianStudyResponse, draft: De
     expected_history_sha256: study.observation_history.observation_history_sha256,
     response_models: models, observation_policy: { mode: draft.aggregation, nearby_tolerances: null, nearby_units: "normalized" as const },
     xi_desirability: xi!, total_trial_budget: total!,
-    search: { ...defaultDesirabilitySearch, random_seed: seed!, time_budget_ms: time!, model_max_evaluations: evaluations!, hyperparameter_restart_count: restarts! },
+    search: { ...defaultDesirabilitySearch, random_seed: seed!, time_budget_ms: time!, model_max_evaluations: evaluations!, hyperparameter_restart_count: restarts!,
+      candidate_count_per_step: pool!, local_start_count_per_step: localStarts!, max_iterations_per_step: localIterations!,
+      model_max_iterations: modelIterations!, max_evaluations_total: candidates! },
   };
   if (versionedCurve) return { errors, request: {
     ...common, schema_version: 7, batch_size: batchSize!,

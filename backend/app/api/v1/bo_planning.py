@@ -6,15 +6,17 @@ from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas import bo_planning as dto
 from app.api.v1.schemas.bo_augmentation import (
-    AugmentationSelectionRequest,
+    AugmentationRequest,
     AugmentationSelectionResponse,
 )
 from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
+from app.api.v1.schemas.bo_auto_strategy import AutoStrategyRequest, AutoStrategyView
 from app.api.v1.schemas.bo_candidates_v2 import (
     CandidatePageV2,
     CandidateRevisionCreateRequestV2,
     CandidateSetListV2,
 )
+from app.api.v1.schemas.bo_loo import LooRequest, LooView
 from app.api.v1.schemas.bo_planning_batch import PlanningBatchResponse
 from app.api.v1.schemas.reports import ReportSourceDescriptor
 from app.services import bo_candidates_v2 as candidates
@@ -25,12 +27,30 @@ router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-planning"])
 
 
 @router.post(
+    "/{study_id}/planning-models/{model_id}/auto-strategy", response_model=AutoStrategyView
+)
+def auto_strategy(
+    request: Request, study_id: UUID, model_id: UUID, body: AutoStrategyRequest
+) -> AutoStrategyView:
+    from app.services.bo_auto_strategy import get_auto_strategy
+
+    return get_auto_strategy(request.app.state.settings, study_id, model_id, body)
+
+
+@router.post("/{study_id}/planning-models/{model_id}/loo", response_model=LooView)
+def model_loo(request: Request, study_id: UUID, model_id: UUID, body: LooRequest) -> LooView:
+    from app.services.bo_loo import get_loo_view
+
+    return get_loo_view(request.app.state.settings, study_id, model_id, body)
+
+
+@router.post(
     "/{study_id}/augmentations",
     response_model=AugmentationSelectionResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_augmentation(
-    request: Request, study_id: UUID, body: AugmentationSelectionRequest
+    request: Request, study_id: UUID, body: AugmentationRequest
 ) -> AugmentationSelectionResponse:
     from app.services.bo_augmentation import create_augmentation_selection
 

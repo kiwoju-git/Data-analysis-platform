@@ -17,6 +17,9 @@ from app_readiness import (
     wait_for_layout_settled,
 )
 from playwright.sync_api import Browser, expect, sync_playwright
+from bo_loo import verify_loo
+from bo_auto_strategy import verify_auto_strategy
+from bo_auto_evidence import verify_saved_auto_evidence
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
@@ -122,7 +125,7 @@ def verify_mixed_builder(page, base: str) -> dict:
     }
 
 
-def verify_mixed_workflow(browser: Browser, base: str, output: Path) -> dict:
+def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evidence_only=False) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -241,6 +244,7 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path) -> dict:
             ).click()
         assert fitted.value.status == 201, fitted.value.text()
         model = fitted.value.json()
+        verify_loo(page, api, model, output, mixed=True)
         expect(
             panel.get_by_role("region", name="Mixed-factor saved model", exact=True)
         ).to_contain_text(model["snapshot_sha256"])
@@ -259,6 +263,13 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path) -> dict:
             isinstance(row["actual_coordinates"]["material"], str)
             for row in candidate["items"]
         )
+        auto_selection = verify_auto_strategy(page, api, model, output, mixed=True, keep_selection=auto_evidence_only)
+        if auto_evidence_only:
+            receipt = verify_saved_auto_evidence(browser, page, api, base, model, auto_selection, output, mixed=True)
+            assert not errors, errors
+            receipt["pageerrors"] = errors
+            (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            return receipt
         panel.get_by_role("button", name="Next page", exact=True).click()
         candidate_table = panel.get_by_role("table", name="Candidate table", exact=True)
         expect(candidate_table.locator("tbody tr")).to_have_count(10)
@@ -461,12 +472,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--auto-evidence-only", action="store_true")
     args = parser.parse_args()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
             print(
-                json.dumps(verify_mixed_workflow(browser, args.base_url, args.output))
+                json.dumps(verify_mixed_workflow(browser, args.base_url, args.output, auto_evidence_only=args.auto_evidence_only))
             )
         finally:
             browser.close()

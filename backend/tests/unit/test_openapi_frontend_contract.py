@@ -3775,6 +3775,30 @@ def test_target_curve_contract_is_explicit_and_legacy_objectives_are_unchanged(
         assert response[name]["const"] == value
 
 
+def test_mixed_auto_evidence_versioned_public_contract(openapi_schema: dict[str, Any]) -> None:
+    schemas = openapi_schema["components"]["schemas"]
+    route = openapi_schema["paths"]["/api/v1/bayesian-studies/{study_id}/mixed-selections"]["post"]
+    request = route["requestBody"]["content"]["application/json"]["schema"]
+    assert _schema_any_of_ref_names(request) == frozenset(
+        {"MixedSelectionRequest", "MixedAutoSelectionRequest"}
+    )
+    old, new = schemas["MixedSelectionRequest"], schemas["MixedAutoSelectionRequest"]
+    assert old["properties"]["schema_version"]["const"] == 3
+    assert "auto_strategy" not in old["properties"]
+    assert new["properties"]["schema_version"]["const"] == 5
+    assert new["properties"]["kind"]["const"] == "augmentation"
+    assert "auto_strategy" in new["required"]
+    assert new["additionalProperties"] is False
+    calculation = schemas["MixedAutoAugmentationCalculation"]
+    assert calculation["properties"]["schema_version"]["const"] == 4
+    assert calculation["properties"]["auto_evidence"]["$ref"].endswith("/AutoStrategyEvidence")
+    batch = schemas["MixedBatchResponse"]["properties"]
+    assert batch["result_schema_version"]["enum"] == [10, 12]
+    assert batch["model_schema_version"]["enum"] == [10, 12]
+    assert batch["config_schema_version"]["enum"] == [10, 12]
+    assert batch["item_schema_version"]["const"] == 5
+
+
 def test_bayesian_versioned_response_and_replicate_contracts(
     openapi_schema: dict[str, Any],
 ) -> None:

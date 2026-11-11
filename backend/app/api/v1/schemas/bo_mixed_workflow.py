@@ -3,9 +3,18 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, JsonValue, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    FiniteFloat,
+    JsonValue,
+    TypeAdapter,
+    model_validator,
+)
 
 from app.api.v1.schemas.bo_augmentation import AugmentationPolicy, AugmentationTrace
+from app.api.v1.schemas.bo_auto_strategy import AutoEvidenceRequest, AutoStrategyEvidence
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
 from app.api.v1.schemas.bo_desirability_calculation import (
     DesirabilityMomentResult,
@@ -197,8 +206,7 @@ class MixedCandidateList(_Model):
     items: list[MixedCandidateSummary] = Field(max_length=32)
 
 
-class MixedSelectionRequest(MixedSourceRequest):
-    schema_version: Literal[3] = 3
+class _MixedSelectionRequest(MixedSourceRequest):
     request_id: UUID
     kind: Literal["manual_ordered", "augmentation"]
     candidate_revision_id: UUID
@@ -218,7 +226,7 @@ class MixedSelectionRequest(MixedSourceRequest):
     time_budget_ms: int = Field(default=60000, ge=1000, le=60000, strict=True)
 
     @model_validator(mode="after")
-    def coherent_selection(self) -> "MixedSelectionRequest":
+    def coherent_selection(self) -> "_MixedSelectionRequest":
         if (self.model_id is None) != (self.expected_model_sha256 is None):
             raise ValueError("bayesian_planning_model_mismatch")
         if self.kind == "manual_ordered":
@@ -236,8 +244,21 @@ class MixedSelectionRequest(MixedSourceRequest):
         return self
 
 
-class MixedAugmentationCalculation(_Model):
+class MixedSelectionRequest(_MixedSelectionRequest):
     schema_version: Literal[3] = 3
+
+
+class MixedAutoSelectionRequest(_MixedSelectionRequest):
+    schema_version: Literal[5]
+    kind: Literal["augmentation"]
+    auto_strategy: AutoEvidenceRequest
+
+
+MixedSelectionInput = MixedSelectionRequest | MixedAutoSelectionRequest
+MIXED_SELECTION_REQUEST: TypeAdapter[MixedSelectionInput] = TypeAdapter(MixedSelectionInput)
+
+
+class _MixedAugmentationCalculation(_Model):
     augmentation: AugmentationTrace
     selected_rows: list[EvaluatedMixedCandidateRow | MixedCandidateRow] = Field(
         min_length=1, max_length=8
@@ -249,7 +270,7 @@ class MixedAugmentationCalculation(_Model):
     model_refit: Literal[False] = False
 
     @model_validator(mode="after")
-    def exact_selection(self) -> "MixedAugmentationCalculation":
+    def exact_selection(self) -> "_MixedAugmentationCalculation":
         model_free = self.augmentation.source.model_snapshot_id is None
         if (
             [row.row_id for row in self.selected_rows] != self.augmentation.selected_row_ids
@@ -265,14 +286,25 @@ class MixedAugmentationCalculation(_Model):
         return self
 
 
+class MixedAugmentationCalculation(_MixedAugmentationCalculation):
+    schema_version: Literal[3] = 3
+
+
+class MixedAutoAugmentationCalculation(_MixedAugmentationCalculation):
+    schema_version: Literal[4]
+    auto_evidence: AutoStrategyEvidence
+
+
 MixedSelectionCalculation = Annotated[
-    MixedPlanningSelectionCalculation | MixedAugmentationCalculation,
+    MixedPlanningSelectionCalculation
+    | MixedAugmentationCalculation
+    | MixedAutoAugmentationCalculation,
     Field(discriminator="schema_version"),
 ]
 
 
 class MixedSelectionResponse(_Model):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[3, 5] = 3
     selection_id: UUID
     study_id: UUID
     study_version_id: UUID
@@ -280,15 +312,23 @@ class MixedSelectionResponse(_Model):
     candidate_revision_id: UUID
     config_sha256: Sha256
     result_sha256: Sha256
-    request: MixedSelectionRequest
+    request: MixedSelectionInput
     calculation: MixedSelectionCalculation
     created_at: str
     source_is_current: bool
     confirmed_batch_id: UUID | None
 
+    @model_validator(mode="after")
+    def version_binding(self) -> "MixedSelectionResponse":
+        if self.schema_version != self.request.schema_version or (
+            self.schema_version == 5
+        ) != isinstance(self.calculation, MixedAutoAugmentationCalculation):
+            raise ValueError("bayesian_planning_artifact_invalid")
+        return self
+
 
 class MixedSelectionSummary(_Model):
-    schema_version: Literal[3] = 3
+    schema_version: Literal[3, 5] = 3
     selection_id: UUID
     study_id: UUID
     study_version_id: UUID
