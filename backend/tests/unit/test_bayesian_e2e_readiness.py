@@ -89,6 +89,7 @@ def test_bayesian_ready_preserves_app_readiness_failure(readiness, monkeypatch):
 
 def test_new_bo_journeys_use_catalog_readiness_only_for_bo_routes():
     for name in (
+        "bo_progress",
         "bo_vector_history",
         "bo_desirability_review",
         "bo_target_curve_preview",

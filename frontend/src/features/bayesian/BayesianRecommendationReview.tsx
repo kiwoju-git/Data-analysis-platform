@@ -4,6 +4,7 @@ import { useI18n } from "../../i18n/LocaleProvider";
 import { formatMeasurement } from "../../statisticalNumberFormat";
 import { boText } from "./boNoisePolicy";
 import { BayesianSurrogateSummary } from "./BayesianSurrogateSummary";
+import { BayesianCandidatePurpose } from "./BayesianCandidatePurpose";
 
 export function BayesianRecommendationReview({
   review, study, disabled, isConfirming, onConfirm, onDiscard,
@@ -46,6 +47,7 @@ export function BayesianRecommendationReview({
             <th>{text("새 관측 predictive SD", "New-observation predictive SD")}</th>
             <th>{text("배치 한계 EI/ETI", "Marginal batch EI/ETI")}</th>
             <th>{text("제약", "Constraints")}</th>
+            <th>{text("목표 / 선정 기준", "Goal / selection")}</th>
           </tr></thead>
           <tbody>{calculation.items.map(item => (
             <tr key={`${review.review_id}:${item.rank}`}>
@@ -59,6 +61,8 @@ export function BayesianRecommendationReview({
               <td>{number(item.acquisition_value_raw)}</td>
               <td>{item.constraint_evaluations.every(constraint => constraint.satisfied)
                 ? text("충족", "Satisfied") : text("위반", "Violated")}</td>
+              <td><BayesianCandidatePurpose goal={calculation.shared_model.objective_goal_type} acquisition={item.acquisition_kind}
+                xi={calculation.incumbent.xi_standardized} conditionedOn={item.planning.conditioned_on_selected_ranks} /></td>
             </tr>
           ))}</tbody>
         </table>

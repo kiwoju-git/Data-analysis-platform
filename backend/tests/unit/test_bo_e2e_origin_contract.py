@@ -39,6 +39,7 @@ def test_bo_manual_api_mutations_have_explicit_same_origin() -> None:
     directory = Path(__file__).resolve().parents[3] / "tests" / "e2e"
     paths = sorted(directory.glob("bo*.py"))
     assert {path.stem for path in paths} >= {
+        "bo_progress",
         "bo_vector_history",
         "bo_desirability_review",
         "bo_persistent_planning",

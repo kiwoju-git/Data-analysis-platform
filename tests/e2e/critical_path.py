@@ -56,6 +56,7 @@ from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
 from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
+from bo_progress import verify_bo_progress
 from bo_vector_history import verify_bo_vector_history
 from doe_rsm_completion import verify_doe_rsm_completion
 from gage_followup import verify_gage_followup
@@ -228,7 +229,7 @@ C\t96.0\t89\t19.5
 
 SUITE_STAGES = {
     "context": (
-        "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_vector_history", "api_translation", "chart_formatting",
+        "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "api_translation", "chart_formatting",
         "pilot_feedback", "english_system_text", "result_metric_layout",
     ),
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
@@ -239,7 +240,7 @@ SUITE_STAGES = {
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_vector_history", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
@@ -780,6 +781,9 @@ def run_browser_flow(
                 if "bo_noise_context" in stages:
                     diagnostics.step("verify explicit replicate retry ownership")
                     verify_bo_noise_context(browser, frontend_base_url, diagnostics.root / "bo-noise-context")
+                if "bo_progress" in stages:
+                    diagnostics.step("verify measured BO history and shared interactive progress charts")
+                    verify_bo_progress(browser, frontend_base_url, diagnostics.root / "bo-progress")
                 if "bo_vector_history" in stages:
                     diagnostics.step("verify multiresponse and saved-model BO workflows")
                     verify_bo_vector_history(browser, frontend_base_url, diagnostics.root / "bo-vector-history")

@@ -1,6 +1,14 @@
 {
   "version": 1,
   "en": {
+    "ui.832ae96604cabd9f": "Goal / selection",
+    "ui.0e2c60713ebfad18": "Registering replicate experiments",
+    "ui.3c20c27f816f2470": "Selection criterion",
+    "ui.53a562c3c3f0753c": "Batch improvement conditioned on earlier candidates",
+    "ui.22c8224ee4ebc298": "Expected improvement of the latent function",
+    "ui.12f68ff50eee88e5": "Not recorded",
+    "ui.b2b2802271ace0be": "Strategy",
+    "ui.c1f1102e79f0f0f9": "Abandoned",
     "boHelp.goal": "One numeric response (maximize/minimize/target), or 1–4 measured responses with desirability goals (q=1)",
     "boHelp.noise": "Estimated measurement variance, fixed measurement SD, or near-noiseless; jitter is separate",
     "boHelp.kernel": "Gaussian, Matérn 3/2, Matérn 5/2, or Exponential signal kernel",
@@ -4688,6 +4696,14 @@
     "ui.ce8cd0119cee6d28": "Discard unsaved inputs for closed trials"
   },
   "ko": {
+    "ui.832ae96604cabd9f": "목표 / 선정 기준",
+    "ui.0e2c60713ebfad18": "반복 실험 등록 중",
+    "ui.3c20c27f816f2470": "선정 기준",
+    "ui.53a562c3c3f0753c": "선행 후보에 조건화한 배치 개선",
+    "ui.22c8224ee4ebc298": "잠재함수의 기대 개선",
+    "ui.12f68ff50eee88e5": "저장 정보 없음",
+    "ui.b2b2802271ace0be": "전략",
+    "ui.c1f1102e79f0f0f9": "포기",
     "boHelp.goal": "단일 숫자 반응(최대화/최소화/목표값) 또는 만족도 목표를 가진 실제 측정 반응 1–4개(q=1)",
     "boHelp.noise": "측정 분산 추정, 고정 측정 SD 또는 준무잡음; jitter는 별도 수치 안정화 값",
     "boHelp.kernel": "Gaussian, Matérn 3/2, Matérn 5/2 또는 Exponential 신호 커널",
@@ -9375,6 +9391,14 @@
     "ui.ce8cd0119cee6d28": "종료 실험의 미저장 입력 폐기"
   },
   "sourceToKey": {
+    "목표 / 선정 기준": "ui.832ae96604cabd9f",
+    "반복 실험 등록 중": "ui.0e2c60713ebfad18",
+    "선정 기준": "ui.3c20c27f816f2470",
+    "선행 후보에 조건화한 배치 개선": "ui.53a562c3c3f0753c",
+    "잠재함수의 기대 개선": "ui.22c8224ee4ebc298",
+    "저장 정보 없음": "ui.12f68ff50eee88e5",
+    "전략": "ui.b2b2802271ace0be",
+    "포기": "ui.c1f1102e79f0f0f9",
     "다중 반응 저장 이력": "bo.vector.history",
     "실제 측정값": "bo.vector.measurements",
     "저장된 반응 목표": "bo.vector.goals",
