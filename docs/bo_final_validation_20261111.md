@@ -66,7 +66,11 @@ This is an incremental ledger, not a claim that unfinished checks passed.
 | Mixed/numeric frontend evidence guards | 37 passed across3 files; new source/version/digest/policy mismatch cases and legacy preservation |
 | Mixed evidence built browser | Passed on the final combined build: actual UI review/confirm, lost-response retry without duplicate trials, exact restore, KO/EN1024/1440 and offline managed HTML; no page errors |
 | Final complete built BO journey | Passed `bo_vector_history.py`: q1/q2, fit-quality settings, stored target curves, typed history entry, candidate pagination/manual selection, Profiler, separate augmentation, mixed planning and both Auto evidence journeys; every recorded pageerror list empty |
-| Native full-product CI | Not executed at the pre-push ledger checkpoint. Inspect the delivery branch/PR checks linked below; local narrow tests do not substitute for Windows/Linux/Python3.11/security/archive gates |
+| Full local Windows context E2E on0ecda6e | Passed fresh isolated workspace/source server on8682/8683: analysis completion, Report Center, RSM, BO noise/replicates and complete BO, API translation preservation, chart precision, local feedback privacy, English text and actual zoom/layout |
+| Initial native CI run42927248274 | Python3.11:4352 passed/8 failed/26 skipped in1002.82s; Linux3.12:4352 passed/8 failed/26 skipped in1041.44s. Both failed only the eight explicit migration-history expectations missing33. Not a product-gate pass |
+| Migration expectation correction | Local red reproduced the same missing33 assertion; after adding the explicit tuple to all eight expectations, metadata and Auto migration modules passed35 tests in116.86s. Production code and exact equality assertions unchanged |
+| Native dependency/resource gates in first run | All Python runtime/dev and npm security jobs plus dependency-security passed; Windows3.10 and Linux3.12 GP resource jobs passed |
+| Final native full-product CI | Still required after the test/docs-only correction. Inspect PR7 checks below; local narrow tests do not substitute for Windows/Linux/Python3.11/security/archive gates |
 
 First failures are retained in the task evidence: missing method0.16 reader
 allowlist, backup metadata33 acceptance and batch11 report URL dispatch were found
@@ -104,6 +108,8 @@ npm --prefix frontend audit --omit=dev --audit-level=low
 npm --prefix frontend audit --audit-level=low
 .\.venv\Scripts\python.exe tests/e2e/bo_mixed_workflow.py --base-url http://127.0.0.1:8681 --output "$env:TEMP\bo-evidence-final-20261111\mixed-auto" --auto-evidence-only
 .\.venv\Scripts\python.exe tests/e2e/bo_vector_history.py --base-url http://127.0.0.1:8681 --output "$env:TEMP\bo-evidence-final-20261111\full-bo"
+powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -Suite context -BackendPort 8682 -FrontendPort 8683 -WorkspaceRoot "$env:TEMP\bo-evidence-final-20261111\context-workspace" -DiagnosticsRoot "$env:TEMP\bo-evidence-final-20261111\context-diagnostics" -KeepWorkspace
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_metadata_store.py backend/tests/unit/test_bo_auto_evidence_migration.py -q --tb=short
 ```
 
 The browser scripts require an isolated synthetic built-UI server; never point
@@ -156,7 +162,13 @@ retain the newer workspace intact. Frontend/backend API42 must move together.
 ## Integration Evidence
 
 Delivery branch: `fix/bo-search-option-alignment`. This committed ledger records
-the pre-push local evidence, not an advance claim that remote jobs passed.
+the local evidence and first CI failures, not an advance claim that final remote
+jobs passed. Implementation commit: `0ecda6e8145cf4df043a54461db6218a4a5dc062`.
+The first CI checks out merge ref `fd86ebff880cf2286c899c2b22e3c6f710ca2bdc`, not
+the PR head; its failure is retained in
+[run42927248274](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/42927248274).
+[PR7](https://github.com/kiwoju-git/Data-analysis-platform/pull/7) contains the
+normal follow-up test/docs commit and the final head's checks.
 [Delivery CI history](https://github.com/kiwoju-git/Data-analysis-platform/actions?query=branch%3Afix%2Fbo-search-option-alignment)
 and the branch's pull request retain exact head/merge SHAs, native job outcomes
 and synthetic diagnostics. Integration must use ordinary push/merge only after
