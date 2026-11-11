@@ -3,6 +3,7 @@
 ## Scope And Source
 
 BASE_SHA: `1df6515a7e5e0e728633e0b1f16f42e7f23911e8`.
+Verified implementation: `834694d30d53c5d1a1fe21ac9ab3527c10988c81`.
 Branch: `feat/bo-progress-charts`. Existing isolated worktree; user workspace,
 untracked training materials and examples were not changed. This is an additive
 UI change, not a new GP fit, acquisition policy, API/schema or database migration.
@@ -58,7 +59,9 @@ fields. No retries or enlarged timeouts were added to conceal them.
 
 ## Validation Ledger
 
-Fresh local environment: Windows, CPython3.10, Node24, Chromium149, CPU-only.
+Fresh local environment: Windows build19045 (Python reports Windows10),
+CPython3.10.11, Node24.17, Chromium149.0.7827.55, CPU-only. This is not a
+claim that the local machine ran Windows11 or a native Linux test.
 Synthetic data uses a separate temporary workspace and loopback port. The user's
 preview workspace is not a test fixture. Backend imports explicitly use this
 worktree via `PYTHONPATH=backend`.
@@ -100,6 +103,41 @@ The current task reuses the inspected training-output locations and independent
 Cholesky/quadrature checks. Starting Values are not fitted parameters; unknown
 interval definitions cannot be converted into SD. A common finite candidate-pool
 ranking using our acquisition is not JMP's acquisition value or a parity rate.
+
+### Fresh Saved-Output Comparison
+
+Both private harnesses ran against the verified implementation SHA above,
+sequentially with BLAS/OpenMP threads set to1. Neither reused an older result
+JSON. The input documents' before/after SHA-256 values were identical.
+
+| Evidence | Fresh outcome | Boundary |
+| --- | --- | --- |
+| Baseline comparison | 108 independent numeric checks passed;16 kernel/start/fixture fits recorded | Includes Cholesky posterior, restored state and quadrature checks; not108 JMP parity claims |
+| Common-pool and noise sensitivity | 24 checks passed | Same current-code candidate compared under explicit acquisition/noise settings |
+| Concrete saved recommendation | Small coordinate difference remains | Evaluating the saved JMP point with our acquisition does not reveal JMP's acquisition or original candidate pool |
+| Sophoro saved mean | Small mean difference remains | Saved interval type/confidence and final fitted parameters are unknown; this is an observed location, not held-out accuracy |
+| LNP Gaussian target formula | Independent supplied-formula check passed | Mixture/pseudocomponent workflow remains unsupported; no silent normalization |
+| Invalid legacy fixtures | Minimum-condition/domain guards rejected unsupported requests | A refusal is not counted as a successful BO recommendation |
+
+The private detailed Markdown report records the saved numbers, app numbers,
+deltas, settings, source locations and result-JSON hashes alongside the local
+comparison outputs. Those sample-specific numbers are not redistributed here.
+The broad comparison conclusion is unchanged: workflow and documented formula
+alignment are verified where evidence exists, but identical JMP recommendations,
+uncertainty intervals and unpublished Auto behavior are not established. No
+kernel/noise parameter was retuned merely to match a saved screenshot.
+
+Libraries actually used: NumPy2.2.6, SciPy1.15.3, scikit-learn1.7.2. No live JMP
+installation was used. Further commits in this change record evidence only;
+comparison validity requires an empty application-code diff from the SHA above.
+
+## Integration Status At This Evidence Commit
+
+Local implementation and review are complete. Native Windows/Linux, security,
+archive and aggregate `release-ready` CI are pending on the pull request; this
+document does not mark them passed in advance. The PR/check history records the
+final gate outcomes and main merge SHA. No release/tag/assets will be published
+as part of this task.
 
 ## Reproduction And Rollback
 

@@ -60,7 +60,7 @@ fixture entry, `docs/bo_progress_validation_20261112.md`.
 - [x] Run built-app synthetic browser flows for scalar/vector/mixed charts,
   keyboard/pin, responsive widths, locale switching, restore, measured entry,
   no POST on chart changes, and unchanged history checksums.
-- [ ] Rerun local supplied-example comparison against final code; retain private
+- [x] Rerun local supplied-example comparison against final code; retain private
   inputs locally. Record saved JMP vs app deltas and unmatched conditions.
 - [ ] Run full project checks sequentially and independent code review; fix
   important findings with regression tests and record any unavailable checks.
@@ -83,4 +83,11 @@ fixture entry, `docs/bo_progress_validation_20261112.md`.
   which included option text. Explicit names fixed this; no timeout was increased.
 - First full frontend run: 1423 passed / 3 failed because an older review fixture
   omitted required incumbent/planning fields. Updated that fixture to the real
-  response contract. Full rerun remains required, not substituted by past results.
+  response contract. Fresh full rerun:160 files/1427 tests passed.
+- Verified implementation SHA: `834694d30d53c5d1a1fe21ac9ab3527c10988c81`.
+  Fresh private JMP baseline/sensitivity checks:108/24 passed;16 fits recorded.
+  Saved-output differences and unknown final JMP settings remain documented,
+  rather than treating independent numerical checks as proof of JMP parity.
+- Local full backend was not run; focused backend/reference tests, all frontend
+  tests, static checks and built-browser journeys passed. Required native CI and
+  main integration remain open until their actual completion.
