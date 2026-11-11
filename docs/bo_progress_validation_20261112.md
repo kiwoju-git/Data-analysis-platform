@@ -139,6 +139,15 @@ document does not mark them passed in advance. The PR/check history records the
 final gate outcomes and main merge SHA. No release/tag/assets will be published
 as part of this task.
 
+The first PR run, [43119382219](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43119382219),
+failed the E2E coverage-document marker contract on Python3.11:4360 passed,
+28 skipped and1 failed. The new `bo_progress` step was registered in the runner
+but omitted from `docs/e2e_coverage.md`. The same failure was reproduced locally;
+the inventory was corrected without weakening the test or changing application
+code. The entire local OpenAPI/frontend contract module then passed244 tests.
+Native gates must rerun on that documentation correction. This failed run
+is not represented as a successful full check.
+
 ## Reproduction And Rollback
 
 ```powershell
