@@ -70,7 +70,12 @@ This is an incremental ledger, not a claim that unfinished checks passed.
 | Initial native CI run42927248274 | Python3.11:4352 passed/8 failed/26 skipped in1002.82s; Linux3.12:4352 passed/8 failed/26 skipped in1041.44s. Both failed only the eight explicit migration-history expectations missing33. Not a product-gate pass |
 | Migration expectation correction | Local red reproduced the same missing33 assertion; after adding the explicit tuple to all eight expectations, metadata and Auto migration modules passed35 tests in116.86s. Production code and exact equality assertions unchanged |
 | Native dependency/resource gates in first run | All Python runtime/dev and npm security jobs plus dependency-security passed; Windows3.10 and Linux3.12 GP resource jobs passed |
-| Final native full-product CI | Still required after the test/docs-only correction. Inspect PR7 checks below; local narrow tests do not substitute for Windows/Linux/Python3.11/security/archive gates |
+| First native Windows full check | 4371 passed/11 failed/4 skipped in3687.37s. Eight failures were the same migration expectations; three Windows-only launcher tests still expected metadata32 after the required boundary became33 |
+| Native run42930274258 onb6e27e7 | Python3.11:4360 passed/26 skipped in923.27s. Linux3.12:4360 passed/26 skipped in1071.32s plus157 frontend files/1407 tests, source lifecycle and full browser E2E passed. Dependency-security and both native GP resource gates passed |
+| Intermediate Linux archive onb6e27e7 PR merge ref | Offline verification passed for actual source9ae304b621d9c765f9814e0ad324e3f6b4fd7603; this is CI evidence, not a published Release or evidence for a later commit |
+| Windows launcher correction | Local red reproduced3 failed/23 passed in82.07s; corrected launcher/entrypoint modules passed30 tests in73.48s. The follow-up retains explicit metadata32 rejection/33 acceptance, exact API checks and omitted-capability checks against an otherwise compatible runtime; production code is unchanged |
+| Offline CLI backup/restore onb6e27e7 | Actual backup/restore commands verified12 app-owned files and metadata33 in a new Korean/space path. Original source checksums, reopened numeric batch11/mixed batch12 decision hashes and routing-model hashes were unchanged |
+| Final native full-product CI | Still required after the Windows test/docs-only correction. Inspect PR7 checks below; local narrow tests do not substitute for Windows/Linux/Python3.11/security/archive gates |
 
 First failures are retained in the task evidence: missing method0.16 reader
 allowlist, backup metadata33 acceptance and batch11 report URL dispatch were found
@@ -79,6 +84,11 @@ to0.16 while legacy0.6 outputs, fixture bytes and numeric tolerances were retain
 Final mixed static checks also caught import formatting and union narrowing;
 explicit typed `isinstance` dispatch fixed the latter without changing selection.
 No production dependency or numerical tolerance changed in this checkpoint.
+The separate Linux3.12 numerical diagnostic onb6e27e7 is not an acceptance test:
+an explicit100-evaluation budget completed7 recommendations, then record8 failed
+with `bayesian_optimization_budget_exhausted`; the separate200-evaluation probe
+completed21/21. No implicit production budget increase or successful partial
+recommendation is inferred from the latter run.
 The final read-only integration reviewer found no confirmed P1/P2 issue in
 numeric/mixed provenance, transaction fences, version dispatch or UI ownership.
 That review is source inspection, not a separate execution claim.
@@ -92,6 +102,14 @@ opened offline and compared with the saved metrics) were:
 These are report checksums, not Linux distribution checksums. Local screenshots,
 traces and synthetic workspace files are not committed. The registered CI suite
 regenerates its own synthetic evidence.
+
+Additional checksums fromb6e27e7 (not claims for a later source commit):
+
+- Synthetic offline workspace backup:
+  `506883caea4b5987a2886b5a77aadbfd160521f4bd76b1616cfb8164b6e5ae78`.
+- Intermediate Linux archive, PR merge ref9ae304b:
+  `98668a8102ad8fc3a3db4b248309ca77bc27a47b87f86d26190b1222ea464de8`.
+  This archive was verified by CI but is not published as a GitHub Release.
 
 Representative commands, from the repository root (PowerShell):
 
@@ -110,6 +128,9 @@ npm --prefix frontend audit --audit-level=low
 .\.venv\Scripts\python.exe tests/e2e/bo_vector_history.py --base-url http://127.0.0.1:8681 --output "$env:TEMP\bo-evidence-final-20261111\full-bo"
 powershell -ExecutionPolicy Bypass -File .\scripts\e2e.ps1 -Suite context -BackendPort 8682 -FrontendPort 8683 -WorkspaceRoot "$env:TEMP\bo-evidence-final-20261111\context-workspace" -DiagnosticsRoot "$env:TEMP\bo-evidence-final-20261111\context-diagnostics" -KeepWorkspace
 .\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_metadata_store.py backend/tests/unit/test_bo_auto_evidence_migration.py -q --tb=short
+.\.venv\Scripts\python.exe -m pytest backend/tests/unit/test_dev_startup_contract.py backend/tests/unit/test_runtime_entrypoint_versions.py -q --tb=short
+.\.venv\Scripts\python.exe scripts/backup_workspace.py --workspace $StoppedSyntheticWorkspace --output $SyntheticBackupArchive
+.\.venv\Scripts\python.exe scripts/restore_workspace.py --archive $SyntheticBackupArchive --workspace $NewEmptySyntheticWorkspace
 ```
 
 The browser scripts require an isolated synthetic built-UI server; never point
@@ -168,7 +189,9 @@ The first CI checks out merge ref `fd86ebff880cf2286c899c2b22e3c6f710ca2bdc`, no
 the PR head; its failure is retained in
 [run42927248274](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/42927248274).
 [PR7](https://github.com/kiwoju-git/Data-analysis-platform/pull/7) contains the
-normal follow-up test/docs commit and the final head's checks.
+normal follow-up test/docs commits and the final head's checks. Run42930274258
+tested the explicit migration-history correctionb6e27e7; the subsequent Windows
+launcher expectation correction must run the same unchanged gates again.
 [Delivery CI history](https://github.com/kiwoju-git/Data-analysis-platform/actions?query=branch%3Afix%2Fbo-search-option-alignment)
 and the branch's pull request retain exact head/merge SHAs, native job outcomes
 and synthetic diagnostics. Integration must use ordinary push/merge only after
