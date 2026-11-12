@@ -31,8 +31,8 @@ from app.api.v1.schemas.bo_fit_quality import (
 from app.api.v1.schemas.bo_planning import PlanningSelectionItem
 from app.services.bo_desirability_contract import _validate_source_and_candidate
 from app.statistics.bayesian_optimization import BayesianOptimizationError, _validated_factors
+from app.statistics.bo_beta_policy import stored_beta_expected_improvement
 from app.statistics.bo_desirability import composite_desirability
-from app.statistics.bo_desirability_acquisition import beta_expected_improvement
 from app.statistics.bo_desirability_batch_acquisition import (
     _condition,
     _raw_variance,
@@ -109,6 +109,11 @@ def validate_batch_calculation_result(
         _require(search.nearest_selected_distance == item.nearest_selected_distance)
         _require(search.nearest_existing_distance == item.nearest_existing_distance)
         planning, sampler = item.planning, item.planning.sampler
+        _require(
+            sampler.numerical_policy
+            == item.acquisition.numerical_policy
+            == result.items[0].acquisition.numerical_policy
+        )
         _require(planning.search_seed == batch_search_seed(request.search.random_seed, step))
         _require(sampler.root_seed == request.search.random_seed and sampler.batch_step == step)
         _require(sampler.requested_sample_count == request.batch_options.sample_count)
@@ -183,6 +188,12 @@ def _validate_planning_proof(
 ) -> None:
     item = items[step]
     planning, proof, sampler = item.planning, item.planning.proof, item.planning.sampler
+    _require(
+        all(
+            old.acquisition.numerical_policy == sampler.numerical_policy
+            for old in items[: step + 1]
+        )
+    )
     keys = [g.response_id for g in goals]
     _require(set(proof.response_proofs) == set(sampler.selected_covariance) == set(keys))
     count = sampler.effective_sample_count
@@ -281,8 +292,12 @@ def _validate_planning_proof(
     ]
     _require(proof.thresholds == thresholds)
     scores = [
-        beta_expected_improvement(
-            m.mean, m.variance, min(threshold, 1.0), xi=max(threshold - 1.0, 0.0)
+        stored_beta_expected_improvement(
+            m.mean,
+            m.variance,
+            min(threshold, 1.0),
+            xi=max(threshold - 1.0, 0.0),
+            numerical_policy=sampler.numerical_policy,
         ).value
         for m, threshold in zip(proof.sample_moments, thresholds, strict=True)
     ]

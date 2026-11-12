@@ -1,4 +1,6 @@
 import { translateSystemText as systemText } from "./i18n/translate";
+import { getCurrentLocale } from "./i18n/store";
+import { datasetSourceMessages } from "./i18n/boDatasetSource";
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import type {
@@ -818,6 +820,7 @@ export function DatasetDeletionImpact({
   preflight: import("./api").DatasetVersionDeletionPreflightResponse;
 }) {
   const counts = preflight.counts;
+  const sourceText = datasetSourceMessages(getCurrentLocale());
   const dependencyTotal =
     counts.analysis_run_count +
     counts.regression_model_count +
@@ -827,6 +830,7 @@ export function DatasetDeletionImpact({
     counts.attribute_control_limit_set_count +
     counts.phase_2_analysis_count +
     counts.job_count +
+    (counts.bayesian_study_count ?? 0) +
     (counts.child_version_count ?? 0);
   const operation = (id: DatasetDeletionOperationId) =>
     preflight.available_operations.find((candidate) => candidate.operation_id === id);
@@ -855,12 +859,14 @@ export function DatasetDeletionImpact({
         <span>내보내기 {counts.analysis_export_count.toLocaleString()}건</span>
         <span>관리한계 {counts.attribute_control_limit_set_count.toLocaleString()}건</span>
         <span>Phase II {counts.phase_2_analysis_count.toLocaleString()}건</span>
+        {(counts.bayesian_study_count ?? 0) > 0 && <span>{sourceText.study}: {(counts.bayesian_study_count ?? 0).toLocaleString()}</span>}
         <span>job {counts.job_count.toLocaleString()}건</span>
         <span>다른 버전 {counts.sibling_version_count.toLocaleString()}개</span>
         {(counts.child_version_count ?? 0) > 0 ? (
           <span>파생 버전 {(counts.child_version_count ?? 0).toLocaleString()}개</span>
         ) : null}
       </div>
+      {preflight.blockers.includes("dataset_version_deletion_bayesian_study_dependency") && <p className="warning-box">{sourceText.dependency}</p>}
       {preflight.integrity_issue_codes.length > 0 ? (
         <div className="warning-box">
           <strong>{integrityIssueTitle(preflight.integrity_issue_codes[0])}</strong>
@@ -1059,6 +1065,7 @@ function dependencyLabel(
     analysis_export: systemText("리포트/내보내기"),
     attribute_control_limit_set: systemText("관리한계"),
     phase_2_analysis: systemText("Phase II 분석"),
+    bayesian_study: datasetSourceMessages(getCurrentLocale()).study,
     job: systemText("Job 기록"),
   };
   return labels[assetType];

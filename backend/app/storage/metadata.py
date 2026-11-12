@@ -12,7 +12,7 @@ from app.storage.bo_auto_evidence_schema import BO_AUTO_EVIDENCE_MIGRATION_SQL
 from app.storage.bo_planning_schema import BO_PLANNING_MIGRATION_SQL
 from app.storage.bo_planning_v2_schema import BO_PLANNING_V2_MIGRATION_SQL
 
-SCHEMA_VERSION: Final = 33
+SCHEMA_VERSION: Final = 34
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -180,6 +180,7 @@ class DatasetVersionDependencyCounts:
     job_count: int
     attribute_control_limit_set_count: int
     phase_2_analysis_count: int
+    bayesian_study_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -201,6 +202,7 @@ class DatasetVersionCascadeSnapshot:
     regression_models: tuple["RegressionModelRecord", ...]
     limit_sets: tuple["AttributeControlLimitSetRecord", ...]
     jobs: tuple["JobRecord", ...]
+    bayesian_studies: tuple["DatasetDeletionDependencyDescriptorRecord", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2102,6 +2104,26 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         requires_foreign_keys_off=True,
         sql=BO_AUTO_EVIDENCE_MIGRATION_SQL,
     ),
+    Migration(
+        version=34,
+        name="bayesian_dataset_import_ownership",
+        sql="""
+        CREATE TABLE bayesian_dataset_imports (
+            study_version_id TEXT PRIMARY KEY
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE CASCADE,
+            dataset_version_id TEXT NOT NULL
+                REFERENCES dataset_versions(version_id) ON DELETE RESTRICT,
+            request_id TEXT NOT NULL UNIQUE,
+            request_sha256 TEXT NOT NULL CHECK(length(request_sha256)=64),
+            preflight_sha256 TEXT NOT NULL CHECK(length(preflight_sha256)=64),
+            source_schema_hash TEXT NOT NULL CHECK(length(source_schema_hash)=64),
+            source_canonical_sha256 TEXT NOT NULL CHECK(length(source_canonical_sha256)=64),
+            import_schema_version INTEGER NOT NULL CHECK(import_schema_version=1)
+        );
+        CREATE INDEX idx_bayesian_import_dataset
+            ON bayesian_dataset_imports(dataset_version_id);
+        """,
+    ),
 )
 
 
@@ -3222,6 +3244,8 @@ def delete_dataset_version_cascade_records(
         if current is None or current != expected_snapshot:
             raise DatasetVersionStorageConflict("dataset_version_deletion_conflict")
 
+        if current.dataset.dependencies.bayesian_study_count:
+            raise DatasetVersionStorageConflict("dataset_version_deletion_blocked")
         analysis_ids = tuple(item.analysis_id for item in current.analysis_runs)
         model_ids = tuple(item.model_id for item in current.regression_models)
         limit_set_ids = tuple(item.limit_set_id for item in current.limit_sets)
@@ -6825,6 +6849,11 @@ def _connection_dataset_version_deletion_snapshot(
             job_count=job_count,
             attribute_control_limit_set_count=limit_set_count,
             phase_2_analysis_count=phase_2_count,
+            bayesian_study_count=_connection_count(
+                connection,
+                "SELECT COUNT(*) FROM bayesian_dataset_imports WHERE dataset_version_id = ?;",
+                version_id,
+            ),
         ),
     )
 
@@ -6965,6 +6994,32 @@ def _connection_dataset_version_cascade_snapshot(
         regression_models=models,
         limit_sets=limit_sets,
         jobs=jobs,
+        bayesian_studies=tuple(
+            DatasetDeletionDependencyDescriptorRecord(
+                asset_type="bayesian_study",
+                asset_id=str(row[0]),
+                display_name=str(row[1]),
+                method_id=str(row[2]),
+                relationship="study_imported_from_dataset",
+                created_at=str(row[3]),
+                status=str(row[4]),
+                stale=False,
+                result_available=True,
+                related_dataset_version_id=version_id,
+                related_dataset_display_name=None,
+                integrity_state="not_applicable",
+                blocker_codes=("dataset_version_deletion_bayesian_study_dependency",),
+            )
+            for row in connection.execute(
+                "SELECT study.study_id,study.name,study.method_id,study.created_at,study.status "
+                "FROM bayesian_dataset_imports imported "
+                "JOIN bayesian_study_versions version "
+                "ON version.study_version_id=imported.study_version_id "
+                "JOIN bayesian_studies study ON study.study_id=version.study_id "
+                "WHERE imported.dataset_version_id=? ORDER BY study.study_id",
+                (version_id,),
+            )
+        ),
     )
 
 
@@ -6973,7 +7028,7 @@ def _dataset_deletion_dependency_descriptors(
 ) -> list[DatasetDeletionDependencyDescriptorRecord]:
     version_id = snapshot.dataset.version.version_id
     limit_set_ids = {item.limit_set_id for item in snapshot.limit_sets}
-    descriptors: list[DatasetDeletionDependencyDescriptorRecord] = []
+    descriptors: list[DatasetDeletionDependencyDescriptorRecord] = list(snapshot.bayesian_studies)
     for run in snapshot.analysis_runs:
         is_prediction = run.method_id == "regression.predict"
         is_phase_2 = run.method_id == "quality.attribute_control_chart" and any(
@@ -7120,6 +7175,7 @@ def _dataset_version_has_dependencies(counts: DatasetVersionDependencyCounts) ->
             counts.job_count,
             counts.attribute_control_limit_set_count,
             counts.phase_2_analysis_count,
+            counts.bayesian_study_count,
         )
     )
 

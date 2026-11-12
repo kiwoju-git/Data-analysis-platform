@@ -19,7 +19,7 @@ from app.api.v1.schemas.bo_mixed_studies import (
     mixed_factor_domains,
 )
 from app.statistics.bayesian_optimization import BayesianOptimizationError
-from app.statistics.bo_desirability_acquisition import beta_expected_improvement
+from app.statistics.bo_beta_policy import stored_beta_expected_improvement
 from app.statistics.bo_mixed_candidate_points import (
     generate_mixed_candidate_points,
     validated_mixed_candidate_rows,
@@ -164,11 +164,12 @@ def _validate_base(
         expected = {
             "kind": "desirability_beta_expected_improvement",
             **asdict(
-                beta_expected_improvement(
+                stored_beta_expected_improvement(
                     base.moments.mean,
                     base.moments.variance,
                     model.incumbent["latent_incumbent_value"],
                     xi=model.request.xi_desirability,
+                    numerical_policy=row.acquisition.numerical_policy,
                 )
             ),
             "xi_desirability": model.request.xi_desirability,
@@ -291,6 +292,11 @@ def validate_mixed_selection(
                 and nearest >= payload["min_batch_distance"]
             )
             sampler = item.planning.sampler
+            _require(
+                sampler.numerical_policy
+                == item.acquisition.numerical_policy
+                == typed.items[0].acquisition.numerical_policy
+            )
             _require(sampler.batch_step == step and sampler.root_seed == request.search.random_seed)
             _require(sampler.requested_sample_count == payload["sample_count"])
             _require(sampler.effective_sample_count == (payload["sample_count"] if step else 0))

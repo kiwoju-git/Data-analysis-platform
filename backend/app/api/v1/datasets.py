@@ -230,6 +230,7 @@ def list_dataset_version_deletion_dependencies_route(
     request: Request,
     version_id: UUID,
     asset_type: Literal[
+        "bayesian_study",
         "analysis_run",
         "regression_model",
         "prediction",

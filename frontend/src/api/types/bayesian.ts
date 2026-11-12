@@ -1,4 +1,5 @@
 import type { DesirabilityBatch } from "./bayesianDesirability";
+import type { DatasetImportedInitialDesign } from "./boDatasetSource";
 
 export interface BayesianFactorRequest {
   factor_id: string;
@@ -244,7 +245,7 @@ export interface BayesianStudyResponse {
   factors: BayesianFactorResponse[];
   objective: BayesianObjectiveResponse;
   constraints: BayesianLinearConstraintResponse[];
-  initial_design: BayesianInitialDesignResponse;
+  initial_design: BayesianInitialDesignResponse | DatasetImportedInitialDesign;
   trial_count: number;
   pending_trial_count: number;
   completed_trial_count: number;

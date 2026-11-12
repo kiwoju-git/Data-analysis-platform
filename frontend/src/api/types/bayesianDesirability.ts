@@ -78,7 +78,8 @@ export interface DesirabilityQ1Calculation {
     response_predictions: Array<{ response_id: string; mean_raw: number; latent_standard_deviation_raw: number; predictive_standard_deviation_raw: number }>;
     desirability_moments: DesirabilityMoments;
     acquisition: { kind: "desirability_beta_expected_improvement"; value: number; threshold: number;
-      distribution: "point_mass" | "bernoulli_limit" | "beta_moment_match"; alpha: number | null; beta: number | null; xi_desirability: number };
+      distribution: "point_mass" | "bernoulli_limit" | "beta_moment_match"; alpha: number | null; beta: number | null; xi_desirability: number;
+      numerical_policy?: "positive_beta_integral_v2" };
     nearest_existing_distance: number;
     constraint_evaluations: BayesianConstraintEvaluationResponse[];
   }>;
@@ -140,6 +141,7 @@ export interface DesirabilityPlanning {
   conditional_variance_raw: Record<string, number>;
   search_seed: number;
   sampler: {
+    numerical_policy?: "positive_beta_integral_v2";
     policy_version: "conditional_mc_desirability_beta_marginal_v1";
     root_seed: number;
     response_sample_seeds: Record<string, string>;

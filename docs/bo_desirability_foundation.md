@@ -145,11 +145,19 @@ EI = M*BetaSF(t; a+1,b) - t*BetaSF(t; a,b)
 Xi is dimensionless desirability improvement, not the old standardized-Y xi.
 It is applied once. V=0 is a point mass; V=M(1-M) is the endpoint Bernoulli limit,
 not an invalid Beta(0,0). Inconsistent moments are rejected. Positive variance
-is never silently classified as deterministic. Very concentrated Beta (`c>1e8`)
-and unresolved survival-term cancellation currently return
-`bayesian_desirability_beta_precision_unsupported`. This deliberate limitation
-must be resolved or presented explicitly before a recommendation UI uses it.
-No arbitrary normal fallback or zero-EI success hides that limitation.
+is never silently classified as deterministic. The API43 numerical repair uses
+positive width-scaled Beta-density quadrature for concentrated distributions,
+with high-precision centering of the stored binary64 shape parameters. A
+log-concave tangent bound can establish that EI rounds to binary64 zero; zero
+is not inferred merely because two survival terms cancel. Unresolved widths,
+quadrature error or unsupported shapes still return
+`bayesian_desirability_beta_precision_unsupported`. No Gaussian or point-mass
+approximation replaces a positive-variance Beta. See `bo_xy_start_validation.md`
+for boundary cases and independent reference evidence. The statistical policy
+and old saved artifacts are unchanged. New acquisitions and conditional samplers
+record `numerical_policy=positive_beta_integral_v2`; absent-policy stored results
+use the frozen legacy arithmetic. See `bo_beta_numerical_compatibility.md` for
+reader dispatch and unchanged legacy serialization/hash verification.
 
 Independent examples:
 

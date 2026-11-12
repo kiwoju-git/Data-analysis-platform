@@ -190,12 +190,22 @@ def test_roadmap_and_contextual_are_not_counted_as_available_methods(
     workflows = {item["id"]: item for item in matrix["informational_workflows"]}
     assert workflows["hypothesis.comparability_assessment"]["visibility"] == "roadmap_only"
     assert workflows["quality.multivariate_monitoring"]["visibility"] == "roadmap_only"
-    assert workflows["gaussian-process-surrogate"]["entry_kind"] == "contextual_information"
+    assert "gaussian-process-surrogate" not in workflows
     assert "quality.two_variances" not in workflows
     methods = {item["method_id"]: item for item in matrix["methods"]}
     assert methods["regression.predict"]["placement"]["contextual"]
     assert methods["regression.predict"]["source_prerequisite"] == "regression_model"
     assert methods["regression.predict"]["availability"] == "available"
+    gp = methods["regression.gaussian_process"]
+    assert gp["availability"] == "available"
+    assert gp["placement"]["domain_id"] == "correlation-regression-prediction"
+    assert gp["placement"]["contextual"] is False
+    ai = next(domain for domain in matrix["domains"] if domain["id"] == "ai-ml-experimental-design")
+    assert ai["crossLinkMethodIds"] == ["regression.gaussian_process"]
+    assert "regression.gaussian_process" not in ai["directMethodIds"]
+    assert (
+        sum(item["method_id"] == "regression.gaussian_process" for item in matrix["methods"]) == 1
+    )
     assert len(matrix["methods"]) == 38
 
 

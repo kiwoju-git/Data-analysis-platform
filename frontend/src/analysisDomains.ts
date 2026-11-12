@@ -40,6 +40,7 @@ export interface AnalysisDomainFamily {
 
 export interface AnalysisDomainDefinition {
   contextualSummaryKey?: TranslationKey;
+  crossLinkMethodIds?: readonly string[];
   descriptionKey: TranslationKey;
   directContextualMethodIds?: readonly string[];
   directContextualWorkflows?: readonly AnalysisContextualWorkflow[];
@@ -213,16 +214,7 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
     labelKey: "analysisDomains.ai.label",
     descriptionKey: "analysisDomains.ai.description",
     directMethodIds: ["doe.latin_hypercube", "doe.bayesian_optimization"],
-    directContextualWorkflows: [
-      {
-        id: "gaussian-process-surrogate",
-        labelKey: "analysisContext.gaussianProcess.label",
-        descriptionKey: "analysisContext.gaussianProcess.description",
-        presentation: "card",
-        showInSidebar: false,
-        statusKey: "analysisContext.gaussianProcess.status",
-      },
-    ],
+    crossLinkMethodIds: ["regression.gaussian_process"],
     families: [],
   },
   {

@@ -26,6 +26,7 @@ from app.api.v1.schemas.bayesian import (
 )
 from app.api.v1.schemas.bayesian_desirability import ResponseValues
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
     BoCorrelationPolicy,
@@ -190,7 +191,7 @@ class MixedStudyResponse(BaseModel):
     factors: list[MixedFactorResponse]
     objective: AnyDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
-    initial_design: MixedInitialDesignResponse
+    initial_design: MixedInitialDesignResponse | DatasetImportedInitialDesign
     trial_count: int = Field(ge=1, le=200)
     pending_trial_count: int = Field(ge=0, le=200)
     completed_trial_count: int = Field(ge=0, le=200)

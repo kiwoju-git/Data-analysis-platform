@@ -254,7 +254,7 @@ def test_populated_metadata24_migration_preserves_legacy_hashes(tmp_path, monkey
         assert read.status_code == 200, read.json()
         assert read.json() == batch
         with sqlite3.connect(metadata_db_path(restored)) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 33
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 34
             assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
             for table in tables:
                 assert (

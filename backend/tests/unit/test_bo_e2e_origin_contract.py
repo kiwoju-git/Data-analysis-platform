@@ -47,6 +47,8 @@ def test_bo_manual_api_mutations_have_explicit_same_origin() -> None:
         "bo_mixed_workflow",
         "bo_target_curve_preview",
         "bo_target_curve_recommendation",
+        "bo_dataset_import",
+        "bo_xy_gpr_navigation",
     }
     failures = {
         path.name: lines

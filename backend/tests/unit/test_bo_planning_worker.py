@@ -34,7 +34,13 @@ def test_validation_is_inside_admission_and_original_worker_deadline(monkeypatch
     from app.statistics import bo_planning_model as model
 
     payload = {"snapshot": {}, "points": [], "eligibility_excluded_normalized": []}
-    result = {"calculation_request": payload}
+    result = (
+        []
+        if operation == "evaluate"
+        else {"items": []}
+        if operation == "selection"
+        else {"calculation_request": payload}
+    )
     events = []
 
     def calculate(kind, received):

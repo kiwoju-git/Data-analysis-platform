@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from app.statistics.bayesian_optimization import BayesianOptimizationError
+from app.statistics.bo_beta_policy import BETA_NUMERICAL_POLICY
 from app.statistics.bo_desirability import (
     DesirabilityGoal,
     composite_desirability,
@@ -558,6 +559,7 @@ class DesirabilityBatchAcquisition:
     def metadata(self) -> dict[str, Any]:
         result = {
             "policy_version": POLICY_VERSION,
+            "numerical_policy": BETA_NUMERICAL_POLICY,
             "root_seed": self.root_seed,
             "response_sample_seeds": {key: str(value) for key, value in self._seeds.items()},
             "batch_step": self.selected_count,

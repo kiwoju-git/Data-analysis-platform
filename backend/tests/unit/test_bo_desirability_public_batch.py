@@ -168,20 +168,46 @@ def test_real_worker_review_atomic_confirm_partial_measurement_and_restart(
             )
 
 
-def test_concentrated_beta_q8_failure_creates_no_review_or_pending(tmp_path):
+def test_concentrated_beta_q8_review_succeeds_without_creating_pending(tmp_path):
     with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
         study = completed(client)
         body = batch_request(study, 8)
         for model in body["response_models"]:
             model["kernel"]["kind"] = "matern_5_2"
             model["surrogate"] = {"noise_mode": "estimate"}
-        failed = client.post(url(study) + "/desirability-reviews", json=body)
-        assert failed.status_code == 409, failed.text
-        assert failed.json()["error"]["code"] == "bayesian_desirability_beta_precision_unsupported"
+        reviewed = client.post(url(study) + "/desirability-reviews", json=body)
+        assert reviewed.status_code == 200, reviewed.text
+        items = reviewed.json()["calculation"]["items"]
+        assert len(items) == 8
+        assert all(item["acquisition"]["value"] >= 0 for item in items)
+        assert items[0]["acquisition"]["value"] > 0
         assert client.get(url(study)).json() == study
         assert (
             client.get(url(study) + "/desirability-recommendations/latest").json()["item"] is None
         )
+        with sqlite3.connect(metadata_db_path(tmp_path)) as db:
+            assert db.execute(
+                "SELECT COUNT(*) FROM bayesian_recommendation_batches"
+            ).fetchone() == (0,)
+
+
+def test_unresolved_beta_precision_still_creates_no_partial_review_or_trials(tmp_path, monkeypatch):
+    from app.statistics.bo_desirability_acquisition import beta_expected_improvement
+
+    def unresolved(*args, **kwargs):
+        beta_expected_improvement(0.5, 1e-28, 0.5)
+
+    monkeypatch.setattr(
+        "app.services.bo_desirability_worker.run_desirability_batch_calculation", unresolved
+    )
+    with TestClient(create_app(Settings(workspace_root=tmp_path))) as client:
+        study = completed(client)
+        response = client.post(url(study) + "/desirability-reviews", json=batch_request(study))
+        assert response.status_code == 409, response.text
+        assert (
+            response.json()["error"]["code"] == "bayesian_desirability_beta_precision_unsupported"
+        )
+        assert client.get(url(study)).json() == study
         with sqlite3.connect(metadata_db_path(tmp_path)) as db:
             assert db.execute(
                 "SELECT COUNT(*) FROM bayesian_recommendation_batches"

@@ -28,7 +28,7 @@ def verify_mixed_builder(page, base: str) -> dict:
     page.goto(base + ROUTE, wait_until="domcontentloaded")
     wait_for_bayesian_ready(page, "en", ROUTE)
     page.get_by_role("button", name="Create a new study", exact=True).click()
-    page.get_by_label("Study factor type", exact=True).select_option("mixed")
+    page.get_by_label("Study creation", exact=True).select_option("mixed")
     builder = page.get_by_role("region", name="Mixed-factor Bayesian study", exact=True)
     builder.get_by_label("Study name", exact=True).fill("Synthetic mixed UI creation")
     builder.get_by_label("Initial design seed", exact=True).fill("31")

@@ -56,6 +56,10 @@ import { useRegressionModelRetentionState } from "./useRegressionModelRetentionS
 import { useRestoredAnalysisResultState } from "./useRestoredAnalysisResultState";
 import { useBayesianStudyCatalogState } from "./features/bayesian/hooks/useBayesianStudyCatalogState";
 import { useBayesianStudyDraftState } from "./features/bayesian/hooks/useBayesianStudyDraftState";
+import { datasetImportedInitialFixture } from "./features/bayesian/boDatasetSource.fixture";
+import { useDatasetImport } from "./features/bayesian/hooks/useDatasetImport";
+import type { DatasetImportRequest, DatasetImportPreflightResponse } from "./api/types/boDatasetImport";
+import type { preflightDatasetImport, createDatasetStudy } from "./api/boDatasetImport";
 import { useBayesianVectorEntry } from "./features/bayesian/hooks/useBayesianVectorEntry";
 import { buildVectorObjective, newResponseDraft } from "./features/bayesian/bayesianVectorDraft";
 import type { BayesianObservationBatchCreateRequest } from "./api";
@@ -91,6 +95,77 @@ import { useAssetManagementState } from "./useAssetManagementState";
 import { useProjectOverviewState } from "./useProjectOverviewState";
 import type { AnalysisRunsRouteParams } from "./api/routes";
 
+const datasetImportApi = vi.hoisted(() => ({ preflightDatasetImport: vi.fn<typeof preflightDatasetImport>(), createDatasetStudy: vi.fn<typeof createDatasetStudy>() }));
+vi.mock("./api/boDatasetImport", () => datasetImportApi);
+
+describe("measured dataset import ownership", () => {
+  const receipt = datasetImportedInitialFixture();
+  const request: DatasetImportRequest = {
+    schema_version: 1, name: "Measured", dataset_version_id: receipt.source.dataset_version_id,
+    expected_schema_hash: receipt.source.schema_hash, factor_mappings: [{ column_id: "column-x", factor: { factor_id: "x", name: "X", domain_kind: "continuous", low: 0, high: 10 } }],
+    response_mappings: [{ column_id: "column-y", response_id: null }], objective: { name: "Y", goal_type: "maximize", observation_policy: "manual_single_observation", target_value: null, target_tolerance: null },
+    constraints: [], filter_snapshot: { expression_version: 1, conditions: [] }, missing_policy: "complete_case",
+  };
+  const preview: DatasetImportPreflightResponse = { ...receipt, schema_version: 1 };
+  beforeEach(() => { datasetImportApi.preflightDatasetImport.mockReset(); datasetImportApi.createDatasetStudy.mockReset(); });
+  it("ignores held preflight after edits and old finally while a newer request runs", async () => {
+    const old = deferred<DatasetImportPreflightResponse>(), newer = deferred<DatasetImportPreflightResponse>();
+    datasetImportApi.preflightDatasetImport.mockReturnValueOnce(old.promise).mockReturnValueOnce(newer.promise);
+    const runner = new HookRunner(() => useDatasetImport(vi.fn()), undefined);
+    await runner.act(() => void runner.output.preflight(request));
+    await runner.act(() => runner.output.invalidate());
+    await runner.act(() => void runner.output.preflight(request));
+    old.resolve(preview); await runner.flush();
+    expect(runner.output.review).toBeNull(); expect(runner.output.busy).toBe("preflight");
+    newer.resolve(preview); await runner.flush(); expect(runner.output.review?.result).toEqual(preview);
+    runner.unmount();
+  });
+  it("rejects a different source preflight without enabling creation", async () => {
+    datasetImportApi.preflightDatasetImport.mockResolvedValue({ ...preview, source: { ...preview.source, schema_hash: "f".repeat(64) } });
+    const runner = new HookRunner(() => useDatasetImport(vi.fn()), undefined);
+    await runner.act(() => void runner.output.preflight(request));
+    expect(runner.output.review).toBeNull(); expect(runner.output.error).toBe("bayesian_import_source_mismatch");
+    runner.unmount();
+  });
+  it("keeps the exact create request on network failure and never retries automatically", async () => {
+    datasetImportApi.preflightDatasetImport.mockResolvedValue(preview);
+    datasetImportApi.createDatasetStudy.mockRejectedValue(new Error("network offline"));
+    const runner = new HookRunner(() => useDatasetImport(vi.fn()), undefined);
+    await runner.act(() => void runner.output.preflight(request)); await runner.act(() => void runner.output.create());
+    const first = datasetImportApi.createDatasetStudy.mock.calls[0][0];
+    expect(runner.output.retryAvailable).toBe(true); expect(datasetImportApi.createDatasetStudy).toHaveBeenCalledTimes(1);
+    await runner.act(() => void runner.output.create(true));
+    expect(datasetImportApi.createDatasetStudy.mock.calls[1][0]).toEqual(first);
+    await runner.act(() => runner.output.invalidate()); expect(runner.output.retryAvailable).toBe(false);
+    runner.unmount();
+  });
+  it("does not activate a committed study after unmount", async () => {
+    datasetImportApi.preflightDatasetImport.mockResolvedValue(preview);
+    const held = deferred<BayesianStudyResponse>(), accepted = vi.fn(); datasetImportApi.createDatasetStudy.mockReturnValue(held.promise);
+    const runner = new HookRunner(() => useDatasetImport(accepted), undefined);
+    await runner.act(() => void runner.output.preflight(request)); await runner.act(() => void runner.output.create());
+    runner.unmount(); held.resolve(bayesianStudy("old")); await runner.flush(); expect(accepted).not.toHaveBeenCalled();
+  });
+  it("rejects a returned receipt with wrong column ownership", async () => {
+    datasetImportApi.preflightDatasetImport.mockResolvedValue(preview);
+    datasetImportApi.createDatasetStudy.mockImplementation((body) => Promise.resolve({ ...bayesianStudy("wrong"), initial_design: { ...receipt, request_id: body.request_id } }));
+    const accepted = vi.fn(), runner = new HookRunner(() => useDatasetImport(accepted), undefined);
+    await runner.act(() => void runner.output.preflight(request)); await runner.act(() => void runner.output.create());
+    expect(runner.output.error).toBe("bayesian_import_source_mismatch"); expect(accepted).not.toHaveBeenCalled(); runner.unmount();
+  });
+  it("accepts normalized null filter values from the server without changing filter semantics", async () => {
+    const filtered = { ...request, filter_snapshot: { expression_version: 1, conditions: [{ column_id: "column-x", operator: "is_not_missing" as const }] } };
+    datasetImportApi.preflightDatasetImport.mockResolvedValue(preview);
+    datasetImportApi.createDatasetStudy.mockImplementation((body) => Promise.resolve({ ...bayesianStudy("saved"), initial_design: {
+      ...receipt, request_id: body.request_id, factor_columns: { x: "column-x" }, response_columns: { objective: "column-y" },
+      filter_snapshot: { ...filtered.filter_snapshot, conditions: [{ ...filtered.filter_snapshot.conditions[0], value: null }] },
+    } }));
+    const accepted = vi.fn(), runner = new HookRunner(() => useDatasetImport(accepted), undefined);
+    await runner.act(() => void runner.output.preflight(filtered)); await runner.act(() => void runner.output.create());
+    expect(accepted).toHaveBeenCalledTimes(1); expect(runner.output.error).toBeNull(); runner.unmount();
+  });
+});
+
 function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): AnalysisReportCapability {
   return {
     capability_schema_version: 1, analysis_id: analysisId, method_id: "eda.descriptive",
@@ -103,6 +178,16 @@ function reportCapability(analysisId: string, locale: "en" | "ko", hash = "a"): 
 }
 
 describe("multiresponse measured entry ownership", () => {
+  it("does not seed a generated successor from imported measured observations", async () => {
+    const runner = new HookRunner(useBayesianStudyDraftState, undefined);
+    const before = runner.output.buildRequest();
+    const imported = bayesianStudy("imported-successor");
+    imported.initial_design = datasetImportedInitialFixture();
+    await runner.act(() => runner.output.prepareSuccessor(imported));
+    expect(runner.output.buildRequest()).toEqual(before);
+    expect(runner.output.predecessorStudyId).toBeNull();
+    runner.unmount();
+  });
   function vectorStudy(id: string): BayesianStudyResponse {
     const objective = buildVectorObjective("Q", [{ ...newResponseDraft(1), lower: "0", target: "1" }, { ...newResponseDraft(2), lower: "0", target: "1" }]);
     if (typeof objective === "string") throw new Error(objective);

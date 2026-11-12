@@ -10,7 +10,7 @@ from app.api.v1.schemas.bo_augmentation import AugmentationCalculation
 from app.api.v1.schemas.bo_planning import CandidateRow
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_augmentation import CONFIRM, MAXPRO, MIXED_MAXIMIN, REFINE, REFINE_V2
-from app.statistics.bo_desirability_acquisition import beta_expected_improvement
+from app.statistics.bo_beta_policy import stored_beta_expected_improvement
 
 
 def _require(condition: bool) -> None:
@@ -117,11 +117,12 @@ def _model_row(row: dict[str, Any], snapshot: dict[str, Any], policy: str) -> No
     xi = _finite(snapshot["calculation_request"]["xi_desirability"])
     moments = row["desirability_moments"]
     expected = asdict(
-        beta_expected_improvement(
+        stored_beta_expected_improvement(
             moments["mean"],
             moments["variance"],
             snapshot["incumbent"]["latent_incumbent_value"],
             xi=xi,
+            numerical_policy=acquisition.get("numerical_policy"),
         )
     )
     _require(acquisition["xi_desirability"] == xi)

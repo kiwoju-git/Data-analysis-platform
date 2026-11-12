@@ -1,6 +1,18 @@
 # Dataset Version Retention Contract
 
-Last updated: 2026-07-24
+Last updated: 2026-11-12
+
+## Imported Bayesian Studies
+
+Metadata 34 records durable dataset-version ownership for measured X/Y BO
+imports. Deletion preflight includes `counts.bayesian_study_count` and dependency
+descriptors with `asset_type: bayesian_study` and
+`relationship: study_imported_from_dataset`. Both ordinary and cascade deletion
+are blocked by `dataset_version_deletion_bayesian_study_dependency` until the
+owning study is explicitly deleted. Import and deletion serialize at the metadata
+write transaction; the source foreign key uses `ON DELETE RESTRICT`. Study
+deletion removes the reference, never the source dataset. See
+`bayesian_initial_observation_import_contract.md` for the versioned import receipt.
 
 ## Scope
 

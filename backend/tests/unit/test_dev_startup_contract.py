@@ -83,11 +83,11 @@ def test_dev_and_diagnostics_keep_strict_ports_and_runtime_contract_checks() -> 
     assert "$env:DATALAB_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert "$env:VITE_GIT_COMMIT = $RepositoryBuildId" in dev_text
     assert f"$script:ExpectedApiContractVersion = {API_CONTRACT_VERSION}" in helper_text
-    assert "$script:MinimumMetadataSchemaVersion = 33" in helper_text
+    assert "$script:MinimumMetadataSchemaVersion = 34" in helper_text
     frontend_runtime = (repo_root / "frontend/src/runtimeCompatibility.ts").read_text(
         encoding="utf-8"
     )
-    assert "MINIMUM_METADATA_SCHEMA_VERSION = 33" in frontend_runtime
+    assert "MINIMUM_METADATA_SCHEMA_VERSION = 34" in frontend_runtime
     assert '"dataset_version_metadata"' in helper_text
     assert '"bayesian_optimization"' in helper_text
     assert '"graph_builder_preview"' in helper_text
@@ -140,7 +140,8 @@ def test_lan_entry_keeps_api_loopback_and_does_not_widen_cors() -> None:
         (30, "False"),
         (31, "False"),
         (32, "False"),
-        (33, "True"),
+        (33, "False"),
+        (34, "True"),
     ],
 )
 def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expected: str) -> None:
@@ -156,19 +157,19 @@ def test_dev_runtime_helper_matches_frontend_metadata_boundary(schema: int, expe
     ],
 )
 def test_dev_runtime_helper_requires_exact_api_contract(api_version: int, expected: str) -> None:
-    assert _runtime_compatibility(api_version, 33) == expected
+    assert _runtime_compatibility(api_version, 34) == expected
 
 
 def test_dev_runtime_helper_requires_multiresponse_recommendation_capability() -> None:
-    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_multiresponse=True) == "False"
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 34, omit_multiresponse=True) == "False"
 
 
 def test_dev_runtime_helper_requires_fit_quality_capability() -> None:
-    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_fit_quality=True) == "False"
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 34, omit_fit_quality=True) == "False"
 
 
 def test_dev_runtime_helper_requires_auto_evidence_capability() -> None:
-    assert _runtime_compatibility(API_CONTRACT_VERSION, 33, omit_auto_evidence=True) == "False"
+    assert _runtime_compatibility(API_CONTRACT_VERSION, 34, omit_auto_evidence=True) == "False"
 
 
 def _runtime_compatibility(

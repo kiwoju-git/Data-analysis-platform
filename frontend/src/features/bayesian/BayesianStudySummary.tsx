@@ -4,9 +4,12 @@ import { formatDoeFactorValue } from "../../doe/factorDomain";
 import { constraintText } from "./bayesianDisplay";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { translateSystemText } from "../../i18n/translate";
+import { datasetSourceMessages } from "../../i18n/boDatasetSource";
+import { BayesianDatasetSourceSummary } from "./BayesianDatasetSourceSummary";
 
 export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }) {
   const { locale } = useI18n();
+  const initial = study.initial_design;
   const initialTrials = study.trials.filter((trial) => trial.origin === "initial_design");
   const completedInitialTrials = initialTrials.filter(
     (trial) => trial.state === "completed",
@@ -57,7 +60,7 @@ export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }
         </strong>
         <span>초기 설계</span>
         <strong>
-          {study.initial_design.policy === "latin_hypercube_random_cd_v1"
+          {initial.policy === "dataset_observations_v1" ? datasetSourceMessages(locale).title : initial.policy === "latin_hypercube_random_cd_v1"
             ? "LHS 공간충전"
             : "제약 대응 균등 설계"}
         </strong>
@@ -83,15 +86,17 @@ export function BayesianStudySummary({ study }: { study: BayesianStudyResponse }
         <span>목표값 / 허용 오차</span><strong>{study.objective.target_value ?? "-"} / {study.objective.target_tolerance ?? "-"}</strong>
         <span>관측 정책</span><strong>실제 관측값 직접 입력</strong>
       </div>
+      {initial.policy === "dataset_observations_v1" ? <BayesianDatasetSourceSummary receipt={initial} /> : <>
       <h5>초기설계 설정</h5>
       <div className="metadata-grid" aria-label="Bayesian 초기설계 설정">
-        <span>초기 실험 수</span><strong>{study.initial_design.generated_size}</strong>
-        <span>Policy</span><strong>{study.initial_design.policy === "latin_hypercube_random_cd_v1" ? "LHS random-cd" : "제약 대응 균등 설계"}</strong>
-        <span>Seed</span><strong>{study.initial_design.seed}</strong>
-        <span>Centered discrepancy</span><strong>{study.initial_design.centered_discrepancy ?? "-"}</strong>
-        <span>최소 거리</span><strong>{study.initial_design.minimum_pairwise_distance ?? "-"}</strong>
-        <span>층화 상태</span><strong>{study.initial_design.strata_valid === null || study.initial_design.strata_valid === undefined ? "해당 없음" : study.initial_design.strata_valid ? "유효" : "확인 필요"}</strong>
+        <span>초기 실험 수</span><strong>{initial.generated_size}</strong>
+        <span>Policy</span><strong>{initial.policy === "latin_hypercube_random_cd_v1" ? "LHS random-cd" : "제약 대응 균등 설계"}</strong>
+        <span>Seed</span><strong>{initial.seed}</strong>
+        <span>Centered discrepancy</span><strong>{initial.centered_discrepancy ?? "-"}</strong>
+        <span>최소 거리</span><strong>{initial.minimum_pairwise_distance ?? "-"}</strong>
+        <span>층화 상태</span><strong>{initial.strata_valid === null || initial.strata_valid === undefined ? "해당 없음" : initial.strata_valid ? "유효" : "확인 필요"}</strong>
       </div>
+      </>}
       <div className="panel-heading bayesian-initial-design-heading">
         <div><h5>초기 실험 설계</h5><p>Study definition에 저장된 실제 단위 조건입니다.</p></div>
         <a className="secondary-button" download href={apiRoutes.bayesianInitialDesignCsv(study.study_id)}>CSV 다운로드</a>

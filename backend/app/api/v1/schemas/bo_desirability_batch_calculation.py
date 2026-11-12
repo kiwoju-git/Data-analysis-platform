@@ -21,6 +21,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _Budget,
     _Constraint,
     _Incumbent,
+    _NumericalPolicyFields,
     _ResponsePrediction,
     _SharedModel,
     _SharedObservationView,
@@ -84,7 +85,7 @@ class _CovarianceSummary(_StrictModel):
     conditional_variance_adjustment_max_scaled: FiniteFloat = Field(ge=0)
 
 
-class _Sampler(_StrictModel):
+class _Sampler(_NumericalPolicyFields):
     policy_version: Literal["conditional_mc_desirability_beta_marginal_v1"]
     root_seed: int = Field(ge=0, le=2_147_483_647)
     response_sample_seeds: dict[Identifier, str] = Field(min_length=1, max_length=4)

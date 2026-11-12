@@ -9,12 +9,14 @@ import { isMixedCategory, mixedStudyKey } from "./boMixedDraft";
 import { planningInteger } from "./boPlanningDraft";
 import { vectorDraftCell } from "./bayesianVectorDraft";
 import { BayesianCurveSummary } from "./BayesianCurvePolicy";
+import { BayesianDatasetSourceSummary } from "./BayesianDatasetSourceSummary";
 import { useMixedStudyActions } from "./hooks/useMixedStudyActions";
 import "./boPlanning.css";
 
 interface Props { study: MixedStudyResponse; disabled: boolean; onCommitted: (study: MixedStudyResponse, expectedHistory: string) => void; onRefresh: () => void; onBusyChange: (value: boolean) => void }
 export function BayesianMixedStudyWorkspace({ study, disabled, onCommitted, onRefresh, onBusyChange }: Props) {
   const { locale } = useI18n(), text = mixedMessages(locale);
+  const initial = study.initial_design;
   const state = useMixedStudyActions({ study, disabled, onCommitted, onRefresh });
   const [offset, setOffset] = useState(0), [replicateTrial, setReplicateTrial] = useState(""), [count, setCount] = useState("1"), [budget, setBudget] = useState("200"), [intent, setIntent] = useState(false);
   const [closingIntent, setClosingIntent] = useState(false), [closeTarget, setCloseTarget] = useState<"completed" | "abandoned">("completed");
@@ -37,9 +39,9 @@ export function BayesianMixedStudyWorkspace({ study, disabled, onCommitted, onRe
     <div className="table-wrap"><table className="result-table"><caption className="bo-planning-caption">{text.factors}</caption><thead><tr><th>{text.factorName}</th><th>{text.kind}</th><th>{text.levels}</th><th>{text.correlation}</th></tr></thead><tbody>{study.factors.map(factor => <tr key={factor.factor_id}><th scope="row">{factor.name}{factor.unit ? ` (${factor.unit})` : ""}</th><td>{factor.domain_kind === "nominal" ? text.nominal : factor.domain_kind === "ordinal" ? text.ordinal : factor.domain_kind === "discrete_numeric" ? text.discrete : text.continuous}</td>
       <td>{isMixedCategory(factor) ? <ol>{factor.levels.map((level, index) => <li key={index}>{level}</li>)}</ol> : `${exact(factor.low)} – ${exact(factor.high)}${factor.step == null ? "" : ` / ${text.step}: ${exact(factor.step)}`}`}</td>
       <td>{isMixedCategory(factor) ? mixedCorrelationLabel(factor.correlation_policy, locale) : "-"}</td></tr>)}</tbody></table></div>
-    <details><summary>{text.initial}</summary><p>{text.initialPolicy}</p><p>{text.size}: {study.initial_design.generated_size} · {text.seed}: {study.initial_design.seed}</p>
-      {study.factors.filter(isMixedCategory).map(factor => <div key={factor.factor_id}><strong>{factor.name}</strong><ul>{factor.levels.map((level, index) => <li key={index}>{level}: {study.initial_design.category_level_counts[factor.factor_id]?.[index] ?? "-"}</li>)}</ul>
-        {(study.initial_design.unobserved_level_indices[factor.factor_id]?.length ?? 0) > 0 && <p>{text.uncovered}: {study.initial_design.unobserved_level_indices[factor.factor_id].map(index => factor.levels[index]).join("; ")}</p>}</div>)}<p>{text.prior}</p></details>
+    {initial.policy === "dataset_observations_v1" ? <BayesianDatasetSourceSummary receipt={initial} /> : <details><summary>{text.initial}</summary><p>{text.initialPolicy}</p><p>{text.size}: {initial.generated_size} · {text.seed}: {initial.seed}</p>
+      {study.factors.filter(isMixedCategory).map(factor => <div key={factor.factor_id}><strong>{factor.name}</strong><ul>{factor.levels.map((level, index) => <li key={index}>{level}: {initial.category_level_counts[factor.factor_id]?.[index] ?? "-"}</li>)}</ul>
+        {(initial.unobserved_level_indices[factor.factor_id]?.length ?? 0) > 0 && <p>{text.uncovered}: {initial.unobserved_level_indices[factor.factor_id].map(index => factor.levels[index]).join("; ")}</p>}</div>)}<p>{text.prior}</p></details>}
     <BayesianCurveSummary responses={study.objective.responses} />
     <h4>{text.observations}</h4><p>{text.partial}</p>
     <fieldset className="bo-planning-confirm-lock" disabled={readOnly}><div className="table-wrap"><table className="result-table"><caption className="bo-planning-caption">{text.observations}</caption><thead><tr><th>{text.trial}</th>{study.factors.map(factor => <th key={factor.factor_id}>{factor.name}</th>)}<th>{text.state}</th>{study.objective.responses.map(response => <th key={response.response_id}>{response.name}{response.unit ? ` (${response.unit})` : ""}</th>)}<th>{text.abandon}</th></tr></thead>

@@ -5558,7 +5558,7 @@ describe("App", () => {
       dependency_preview: [dependency],
       dependency_preview_truncated: false,
     };
-    const html = renderToString(
+    const renderImpact = (value: DatasetVersionDeletionPreflightResponse) => renderToString(
       <DatasetDeletionImpact
         cascadeConfirmed={false}
         cascadeConfirmationText=""
@@ -5573,15 +5573,27 @@ describe("App", () => {
         onDelete={() => undefined}
         onLoadDependencies={() => undefined}
         onMetadataOnlyConfirmedChange={() => undefined}
-        preflight={preflight}
+        preflight={value}
       />,
     );
 
+    const html = renderImpact(preflight);
     expect(html).toContain("저장 경로 검증 실패");
     expect(html).toMatch(/연결 자산.*2.*건 보기/);
     expect(html).toContain("eda.descriptive");
     expect(html).toContain("연결 자산과 데이터셋 모두 영구 삭제");
     expect(html).not.toContain("workspaces/");
+    const imported = renderImpact({ ...preflight,
+      counts: { ...counts, analysis_run_count: 0, analysis_export_count: 0, bayesian_study_count: 1 },
+      blockers: ["dataset_version_deletion_bayesian_study_dependency"],
+      available_operations: preflight.available_operations.map(operation => ({ ...operation, ready: false,
+        blockers: ["dataset_version_deletion_bayesian_study_dependency"] })),
+      dependency_preview: [{ ...dependency, asset_type: "bayesian_study", relationship: "study_imported_from_dataset", display_name: "Imported synthetic study" }],
+    });
+    expect(imported).toMatch(/연결 자산.*1.*건 보기/);
+    expect(imported).toContain("Bayesian Study");
+    expect(imported).toContain("연결된 Study를 먼저 삭제");
+    expect(imported).not.toContain("연결 자산과 데이터셋 모두 영구 삭제");
   });
 
   it("renders the single-workspace project overview surface", () => {

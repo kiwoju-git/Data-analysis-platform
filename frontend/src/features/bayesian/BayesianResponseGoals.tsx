@@ -9,7 +9,7 @@ import { curvePolicyMessages } from "../../i18n/boCurvePolicy";
 
 type GoalEditor = Pick<ReturnType<typeof useBayesianStudyDraftState>, "responseGoals" | "updateResponseGoal" | "removeResponseGoal" | "addResponseGoal"> &
   Partial<Pick<ReturnType<typeof useBayesianStudyDraftState>, "studyName" | "factors" | "predecessorStudyId">>;
-export function BayesianResponseGoals({ draft, sourceKey }: { draft: GoalEditor; sourceKey?: string }) {
+export function BayesianResponseGoals({ draft, sourceKey, namesReadOnly = false, showCreationNotice = true }: { draft: GoalEditor; sourceKey?: string; namesReadOnly?: boolean; showCreationNotice?: boolean }) {
   const { locale } = useI18n();
   const text = (ko: string, en: string) => boText(locale, ko, en);
   return <section aria-label={text("반응별 목표", "Response goals")}>
@@ -23,7 +23,7 @@ export function BayesianResponseGoals({ draft, sourceKey }: { draft: GoalEditor;
       <tbody>{draft.responseGoals.map((row, index) => <tr key={row.key} data-response-id={row.responseId}>
         {(["name", "unit"] as const).map(field => <td key={field}><input
           aria-label={`${text("반응", "Response")} ${index + 1} ${field === "name" ? text("이름", "name") : text("단위", "unit")}`}
-          value={row[field]} maxLength={field === "name" ? 80 : 40}
+          value={row[field]} readOnly={namesReadOnly} maxLength={field === "name" ? 80 : 40}
           onChange={event => draft.updateResponseGoal(row.key, field, event.currentTarget.value)} /></td>)}
         <td><select aria-label={`${text("반응", "Response")} ${index + 1} ${text("목표", "goal")}`} value={row.goal}
           onChange={event => draft.updateResponseGoal(row.key, "goal", event.currentTarget.value as typeof row.goal)}>
@@ -46,7 +46,7 @@ export function BayesianResponseGoals({ draft, sourceKey }: { draft: GoalEditor;
       <Plus size={16} aria-hidden="true" /> {text("반응 추가", "Add response")}
     </button>
     <BayesianCurvePolicy draft={draft} />
-    <div className="notice-box" role="status">{desirabilityMessages(locale).creationNotice}</div>
+    {showCreationNotice && <div className="notice-box" role="status">{desirabilityMessages(locale).creationNotice}</div>}
     <BayesianTargetCurvePreview goals={draft.responseGoals} sourceKey={sourceKey ?? JSON.stringify([draft.studyName, draft.factors, draft.responseGoals, draft.predecessorStudyId])} />
   </section>;
 }

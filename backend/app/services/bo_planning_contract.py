@@ -13,8 +13,8 @@ from app.api.v1.schemas.bo_desirability_calculation import _ResponseModelResult
 from app.api.v1.schemas.bo_fit_quality import _ResponseModel
 from app.services.bo_desirability_batch_contract import _validate_planning_proof
 from app.statistics.bayesian_optimization import BayesianOptimizationError
+from app.statistics.bo_beta_policy import stored_beta_expected_improvement
 from app.statistics.bo_candidate_points import GENERATION_POLICY, validated_candidate_rows
-from app.statistics.bo_desirability_acquisition import beta_expected_improvement
 from app.statistics.bo_desirability_batch_acquisition import _raw_variance, batch_response_seed
 from app.statistics.bo_desirability_posterior import evaluate_surrogate_desirability
 from app.statistics.bo_planning_model import (
@@ -96,11 +96,12 @@ def _base(
         base = evaluate_surrogate_desirability(model.models, model.goals, point)
         _require(_same_incumbent(data["response_predictions"], [asdict(v) for v in base.responses]))
         _require(_same_incumbent(data["desirability_moments"], asdict(base.moments)))
-        acquisition = beta_expected_improvement(
+        acquisition = stored_beta_expected_improvement(
             base.moments.mean,
             base.moments.variance,
             model.incumbent["latent_incumbent_value"],
             xi=request.xi_desirability,
+            numerical_policy=row.acquisition.numerical_policy,
         )
         _require(
             _same_incumbent(
@@ -168,6 +169,11 @@ def validate_planning_selection(
             )
         )
         sampler = item.planning.sampler
+        _require(
+            sampler.numerical_policy
+            == item.acquisition.numerical_policy
+            == typed.items[0].acquisition.numerical_policy
+        )
         _require(sampler.batch_step == step and sampler.root_seed == request.search.random_seed)
         _require(sampler.requested_sample_count == request.batch_options.sample_count)
         _require(

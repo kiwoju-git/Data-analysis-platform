@@ -31,6 +31,29 @@ describe("shared BO progress chart presentation", () => {
     expect(html).toContain("No desirability limits"); expect(html).toContain("Two factors are required");
     expect(html).toContain('data-y="1e-8"'); expect(html).not.toContain('data-chart-id="bo-progress-desirability"');
   });
+  it("retains both markers at exactly the same measured and cumulative-best coordinates", () => {
+    const { study } = desirabilityFixture();
+    study.objective = { name: "Y", goal_type: "maximize", direction: "maximize", observation_policy: "manual_single_observation",
+      unit: "mg", target_value: null, target_tolerance: null };
+    study.trials.forEach((trial, index) => { trial.objective_value = index + 1; });
+    const before = JSON.stringify(study);
+    const html = renderToStaticMarkup(<BayesianProgressCharts study={study} />);
+    const chart = html.split('data-chart-id="bo-progress-observed"')[1].split("</svg>")[0];
+    const measured = [...chart.matchAll(/<circle[^>]*data-point-id="([^"]+):measured"[^>]*>/g)];
+    const best = [...chart.matchAll(/<rect[^>]*data-point-id="([^"]+):best"[^>]*>/g)];
+    expect(measured.length).toBeGreaterThan(0);
+    expect(best).toHaveLength(measured.length);
+    const attribute = (tag: string, name: string) => Number(tag.match(new RegExp(` ${name}="([^"]+)"`))![1]);
+    for (const [index, point] of measured.entries()) {
+      const square = best[index];
+      expect(square[1]).toBe(point[1]);
+      expect(attribute(square[0], "data-x")).toBe(attribute(point[0], "data-x"));
+      expect(attribute(square[0], "data-y")).toBe(attribute(point[0], "data-y"));
+      expect(attribute(square[0], "x") + attribute(square[0], "width") / 2).toBe(attribute(point[0], "cx"));
+      expect(attribute(square[0], "y") + attribute(square[0], "height") / 2).toBe(attribute(point[0], "cy"));
+    }
+    expect(JSON.stringify(study)).toBe(before);
+  });
   it("keeps a target outside the observations inside the plot range", () => {
     const { study } = desirabilityFixture();
     study.objective = { name: "Y", goal_type: "match_target", direction: null, observation_policy: "manual_single_observation",

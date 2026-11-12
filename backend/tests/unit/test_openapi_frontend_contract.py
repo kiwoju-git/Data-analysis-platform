@@ -1681,11 +1681,12 @@ FRONTEND_SCHEMA_COMPONENT_CONTRACTS = [
                 "lifecycle_event",
             }
         ),
-        property_refs=(
-            ("initial_design", "BayesianInitialDesignResponse"),
-            ("observation_history", "BayesianHistoryRevisionResponse"),
-        ),
+        property_refs=(("observation_history", "BayesianHistoryRevisionResponse"),),
         property_any_of_refs=(
+            (
+                "initial_design",
+                frozenset({"BayesianInitialDesignResponse", "DatasetImportedInitialDesign"}),
+            ),
             (
                 "objective",
                 frozenset(

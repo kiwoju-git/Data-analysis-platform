@@ -275,6 +275,7 @@ class DatasetVersionDeletionCounts(BaseModel):
     job_count: int = Field(ge=0)
     attribute_control_limit_set_count: int = Field(ge=0)
     phase_2_analysis_count: int = Field(ge=0)
+    bayesian_study_count: int = Field(default=0, ge=0)
     child_version_count: int = Field(default=0, ge=0)
 
 
@@ -320,6 +321,7 @@ class DatasetCellCorrectionResponse(BaseModel):
 
 
 DatasetDeletionDependencyAssetType = Literal[
+    "bayesian_study",
     "analysis_run",
     "regression_model",
     "prediction",
@@ -338,6 +340,7 @@ class DatasetDeletionDependencyDescriptor(BaseModel):
     display_name: str
     method_id: str | None
     relationship: Literal[
+        "study_imported_from_dataset",
         "direct_analysis",
         "model_fitted_from_dataset",
         "prediction_uses_as_source",

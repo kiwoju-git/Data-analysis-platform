@@ -5,6 +5,7 @@ import { desirabilityMessages } from "../../i18n/boDesirability";
 import { formatExactNumericValue } from "../../statisticalNumberFormat";
 import { boText } from "./boNoisePolicy";
 import { BayesianCurveSummary } from "./BayesianCurvePolicy";
+import { BayesianDatasetSourceSummary } from "./BayesianDatasetSourceSummary";
 
 export function BayesianVectorStudySnapshot({ study }: { study: BayesianStudyResponse }) {
   const { locale } = useI18n();
@@ -23,6 +24,7 @@ export function BayesianVectorStudySnapshot({ study }: { study: BayesianStudyRes
       {desirabilityMessages(locale).savedNotice}
     </div>
     <p>{objective.name} · {boText(locale, "완료 / 전체", "Completed / total")}: {study.completed_trial_count} / {study.trial_count}</p>
+    {study.initial_design?.policy === "dataset_observations_v1" && <BayesianDatasetSourceSummary receipt={study.initial_design} />}
     <div className="table-wrap"><table className="result-table">
       <caption>{boText(locale, "저장된 반응 목표", "Stored response goals")}</caption>
       <thead><tr>{[boText(locale, "반응", "Response"), boText(locale, "목표", "Goal"),

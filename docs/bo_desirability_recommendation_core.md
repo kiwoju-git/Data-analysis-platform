@@ -68,8 +68,9 @@ break. `xi_desirability` is dimensionless and applied once.
 
 The selected candidate maximizes **moment-matched Beta EI**, not exact EI under
 the transformed Gaussian product distribution, not qNEI, and not a claimed JMP
-binary match. Proper Beta concentration above1e8 or unresolved subtraction
-precision still fails with `bayesian_desirability_beta_precision_unsupported`.
+binary match. API43 adds a cancellation-safe positive Beta-density integral for
+concentrated shapes; unresolved precision still fails with
+`bayesian_desirability_beta_precision_unsupported`.
 There is no silent normal/point-mass fallback for unsupported precision.
 An all-zero acquisition is explicitly recorded in warnings and search metadata;
 the feasible pool's deterministic tie-break is not evidence of improvement.

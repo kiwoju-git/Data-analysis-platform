@@ -111,6 +111,32 @@ class DesirabilityBatchWorkerCalculation:
     )
 
 
+def _require_current_numerical_policy(
+    rows: Any, *, error_code: str = "bayesian_desirability_result_invalid"
+) -> None:
+    from app.statistics.bo_beta_policy import BETA_NUMERICAL_POLICY
+
+    if not isinstance(rows, list):
+        raise BayesianOptimizationError(error_code)
+    for row in rows:
+        if not isinstance(row, dict):
+            raise BayesianOptimizationError(error_code)
+        acquisition = row.get("acquisition")
+        if acquisition is not None and (
+            not isinstance(acquisition, dict)
+            or acquisition.get("numerical_policy") != BETA_NUMERICAL_POLICY
+        ):
+            raise BayesianOptimizationError(error_code)
+        planning = row.get("planning")
+        if planning is not None:
+            sampler = planning.get("sampler") if isinstance(planning, dict) else None
+            if (
+                not isinstance(sampler, dict)
+                or sampler.get("numerical_policy") != BETA_NUMERICAL_POLICY
+            ):
+                raise BayesianOptimizationError(error_code)
+
+
 def _duplicate_free_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -312,6 +338,7 @@ def _run_calculation(
             ):
                 raise ValueError
             result_bytes = canonical_json_bytes(message["result"])
+            _require_current_numerical_policy(message["result"]["items"])
             returned: DesirabilityWorkerCalculation | DesirabilityBatchWorkerCalculation
             result_sha256 = hashlib.sha256(result_bytes).hexdigest()
             if isinstance(

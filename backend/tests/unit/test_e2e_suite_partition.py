@@ -34,6 +34,8 @@ STAGE_CALLS = {
     "bo_noise_context": "verify_bo_noise_context",
     "bo_progress": "verify_bo_progress",
     "bo_vector_history": "verify_bo_vector_history",
+    "bo_dataset_import": "verify_bo_dataset_import",
+    "bo_xy_gpr_navigation": "verify_bo_xy_gpr_navigation",
     "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
     "doe_browser_zoom": "verify_doe_browser_zoom",
@@ -74,6 +76,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "bo_noise_context",
         "bo_progress",
         "bo_vector_history",
+        "bo_dataset_import",
+        "bo_xy_gpr_navigation",
         "api_translation",
         "dataset_context",
         "gp_prediction_context",
@@ -112,6 +116,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "pilot_feedback" in driver.suite_stage_ids("context")
     assert "rsm_context" in driver.suite_stage_ids("context")
     assert "bo_vector_history" in driver.suite_stage_ids("context")
+    assert "bo_xy_gpr_navigation" in driver.suite_stage_ids("context")
+    assert "bo_dataset_import" in driver.suite_stage_ids("workflows")
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
@@ -154,6 +160,8 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
 
         def invoke(*_args, _stage=stage, **_kwargs):
             calls.append(_stage)
+            if _stage in {"bo_dataset_import", "bo_xy_gpr_navigation"}:
+                assert _kwargs == {"isolated_workspace": True}
             if _stage == "localization_shell":
                 raise LegacyBoundary()
             if _stage == "doe_rsm_completion":

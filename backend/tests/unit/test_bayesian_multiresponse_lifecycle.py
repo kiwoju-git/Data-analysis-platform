@@ -315,7 +315,7 @@ def test_replicate_vector_backup_restore_and_closed_delete(tmp_path) -> None:
         current = close.json()["study"]
     archive = tmp_path / "vector.zip"
     manifest = backup_workspace(root, archive)
-    assert manifest["metadata_schema_version"] == 33
+    assert manifest["metadata_schema_version"] == 34
     sha = hashlib.sha256(archive.read_bytes()).hexdigest()
     restored_root = tmp_path / "restored spaced path"
     restore_workspace(archive, restored_root)

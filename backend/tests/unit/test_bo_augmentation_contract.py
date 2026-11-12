@@ -305,7 +305,7 @@ def test_confirm_does_not_reintroduce_ei_precision_restrictions(monkeypatch):
         pytest.fail("Confirm must not evaluate EI")
 
     monkeypatch.setattr(
-        "app.services.bo_augmentation_contract.beta_expected_improvement", forbidden
+        "app.services.bo_augmentation_contract.stored_beta_expected_improvement", forbidden
     )
     validate_augmentation_binding(result, **arguments)
 

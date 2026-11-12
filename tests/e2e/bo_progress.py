@@ -19,6 +19,32 @@ from app_readiness import (
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
+def assert_coincident_markers_visible(chart) -> None:
+    markers = chart.locator('[data-point-id$=":best"]').evaluate_all(
+        """best => best.flatMap(square => {
+          const id = square.dataset.pointId.replace(/:best$/, ':measured');
+          const measured = [...square.ownerSVGElement.querySelectorAll('[data-point-id]')]
+            .find(point => point.dataset.pointId === id);
+          if (!measured || measured.dataset.x !== square.dataset.x || measured.dataset.y !== square.dataset.y) return [];
+          const style = getComputedStyle(square), measuredStyle = getComputedStyle(measured);
+          const a = square.getBBox(), b = measured.getBBox();
+          return [{fill: style.fill, stroke: style.stroke, strokeWidth: parseFloat(style.strokeWidth),
+            measuredFill: measuredStyle.fill, measuredOpacity: measuredStyle.opacity,
+            x: a.x + a.width / 2, y: a.y + a.height / 2,
+            measuredX: b.x + b.width / 2, measuredY: b.y + b.height / 2}];
+        })"""
+    )
+    assert markers, "Expected at least one coincident measured/best pair"
+    for marker in markers:
+        assert marker["fill"] == "none", marker
+        assert marker["stroke"] not in {"none", "transparent"}, marker
+        assert marker["strokeWidth"] > 0, marker
+        assert marker["measuredFill"] not in {"none", "transparent"}, marker
+        assert float(marker["measuredOpacity"]) > 0, marker
+        assert abs(marker["x"] - marker["measuredX"]) < 1e-4, marker
+        assert abs(marker["y"] - marker["measuredY"]) < 1e-4, marker
+
+
 def _seed(page, base: str, vector: bool, mixed: bool = False) -> dict:
     objective = {
         "name": "Synthetic response",
@@ -195,6 +221,7 @@ def verify_bo_progress(browser: Browser, base: str, output: Path) -> dict:
                 assert score.locator('[data-point-id$=":best"]').evaluate_all(
                     "els=>els.map(e=>Number(e.dataset.y))"
                 ) == [0.2, 0.8, 0.8]
+                assert_coincident_markers_visible(score)
                 panel.get_by_label("Response", exact=True).select_option("b")
                 assert observed.locator('[data-point-id$=":measured"]').evaluate_all(
                     "els=>els.map(e=>Number(e.dataset.y))"
@@ -222,6 +249,7 @@ def verify_bo_progress(browser: Browser, base: str, output: Path) -> dict:
                 expect(disclosure).not_to_have_attribute("open", "")
                 disclosure.locator("summary").click()
                 expect(disclosure).to_have_attribute("open", "")
+            assert_coincident_markers_visible(observed)
             point = observed.locator('[data-point-id$=":measured"]').first
             point.focus()
             point.press("Enter")

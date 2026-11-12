@@ -251,6 +251,23 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
                 )
             else:
                 validate_candidate_generation(payload, result)
+            if operation in {"evaluate", "mixed_evaluate"}:
+                execution._require_current_numerical_policy(
+                    result, error_code="bayesian_planning_result_invalid"
+                )
+            elif operation in {"selection", "mixed_selection"}:
+                execution._require_current_numerical_policy(
+                    result["items"], error_code="bayesian_planning_result_invalid"
+                )
+            elif operation in {
+                "augmentation",
+                "auto_augmentation",
+                "mixed_augmentation",
+                "auto_mixed_augmentation",
+            }:
+                execution._require_current_numerical_policy(
+                    result["selected_rows"], error_code="bayesian_planning_result_invalid"
+                )
             if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
                 from app.api.v1.schemas.bo_auto_strategy import (
                     AutoEvidenceRequest,

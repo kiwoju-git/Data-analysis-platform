@@ -119,7 +119,7 @@ import type {
   TwoProportionResult,
   XyCorrelationResult,
 } from "./api";
-import type { AnalysisFilterDraft } from "./analysisFilters";
+import { serializeAnalysisFilterDrafts, validateAnalysisFilterDrafts, type AnalysisFilterDraft } from "./analysisFilters";
 import type {
   AttributeControlPhase,
   AttributeControlPhase2State,
@@ -1929,7 +1929,8 @@ export function AnalysisShell({
               method.method_id === "doe.bayesian_optimization" &&
               method.availability === "available"
             ) {
-              return <BayesianOptimizationPanel />;
+              return <BayesianOptimizationPanel version={version} filterSnapshot={version !== null && validateAnalysisFilterDrafts(analysisFilterDrafts, version.columns) === null
+                ? { expression_version: 1, conditions: serializeAnalysisFilterDrafts(analysisFilterDrafts, version.columns) } : null} />;
             }
             return null;
           }}

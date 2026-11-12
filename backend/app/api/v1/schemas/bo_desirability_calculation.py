@@ -6,7 +6,15 @@ import math
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    FiniteFloat,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from app.api.v1.schemas.bayesian import BayesianConstraintEvaluationResponse
 from app.api.v1.schemas.bayesian_desirability import (
@@ -35,6 +43,30 @@ TrialId = Annotated[UUID, Field(strict=False)]
 
 class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
+
+
+class _NumericalPolicyFields(_StrictModel):
+    numerical_policy: Literal["positive_beta_integral_v2"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_explicit_null_policy(cls, value: Any) -> Any:
+        if (
+            isinstance(value, dict)
+            and "numerical_policy" in value
+            and value["numerical_policy"] is None
+        ):
+            raise ValueError("bayesian_desirability_numerical_policy_unsupported")
+        return value
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_policy_absence(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
+        result: dict[str, Any] = handler(self)
+        if self.numerical_policy is None:
+            result.pop("numerical_policy", None)
+        return result
 
 
 class DesirabilityFactor(_StrictModel):
@@ -314,7 +346,7 @@ class _ResponsePrediction(_StrictModel):
     predictive_standard_deviation_raw: FiniteFloat = Field(ge=0)
 
 
-class _Acquisition(_StrictModel):
+class _Acquisition(_NumericalPolicyFields):
     kind: Literal["desirability_beta_expected_improvement"]
     value: FiniteFloat = Field(ge=0, le=1)
     threshold: FiniteFloat = Field(ge=0)

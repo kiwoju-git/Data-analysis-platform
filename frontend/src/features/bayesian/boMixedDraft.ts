@@ -7,6 +7,7 @@ import { parsePastedTablePreview } from "../../pastedTablePreview";
 import { planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { vectorObservationEntries, type VectorObservationDraft } from "./bayesianVectorDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
+import { validDatasetImportedInitialDesign } from "./boDatasetSource";
 
 export interface MixedFactorDraft {
   key: number; factorId: string; name: string; unit: string; kind: "continuous" | "discrete_numeric" | "nominal" | "ordinal";
@@ -21,8 +22,18 @@ export function newMixedFactor(key: number, kind: MixedFactorDraft["kind"] = "co
 export function buildMixedStudyRequest(draft: MixedStudyDraft): MixedStudyCreateRequest | string {
   const seed = planningInteger(draft.seed, 0, 2147483647), size = planningInteger(draft.size, Math.max(2, draft.factors.length + 1), 64);
   if (!draft.name.trim() || draft.name.trim().length > 120 || seed === null || size === null || draft.factors.length < 1 || draft.factors.length > 10) return "bayesian_mixed_study_input_invalid";
+  const factors = parseMixedFactorDefinitions(draft.factors);
+  if (typeof factors === "string") return factors;
+  if (!factors.some(factor => factor.domain_kind === "nominal" || factor.domain_kind === "ordinal")) return "bayesian_mixed_factor_required";
+  const constraints = parseMixedConstraintDefinitions(draft.constraints, factors);
+  if (typeof constraints === "string") return constraints;
+  return { schema_version: 7, name: draft.name.trim(), factors, constraints, objective: draft.objective, initial_design_seed: seed, initial_design_size: size,
+    initial_design_policy: "sha256_counter_mixed_uniform_feasible_v1", predecessor_study_id: null };
+}
+export function parseMixedFactorDefinitions(rows: readonly MixedFactorDraft[]): MixedFactorRequest[] | string {
+  if (rows.length < 1 || rows.length > 10) return "bayesian_factor_domain_invalid";
   const ids = new Set<string>(), factors: MixedFactorRequest[] = []; let categoryParameters = 0;
-  for (const row of draft.factors) {
+  for (const row of rows) {
     if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(row.factorId) || ids.has(row.factorId) || !row.name.trim() || row.name.trim().length > 80 || row.unit.trim().length > 40) return "bayesian_factor_domain_invalid";
     ids.add(row.factorId);
     const common = { factor_id: row.factorId, name: row.name.trim(), unit: row.unit.trim() || null };
@@ -39,11 +50,13 @@ export function buildMixedStudyRequest(draft: MixedStudyDraft): MixedStudyCreate
       factors.push({ ...common, domain_kind: row.kind, low, high, step, display_decimals: decimals });
     }
   }
-  if (!factors.some(factor => factor.domain_kind === "nominal" || factor.domain_kind === "ordinal")) return "bayesian_mixed_factor_required";
   if (categoryParameters > 64) return "bayesian_category_parameter_budget_exceeded";
-  if (draft.constraints.length > 16) return "bayesian_constraints_invalid";
+  return factors;
+}
+export function parseMixedConstraintDefinitions(rows: readonly MixedConstraintDraft[], factors: readonly MixedFactorRequest[]): BayesianLinearConstraintRequest[] | string {
+  if (rows.length > 16) return "bayesian_constraints_invalid";
   const constraints: BayesianLinearConstraintRequest[] = [];
-  for (const row of draft.constraints) {
+  for (const row of rows) {
     const bound = parseDoeResponseNumber(row.bound), terms: BayesianLinearConstraintRequest["terms"] = [];
     if (!row.name.trim() || row.name.trim().length > 80 || bound === null) return "bayesian_constraints_invalid";
     for (const [id, raw] of Object.entries(row.coefficients)) {
@@ -55,8 +68,7 @@ export function buildMixedStudyRequest(draft: MixedStudyDraft): MixedStudyCreate
     if (!terms.length) return "bayesian_constraints_invalid";
     constraints.push({ constraint_id: `constraint_${row.key}`, name: row.name.trim(), relation: row.relation, bound, terms });
   }
-  return { schema_version: 7, name: draft.name.trim(), factors, constraints, objective: draft.objective, initial_design_seed: seed, initial_design_size: size,
-    initial_design_policy: "sha256_counter_mixed_uniform_feasible_v1", predecessor_study_id: null };
+  return constraints;
 }
 export function mixedStudyKey(study: MixedStudyResponse): string {
   return JSON.stringify([study.study_id, study.study_version_id, study.definition_sha256, study.status, study.observation_history.history_revision_id,
@@ -76,8 +88,12 @@ export function validMixedStudy(study: MixedStudyResponse, expectedId?: string):
     !planningHash(study.definition_sha256) || study.objective?.goal_type !== "desirability" || !Array.isArray(study.objective.responses) || study.objective.responses.length < 1 || study.objective.responses.length > 4 ||
     !planningId(study.observation_history?.history_revision_id) || !planningHash(study.observation_history?.observation_history_sha256) || study.observation_history.study_version_id !== study.study_version_id ||
     !Array.isArray(study.factors) || study.factors.length < 1 || study.factors.length > 10 || !study.factors.some(isMixedCategory) || new Set(study.factors.map(factor => factor.factor_id)).size !== study.factors.length ||
-    !Array.isArray(study.trials) || study.trials.length !== study.trial_count || study.trial_count < 1 || study.trial_count > 200 || new Set(study.trials.map(row => row.trial_id)).size !== study.trial_count ||
-    study.initial_design?.policy !== "sha256_counter_mixed_uniform_feasible_v1" || study.initial_design.coordinate_encoding !== "numeric_normalized_category_index_v1") return false;
+    !Array.isArray(study.trials) || study.trials.length !== study.trial_count || study.trial_count < 1 || study.trial_count > 200 || new Set(study.trials.map(row => row.trial_id)).size !== study.trial_count) return false;
+  const initial = study.initial_design;
+  if (initial?.policy === "dataset_observations_v1") {
+    if (!validDatasetImportedInitialDesign(initial, study.factors.map(factor => factor.factor_id), study.objective.responses.map(response => response.response_id)) ||
+      study.trials.length < initial.generated_size || study.trials.slice(0, initial.generated_size).some(row => row.origin !== "initial_design" || row.state !== "completed")) return false;
+  } else if (initial?.policy !== "sha256_counter_mixed_uniform_feasible_v1" || initial.coordinate_encoding !== "numeric_normalized_category_index_v1") return false;
   if (study.factors.some(factor => isMixedCategory(factor) ? factor.encoding_rule !== "declared_level_index_v1" || factor.levels.length < 2 || factor.levels.length > 32 ||
     new Set(factor.levels).size !== factor.levels.length || factor.levels.some(level => typeof level !== "string" || !level.trim()) :
     !Number.isFinite(factor.low) || !Number.isFinite(factor.high) || factor.low >= factor.high || !Number.isFinite(factor.high - factor.low))) return false;

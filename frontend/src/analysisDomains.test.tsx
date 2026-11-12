@@ -98,6 +98,31 @@ describe("analysis domain navigation", () => {
     expect(validateAnalysisDomainCatalog(testCatalog())).toEqual([]);
   });
 
+  it.each(["ko", "en"] as const)("offers standalone GPR from AI without changing its canonical domain (%s)", (locale) => {
+    setCurrentLocale(locale);
+    try {
+      const catalog = testCatalog();
+      const gp = catalog.methods.find((method) => method.method_id === "regression.gaussian_process")!;
+      gp.label_ko = "가우시안 프로세스 회귀";
+      gp.label_en = "Gaussian process regression";
+      const domain = ANALYSIS_DOMAINS.find((item) => item.id === "ai-ml-experimental-design")!;
+      const render = () => renderToString(<AnalysisDomainLanding catalog={catalog} domain={domain}
+        selectedMethodId={null} onOpenDomain={() => undefined} onSelectMethod={() => undefined} />);
+      const label = locale === "ko" ? gp.label_ko : gp.label_en;
+      const card = render().match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0];
+      expect(card).toBeDefined();
+      expect(card).not.toContain("disabled");
+      expect(analysisDomainForMethod(gp.method_id)?.id).toBe("correlation-regression-prediction");
+      expect(mappedAnalysisMethodIds().filter((id) => id === gp.method_id)).toHaveLength(1);
+      expect(validateAnalysisDomainCatalog(catalog)).toEqual([]);
+
+      gp.availability = "disabled";
+      expect(render().match(new RegExp(`<button[^>]*aria-label="${label}"[^>]*>`))?.[0]).toContain("disabled");
+      catalog.methods = catalog.methods.filter((method) => method.method_id !== gp.method_id);
+      expect(render()).not.toContain(`aria-label="${label}"`);
+    } finally { setCurrentLocale("ko"); }
+  });
+
   it("keeps contextual and planned workflows out of executable method lists", () => {
     const regression = analysisDomainForMethod("regression.predict");
     expect(regression?.id).toBe("correlation-regression-prediction");
@@ -158,7 +183,7 @@ describe("analysis domain navigation", () => {
       expect(new Set(expected).size).toBe(expected.length);
       const html = renderToString(<AnalysisDomainLanding catalog={catalog} domain={domain}
         selectedMethodId={null} onOpenDomain={() => undefined} onSelectMethod={() => undefined} />);
-      expect(html.match(/<button[^>]*class="analysis-domain-method-card/g) ?? []).toHaveLength(expected.length);
+      expect(html.match(/<button[^>]*class="analysis-domain-method-card/g) ?? []).toHaveLength(expected.length + (domain.id === "ai-ml-experimental-design" ? 1 : 0));
       expect(html).not.toContain('class="analysis-domain-family-card');
       expect(html).not.toContain('<details class="analysis-domain-guide" open');
     }

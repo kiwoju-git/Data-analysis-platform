@@ -80,6 +80,10 @@ export function AnalysisDomainLanding({
       ) : (
         <div className="analysis-domain-method-grid">
           {entries.map(methodCard)}
+          {(domain.crossLinkMethodIds ?? []).flatMap((methodId) => {
+            const method = catalog.methods.find((item) => item.method_id === methodId);
+            return method === undefined ? [] : [methodCard({ method, family: null })];
+          })}
           {visiblePlannedWorkflows(domain.directPlannedWorkflows).map((workflow) => (
             <PlannedDomainMethodCard key={workflow.id} workflow={workflow} />
           ))}

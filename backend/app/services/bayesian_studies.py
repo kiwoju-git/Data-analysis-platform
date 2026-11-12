@@ -61,6 +61,7 @@ from app.api.v1.schemas.bo_curve_policy import (
     BayesianVersionedCurveObjective,
     study_objective_type,
 )
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.api.v1.schemas.bo_mixed_studies import (
     MixedObservationBatchResponse,
     MixedStudyCloseResponse,
@@ -176,7 +177,7 @@ class _ValidatedStudy:
     factors: list[BayesianFactorResponse]
     objective: BayesianObjectiveResponse | BayesianDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
-    initial_design: BayesianInitialDesignResponse
+    initial_design: BayesianInitialDesignResponse | DatasetImportedInitialDesign
     trials: list[BayesianTrialRecord]
     histories: list[BayesianHistoryRevisionRecord]
     current_history: BayesianHistoryRevisionRecord
@@ -1210,8 +1211,11 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
             BayesianLinearConstraintResponse.model_validate(item)
             for item in _json_list(version.constraints_json)
         ]
-        initial_design = BayesianInitialDesignResponse.model_validate(
-            _json_dict(version.initial_design_json)
+        initial_payload = _json_dict(version.initial_design_json)
+        initial_design = (
+            DatasetImportedInitialDesign.model_validate(initial_payload)
+            if initial_payload.get("policy") == "dataset_observations_v1"
+            else BayesianInitialDesignResponse.model_validate(initial_payload)
         )
     except (ValidationError, TypeError, ValueError) as exc:
         raise _metadata_error() from exc
@@ -1241,7 +1245,21 @@ def _load_validated_study(settings: Settings, study_id: str) -> _ValidatedStudy:
         or not initial_design.generated_size <= len(trials) <= MAX_BAYESIAN_TRIALS
     ):
         raise _artifact_error()
-    if initial_design.policy == INITIAL_DESIGN_POLICY:
+    if isinstance(initial_design, DatasetImportedInitialDesign):
+        from app.services.bo_dataset_import import validate_imported_trials
+
+        if version.schema_version not in {4, 5, 6}:
+            raise _artifact_error()
+        validate_imported_trials(settings, version, initial_design, trials)
+        expected_actual = [
+            _numeric_json_dict(item.actual_coordinates_json)
+            for item in trials[: initial_design.generated_size]
+        ]
+        expected_normalized = [
+            _numeric_json_dict(item.normalized_coordinates_json)
+            for item in trials[: initial_design.generated_size]
+        ]
+    elif initial_design.policy == INITIAL_DESIGN_POLICY:
         try:
             expected_actual, expected_normalized, expected_attempts = _generate_initial_design(
                 factors=factors,
@@ -1747,6 +1765,7 @@ def _validate_trials(
     if [item.trial_number for item in trials] != list(range(1, len(trials) + 1)):
         raise _artifact_error()
     seen_coordinates: set[str] = set()
+    imported = _json_dict(version.initial_design_json).get("policy") == "dataset_observations_v1"
     prior_trials: dict[str, BayesianTrialRecord] = {}
     for trial in trials:
         try:
@@ -1823,7 +1842,9 @@ def _validate_trials(
             }
         )
         if expected_sha != trial.coordinates_sha256 or (
-            coordinate_fingerprint in seen_coordinates and not is_replicate
+            coordinate_fingerprint in seen_coordinates
+            and not is_replicate
+            and not (imported and is_initial)
         ):
             raise _artifact_error()
         seen_coordinates.add(coordinate_fingerprint)
@@ -1892,8 +1913,15 @@ def _validate_histories(
         )
         if completed_ids != ordered_ids:
             raise _artifact_error()
-        if index == 0 and completed_ids:
-            raise _artifact_error()
+        if index == 0:
+            initial = _json_dict(version.initial_design_json)
+            expected_initial_ids = (
+                [item.trial_id for item in trials[: int(initial["generated_size"])]]
+                if initial.get("policy") == "dataset_observations_v1"
+                else []
+            )
+            if completed_ids != expected_initial_ids:
+                raise _artifact_error()
         if index > 0 and (
             not set(previous_ids).issubset(completed_ids)
             or len(set(completed_ids) - set(previous_ids)) < 1
@@ -2551,7 +2579,7 @@ def _definition_payload(
     factors: list[BayesianFactorResponse],
     objective: BayesianObjectiveResponse | BayesianDesirabilityObjective,
     constraints: list[BayesianLinearConstraintResponse],
-    initial_design: BayesianInitialDesignResponse,
+    initial_design: BayesianInitialDesignResponse | DatasetImportedInitialDesign,
     study_schema_version: int,
 ) -> dict[str, Any]:
     return {
@@ -2593,7 +2621,7 @@ def _factor_definition_payload(
 
 
 def _initial_design_definition_payload(
-    initial_design: BayesianInitialDesignResponse,
+    initial_design: BayesianInitialDesignResponse | DatasetImportedInitialDesign,
     *,
     study_schema_version: int,
 ) -> dict[str, Any]:

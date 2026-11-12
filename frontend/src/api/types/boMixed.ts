@@ -4,6 +4,7 @@ import type { PlanningFitOptions } from "./boPlanning";
 import type { DesirabilityPlanning, DesirabilityQ1Calculation } from "./bayesianDesirability";
 import type { CandidateRevisionSummaryV2, CandidateRow } from "./boPlanning";
 import type { AugmentationPolicy, AugmentationTrace, AutoEvidenceRequest, AutoStrategyEvidence } from "./boAugmentation";
+import type { DatasetImportedInitialDesign } from "./boDatasetSource";
 
 export type MixedCorrelationPolicy = "equal_positive_correlation_v1" | "unequal_hyperspherical_correlation_v1" | "ordinal_monotone_latent_rbf_v1";
 export interface MixedCategoricalFactorRequest {
@@ -30,7 +31,7 @@ export interface MixedTrialResponse extends Omit<BayesianTrialResponse, "actual_
   objective_value: null; response_values: Record<string, number> | null; replicate_of_trial_id: string | null;
 }
 export interface MixedStudyResponse extends Omit<BayesianStudyResponse, "study_schema_version" | "factors" | "objective" | "initial_design" | "trials" | "recommendation_blockers"> {
-  study_schema_version: 7; factors: MixedFactorResponse[]; objective: BayesianDesirabilityObjective; initial_design: MixedInitialDesign;
+  study_schema_version: 7; factors: MixedFactorResponse[]; objective: BayesianDesirabilityObjective; initial_design: MixedInitialDesign | DatasetImportedInitialDesign;
   trials: MixedTrialResponse[]; recommendation_blockers: string[];
   recommendation_workflow: "fixed_candidate_mixed_planning_v1";
 }

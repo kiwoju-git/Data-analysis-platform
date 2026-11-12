@@ -1,0 +1,126 @@
+import { useEffect, useRef, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
+import type { AnalysisFilterSnapshot, DatasetVersionResponse } from "../../api";
+import type { AnyBayesianStudyResponse } from "../../api/types/boMixed";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { datasetImportMessages } from "../../i18n/boDatasetImport";
+import { newMixedFactor, type MixedFactorDraft } from "./boMixedDraft";
+import { newResponseDraft, type ResponseGoalDraft } from "./bayesianVectorDraft";
+import { buildDatasetImportRequest, type DatasetImportDraft } from "./boDatasetImportDraft";
+import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { useDatasetImport } from "./hooks/useDatasetImport";
+import "./boDatasetImport.css";
+
+export interface BayesianDatasetSourceProps {
+  version?: DatasetVersionResponse | null;
+  filterSnapshot?: AnalysisFilterSnapshot | null;
+}
+interface Props extends BayesianDatasetSourceProps {
+  ownerKey: string; disabled: boolean; onBusyChange: (value: boolean) => void;
+  onCreated: (value: AnyBayesianStudyResponse) => void;
+}
+export function BayesianDatasetImportPanel(props: Props) {
+  const { locale } = useI18n();
+  const text = datasetImportMessages(locale);
+  if (!props.version) return <div className="notice-box">{text.missingDataset}</div>;
+  if (!props.filterSnapshot) return <div className="notice-box">{text.invalidFilter}</div>;
+  const key = JSON.stringify([props.ownerKey, props.version.version_id, props.version.schema_hash, props.filterSnapshot]);
+  return <ImportForm key={key} {...props} version={props.version} filterSnapshot={props.filterSnapshot} />;
+}
+function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated }: Props & { version: DatasetVersionResponse; filterSnapshot: AnalysisFilterSnapshot }) {
+  const { locale } = useI18n();
+  const text = datasetImportMessages(locale);
+  const next = useRef(2);
+  const [draft, setDraft] = useState<DatasetImportDraft>(() => ({
+    name: "", factors: [{ ...newMixedFactor(1), columnId: "", low: "", high: "", levels: [""] }],
+    responseMode: "scalar", scalarColumnId: "", goal: "maximize", target: "", tolerance: "",
+    responses: [newResponseDraft(1)], responseColumns: {}, constraints: [], missingPolicy: "reject",
+  }));
+  const state = useDatasetImport(onCreated);
+  const working = state.busy !== null;
+  useEffect(() => { onBusyChange(working); return () => onBusyChange(false); }, [working, onBusyChange]);
+  function edit(update: (current: DatasetImportDraft) => DatasetImportDraft) { state.invalidate(); setDraft(update); }
+  function factor(key: number, field: keyof MixedFactorDraft | "columnId", value: string | string[]) {
+    edit(current => ({ ...current, factors: current.factors.map(row => row.key === key ? { ...row, [field]: value } : row) }));
+  }
+  const selectColumn = (label: string, value: string, change: (id: string) => void) => <select aria-label={label} value={value} onChange={event => change(event.currentTarget.value)}>
+    <option value="">{text.selectColumn}</option>{version.columns.map(column => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
+  </select>;
+  const goals = {
+    responseGoals: draft.responses.map(row => {
+      const column = version.columns.find(item => item.column_id === draft.responseColumns[row.responseId]);
+      return { ...row, name: column ? draft.displayNames?.[column.column_id] ?? column.display_name : "", unit: column?.unit ?? "" };
+    }),
+    updateResponseGoal: <Field extends keyof Omit<ResponseGoalDraft, "key">>(key: number, field: Field, value: ResponseGoalDraft[Field]) => edit(current => ({ ...current, responses: current.responses.map(row => row.key === key ? { ...row, [field]: value } : row) })),
+    removeResponseGoal: (key: number) => edit(current => ({ ...current, responses: current.responses.filter(row => row.key !== key) })),
+    addResponseGoal: () => { const key = next.current++; edit(current => ({ ...current, responses: [...current.responses, newResponseDraft(key)] })); },
+  };
+  return <section className="bo-dataset-import" aria-label={text.region}>
+    <h3>{text.mode}</h3>
+    <p className="muted">{text.sourceNotice}</p>
+    <fieldset disabled={state.busy === "create" || (disabled && !working)}>
+      <legend>{text.mappingLegend}</legend>
+      <label>{text.studyName}<input aria-label={text.studyNameInput} value={draft.name} maxLength={120} onChange={event => { const value = event.currentTarget.value; edit(current => ({ ...current, name: value })); }} /></label>
+      <div className="table-wrap"><table className="result-table"><caption>{text.predictorsCaption}</caption>
+        <thead><tr>{[text.column, text.type, text.domain, text.remove].map(label => <th key={label}>{label}</th>)}</tr></thead>
+        <tbody>{draft.factors.map((row, index) => <tr key={row.key}>
+          <td>{selectColumn(`X ${index + 1}`, row.columnId, value => factor(row.key, "columnId", value))}</td>
+          <td><select aria-label={`X ${index + 1} ${text.typeInput}`} value={row.kind} onChange={event => factor(row.key, "kind", event.currentTarget.value)}>
+            <option value="continuous">{text.continuous}</option><option value="discrete_numeric">{text.discreteNumeric}</option><option value="nominal">{text.nominal}</option><option value="ordinal">{text.ordinal}</option>
+          </select></td>
+          <td>{row.kind === "nominal" || row.kind === "ordinal" ? <label>{text.levelsHint}<textarea aria-label={`X ${index + 1} ${text.levelsInput}`} value={row.levels.join("\n")} onChange={event => factor(row.key, "levels", event.currentTarget.value.split("\n"))} /></label> : <div className="form-grid">
+            {(["low", "high", ...(row.kind === "discrete_numeric" ? ["step"] : [])] as const).map(field => <label key={field}>{field === "low" ? text.lower : field === "high" ? text.upper : text.step}<input inputMode="decimal" aria-label={`X ${index + 1} ${field}`} value={row[field as "low" | "high" | "step"]} onChange={event => factor(row.key, field as "low" | "high" | "step", event.currentTarget.value)} /></label>)}
+          </div>}</td>
+          <td><button type="button" className="secondary-button" title={text.removePredictor} aria-label={`${text.removePredictor} ${index + 1}`} disabled={draft.factors.length <= 1} onClick={() => edit(current => ({ ...current, factors: current.factors.filter(item => item.key !== row.key), constraints: [] }))}><Trash2 size={16} /></button></td>
+        </tr>)}</tbody></table></div>
+      <button type="button" className="secondary-button" disabled={draft.factors.length >= 10} onClick={() => { const key = next.current++; edit(current => ({ ...current, factors: [...current.factors, { ...newMixedFactor(key), columnId: "", low: "", high: "", levels: [""] }] })); }}><Plus size={16} />{text.addPredictor}</button>
+      <label>{text.responseObjective}<select aria-label={text.responseObjective} value={draft.responseMode} onChange={event => { const value = event.currentTarget.value as "scalar" | "vector"; edit(current => ({ ...current, responseMode: value })); }}>
+        <option value="scalar">{text.singleResponse}</option><option value="vector">{text.desirabilityResponses}</option>
+      </select></label>
+      {draft.responseMode === "scalar" ? <div className="form-grid">
+        <label>Y{selectColumn("Y", draft.scalarColumnId, value => edit(current => ({ ...current, scalarColumnId: value })))}</label>
+        <label>{text.goal}<select aria-label={text.goal} value={draft.goal} onChange={event => { const value = event.currentTarget.value as typeof draft.goal; edit(current => ({ ...current, goal: value })); }}>
+          <option value="maximize">{text.maximize}</option><option value="minimize">{text.minimize}</option><option value="match_target">{text.matchTarget}</option>
+        </select></label>
+        {draft.goal === "match_target" && (["target", "tolerance"] as const).map(field => <label key={field}>{field === "target" ? text.target : text.tolerance}<input inputMode="decimal" value={draft[field]} onChange={event => { const value = event.currentTarget.value; edit(current => ({ ...current, [field]: value })); }} /></label>)}
+        {draft.factors.some(row => row.kind === "nominal" || row.kind === "ordinal") && <p className="notice-box">{text.categoryObjectiveNotice}</p>}
+      </div> : <>
+        <div className="form-grid">{draft.responses.map((row, index) => <label key={row.key}>{`Y ${index + 1}`}{selectColumn(`Y ${index + 1}`, draft.responseColumns[row.responseId] ?? "", value => edit(current => ({ ...current, responseColumns: { ...current.responseColumns, [row.responseId]: value } })))}</label>)}</div>
+        <BayesianResponseGoals draft={goals} namesReadOnly showCreationNotice={false} sourceKey={JSON.stringify([version.version_id, draft.responseColumns])} />
+      </>}
+      <label>{text.missingPolicy}<select aria-label={text.missingPolicy} value={draft.missingPolicy} onChange={event => { const value = event.currentTarget.value as typeof draft.missingPolicy; edit(current => ({ ...current, missingPolicy: value })); }}>
+        <option value="reject">{text.rejectMissing}</option><option value="complete_case">{text.completeCases}</option>
+      </select></label>
+      <p className="muted">{text.domainNotice}</p>
+      <details><summary>{text.displayNames}</summary>
+        <p>{text.displayNamesNotice}</p>
+        {version.columns.filter(column => draft.factors.some(row => row.columnId === column.column_id) || (draft.responseMode === "scalar" ? draft.scalarColumnId === column.column_id : Object.values(draft.responseColumns).includes(column.column_id))).map(column =>
+          <label key={column.column_id}>{column.display_name}<input aria-label={`${text.displayNameInput} ${column.display_name}`} value={draft.displayNames?.[column.column_id] ?? column.display_name} maxLength={80}
+            onChange={event => { const value = event.currentTarget.value; edit(current => ({ ...current, displayNames: { ...current.displayNames, [column.column_id]: value } })); }} /></label>)}
+      </details>
+      <button type="button" className="secondary-button" disabled={working} onClick={() => void state.preflight(buildDatasetImportRequest(version, filterSnapshot, draft))}>{text.preflight}</button>
+    </fieldset>
+    {working && <p role="status">{state.busy === "create" ? text.saving : text.validating}</p>}
+    {state.error && <div role="alert" className="error-box"><p>{text.errorNotice}</p><code>{state.error}</code>{state.retryAvailable && <p>{text.retryNotice}</p>}</div>}
+    {state.review && <section aria-label={text.review}>
+      <details><summary>{text.sourceHashes}</summary><dl className="metadata-grid">
+        <div><dt>{text.datasetVersion}</dt><dd><code>{state.review.result.source.dataset_version_id}</code></dd></div>
+        <div><dt>Schema SHA-256</dt><dd><code>{state.review.result.source.schema_hash}</code></dd></div>
+        <div><dt>Canonical SHA-256</dt><dd><code>{state.review.result.source.canonical_sha256}</code></dd></div>
+      </dl></details>
+      <dl className="metadata-grid">{[
+        [text.totalRows, state.review.result.n_total], [text.filteredRows, state.review.result.n_filtered],
+        [text.missingRows, state.review.result.n_missing], [text.usedRows, state.review.result.n_used],
+        [text.uniqueConditions, state.review.result.unique_coordinate_count], [text.repeatedRows, state.review.result.repeated_coordinate_count],
+        [text.conflictingConditions, state.review.result.conflicting_coordinate_count],
+      ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      {state.review.result.warnings.length > 0 && <div className="notice-box"><p>{text.warnings}</p><ul>{state.review.result.warnings.map(code => <li key={code}>{
+        code === "bayesian_optimization_history_incomplete" ? text.incompleteHistory :
+        code === "bayesian_import_repeated_coordinates_retained" ? text.repeatsRetained :
+        code === "bayesian_import_complete_case_exclusions" ? text.missingExcluded : code
+      }<details><summary>{text.code}</summary><code>{code}</code></details></li>)}</ul></div>}
+      <p>{text.commitNotice}</p>
+      <button type="button" disabled={working || disabled} onClick={() => void state.create(state.retryAvailable)}>{state.retryAvailable ? text.retry : text.create}</button>
+    </section>}
+  </section>;
+}

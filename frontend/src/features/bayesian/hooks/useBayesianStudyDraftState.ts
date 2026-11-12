@@ -196,7 +196,7 @@ export function useBayesianStudyDraftState() {
   }
 
   function prepareSuccessor(study: BayesianStudyResponse) {
-    if (study.objective.goal_type === "desirability") return;
+    if (study.objective.goal_type === "desirability" || study.initial_design.policy === "dataset_observations_v1") return;
     setResponseMode("scalar");
     const nextFactors = study.factors.map((factor, index) => ({
       key: index + 1,

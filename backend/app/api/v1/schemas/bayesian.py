@@ -9,6 +9,7 @@ from app.api.v1.schemas.bayesian_desirability import ResponseValues
 from app.api.v1.schemas.bo_curve_policy import (
     AnyDesirabilityObjective as BayesianDesirabilityObjective,
 )
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
@@ -425,7 +426,7 @@ class BayesianStudyResponse(BaseModel):
     factors: list[BayesianFactorResponse]
     objective: BayesianObjectiveResponse | BayesianDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
-    initial_design: BayesianInitialDesignResponse
+    initial_design: BayesianInitialDesignResponse | DatasetImportedInitialDesign
     trial_count: int = Field(ge=1)
     pending_trial_count: int = Field(ge=0)
     completed_trial_count: int = Field(ge=0)

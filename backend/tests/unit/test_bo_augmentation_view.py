@@ -145,6 +145,13 @@ def test_confirm_bypasses_beta_precision_limit_without_fabricating_ei(monkeypatc
         },
     )
     body["source"].update(model_snapshot_id=str(uuid4()), model_snapshot_sha256="c" * 64)
+
+    def unavailable_ei(*args, **kwargs):
+        raise ValueError("bayesian_desirability_beta_precision_unsupported")
+
+    # Confirm must bypass EI even when its evaluator rejects a numeric case.
+    # This fixture's concentrated moments are now supported by the v2 evaluator.
+    monkeypatch.setattr(planning, "beta_expected_improvement", unavailable_ei)
     result = build_augmentation_view(**body)
     assert all(row["acquisition"] is None for row in result["selected_rows"])
     assert result["augmentation"]["steps"][0]["score"] == 0.5

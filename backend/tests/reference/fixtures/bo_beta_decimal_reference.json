@@ -1,0 +1,58 @@
+{
+  "reference_schema_version": 1,
+  "reference_method": "Independent 80-digit Decimal Beta log-density with positive scalar QUADPACK quadrature",
+  "generator_module": "tests.reference.bo_beta_reference",
+  "decimal_precision": 80,
+  "input_interpretation": "JSON numbers are parsed as binary64; alpha=mean*(mean*(1-mean)/variance-1), beta=(1-mean)*(mean*(1-mean)/variance-1), using binary64 operations. The resulting shapes and threshold are converted exactly with Decimal.from_float.",
+  "source_urls": [
+    "https://dlmf.nist.gov/8.17.E1",
+    "https://dlmf.nist.gov/8.17.E3",
+    "https://dlmf.nist.gov/5.11.E1",
+    "https://dlmf.nist.gov/5.11.ii"
+  ],
+  "quadrature_relative_tolerance": 2e-12,
+  "quadrature_error_limit": 2e-11,
+  "tail_relative_bound_limit": 2e-12,
+  "frozen_reference_relative_tolerance": 2e-12,
+  "production_relative_tolerance": 2e-7,
+  "production_absolute_tolerance": 0,
+  "cases": [
+    {
+      "id": "resolved_lower_tail_reflection",
+      "mean": 1e-12,
+      "variance": 1e-28,
+      "threshold": 9.9e-13,
+      "expected_ei": 1.0825062186803883e-14
+    },
+    {
+      "id": "large_shape_centering_positive_residual",
+      "mean": 0.123456789,
+      "variance": 3e-24,
+      "threshold": 0.1234567890173205,
+      "expected_ei": 1.2946222314123248e-36
+    },
+    {
+      "id": "large_shape_centering_negative_residual",
+      "mean": 0.1,
+      "variance": 3e-24,
+      "threshold": 0.10000000001732051,
+      "expected_ei": 1.2945643186777474e-36
+    },
+    {
+      "id": "survival_difference_cancellation_below_old_cutoff",
+      "mean": 0.9,
+      "variance": 1e-9,
+      "threshold": 0.9000316227766018,
+      "expected_ei": 2.6339494963754832e-6
+    },
+    {
+      "id": "synthetic_q2_tail_rounds_below_half_subnormal",
+      "mean": 0.5154451791162806,
+      "variance": 2.4973594698037663e-6,
+      "threshold": 0.5755140304746322,
+      "expected_ei": 0.0,
+      "expected_log_ei": -746.0088854781562,
+      "expected_log_tangent_upper_bound": -746.0067839909478
+    }
+  ]
+}

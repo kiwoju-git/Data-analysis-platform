@@ -1,0 +1,84 @@
+.bo-study-creation-mode {
+  display: grid;
+  gap: 6px;
+  inline-size: min(100%, 36rem);
+  margin-block: 12px;
+}
+
+.bo-study-creation-mode select {
+  min-inline-size: 0;
+  min-block-size: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.bo-dataset-import {
+  margin-block-start: 20px;
+  min-inline-size: 0;
+}
+
+.bo-dataset-import fieldset {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 12px 0;
+  border: 0;
+  border-block-start: 1px solid var(--border-default);
+}
+
+.bo-dataset-import label {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-inline-size: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.bo-dataset-import fieldset > label {
+  inline-size: min(100%, 36rem);
+}
+
+.bo-dataset-import input,
+.bo-dataset-import select,
+.bo-dataset-import textarea {
+  box-sizing: border-box;
+  min-inline-size: 0;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.bo-dataset-import .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.bo-dataset-import .bo-vector-goals select {
+  min-inline-size: 9rem;
+}
+
+.bo-dataset-import fieldset > button {
+  justify-self: start;
+}
+
+.bo-dataset-import code {
+  overflow-wrap: anywhere;
+}
+
+.bo-dataset-import details > label {
+  margin-block: 12px;
+  max-inline-size: 36rem;
+}

@@ -21,6 +21,7 @@ from app.api.v1.schemas.bo_curve_policy import (
     AnyDesirabilityObjective as BayesianDesirabilityObjective,
 )
 from app.api.v1.schemas.bo_curve_policy import study_objective_type
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.api.v1.schemas.doe import (
     DoeFactorResponse,
     LatinHypercubeDesignOptionsResponse,
@@ -45,6 +46,7 @@ from app.statistics.latin_hypercube import (
     canonical_latin_hypercube_payload,
 )
 from app.storage.bayesian_studies import (
+    BayesianStudyVersionRecord,
     get_bayesian_history_revision_record,
     get_bayesian_recommendation_batch_record,
     get_bayesian_recommendation_record,
@@ -79,6 +81,25 @@ def canonical(value: object) -> str:
 
 def digest(value: object) -> str:
     return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
+
+
+def validate_imported_report_initial(
+    settings: Settings,
+    version: BayesianStudyVersionRecord,
+    initial: DatasetImportedInitialDesign,
+) -> None:
+    from app.services.bo_dataset_import import validate_imported_trials
+
+    # The import receipt owns only its initial observations, not later trials.
+    trials = list_bayesian_trial_records(
+        settings.workspace_root, version.study_version_id, limit=initial.generated_size
+    )
+    if [trial.trial_number for trial in trials] != list(range(1, initial.generated_size + 1)):
+        raise invalid("report_source_changed")
+    try:
+        validate_imported_trials(settings, version, initial, trials)
+    except ApiError as exc:
+        raise invalid("report_source_changed") from exc
 
 
 def parsed(value: str) -> Any:
@@ -268,7 +289,12 @@ def read_bayesian(
         BayesianLinearConstraintResponse.model_validate(item)
         for item in parsed(version.constraints_json)
     ]
-    initial = BayesianInitialDesignResponse.model_validate(parsed(version.initial_design_json))
+    initial_raw = parsed(version.initial_design_json)
+    initial = (
+        DatasetImportedInitialDesign
+        if isinstance(initial_raw, dict) and initial_raw.get("policy") == "dataset_observations_v1"
+        else BayesianInitialDesignResponse
+    ).model_validate(initial_raw)
     definition = _definition_payload(
         method_version=study.method_version,
         factors=factors,
@@ -279,6 +305,8 @@ def read_bayesian(
     )
     if digest(definition) != version.definition_sha256:
         raise invalid("report_source_changed")
+    if isinstance(initial, DatasetImportedInitialDesign):
+        validate_imported_report_initial(settings, version, initial)
     identifiers = parsed(history.completed_trial_ids_json)
     if (
         not isinstance(identifiers, list)

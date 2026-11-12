@@ -8,7 +8,7 @@
 .bo-progress-space { max-inline-size: 640px; }
 .bo-progress p, .bo-progress summary { overflow-wrap: anywhere; }
 .bo-progress-measured, .bo-progress-completed { fill: var(--brand-nav-blue); }
-.bo-progress-best { fill: #24736b; }
+.bo-progress-best { fill: none; stroke: #24736b; stroke-width: 1.5; }
 .bo-progress-pending { fill: #b27513; }
 .bo-progress-abandoned { fill: var(--text-secondary); }
 .bo-progress-best-line { stroke: #24736b; }

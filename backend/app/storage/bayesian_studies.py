@@ -4,6 +4,7 @@ import json
 import math
 import sqlite3
 from collections.abc import Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -210,10 +211,15 @@ def insert_bayesian_study_bundle(
     version: BayesianStudyVersionRecord,
     trials: list[BayesianTrialRecord],
     initial_history: BayesianHistoryRevisionRecord,
+    transaction: sqlite3.Connection | None = None,
 ) -> None:
-    with sqlite3.connect(metadata_db_path(workspace_root)) as connection:
+    with (
+        sqlite3.connect(metadata_db_path(workspace_root))
+        if transaction is None
+        else nullcontext(transaction)
+    ) as connection:
         connection.execute("PRAGMA foreign_keys = ON;")
-        with connection:
+        with connection if transaction is None else nullcontext():
             connection.execute(
                 """
                 INSERT INTO bayesian_studies (
@@ -266,6 +272,16 @@ def insert_bayesian_study_bundle(
                 """,
                 [_trial_values(trial) for trial in trials],
             )
+            vector_values = [
+                (trial.response_values_json, trial.trial_id)
+                for trial in trials
+                if trial.response_values_json is not None
+            ]
+            if vector_values:
+                connection.executemany(
+                    "UPDATE bayesian_trials SET response_values_json=? WHERE trial_id=?",
+                    vector_values,
+                )
             _insert_history_revision(connection, initial_history)
             connection.execute(
                 """

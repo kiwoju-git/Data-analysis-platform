@@ -241,6 +241,7 @@ export interface DatasetVersionDeletionCounts {
   job_count: number;
   attribute_control_limit_set_count: number;
   phase_2_analysis_count: number;
+  bayesian_study_count?: number;
   child_version_count?: number;
 }
 
@@ -251,6 +252,7 @@ export type DatasetDeletionDependencyAssetType =
   | "analysis_export"
   | "attribute_control_limit_set"
   | "phase_2_analysis"
+  | "bayesian_study"
   | "job";
 
 export interface DatasetDeletionDependencyDescriptor {
@@ -266,6 +268,7 @@ export interface DatasetDeletionDependencyDescriptor {
     | "export_owned_by_analysis"
     | "limit_set_derived_from_dataset"
     | "phase_2_uses_limit_set"
+    | "study_imported_from_dataset"
     | "job_owned_by_analysis";
   created_at: string | null;
   status: string | null;

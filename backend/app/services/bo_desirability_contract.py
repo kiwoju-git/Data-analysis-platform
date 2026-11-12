@@ -38,11 +38,11 @@ def _validate_source_and_candidate(
     substitute for independent posterior/reference tests.
     """
     from app.statistics.bayesian_optimization import _constraint_evaluations
+    from app.statistics.bo_beta_policy import stored_beta_expected_improvement
     from app.statistics.bo_desirability import (
         composite_desirability,
         independent_desirability_moments,
     )
-    from app.statistics.bo_desirability_acquisition import beta_expected_improvement
     from app.statistics.bo_observation_groups import prepare_bo_observation_view
 
     def require(condition: bool) -> None:
@@ -257,11 +257,12 @@ def _validate_source_and_candidate(
     require(close(candidate.desirability_moments.second_moment, expected_moments.second_moment))
     require(close(candidate.desirability_moments.variance, expected_moments.variance))
     require(candidate.acquisition.xi_desirability == request.xi_desirability)
-    expected_ei = beta_expected_improvement(
+    expected_ei = stored_beta_expected_improvement(
         expected_moments.mean,
         expected_moments.variance,
         incumbent.latent_incumbent_value,
         xi=request.xi_desirability,
+        numerical_policy=candidate.acquisition.numerical_policy,
     )
     require(candidate.acquisition.value == expected_ei.value)
     require(candidate.acquisition.threshold == expected_ei.threshold)

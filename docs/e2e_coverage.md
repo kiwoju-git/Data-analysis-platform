@@ -1,5 +1,21 @@
 # Browser E2E Coverage
 
+## Measured X/Y Import And GPR Navigation (API43)
+
+The `workflows` partition includes `bo_dataset_import`: a synthetic measured
+dataset, explicit X/Y mapping and source-bound preflight, import, q2 review and
+confirmation, measured observations, then a subsequent q1 review and exact-source
+reload. Locale/resize and source A-B-A checks do not authorize stale imports.
+Manual fixture writes send the exact same-origin header on each request.
+
+The `context` partition includes `bo_xy_gpr_navigation`: the AI-domain GPR card
+opens the existing regression route while retaining the header-selected dataset.
+Korean/English desktop/mobile and keyboard checks preserve the single canonical
+regression sidebar entry. This stage does not fit a model by default. The helper's
+explicit `--fit` option additionally runs one eight-row synthetic default GPR fit
+and checks exact X/Y labels and values, cross-validation, saved-model provenance,
+and retained warnings. Registration alone is not evidence that CI executed it.
+
 ## Target Curve Preview (API36)
 
 `bo_vector_history.py` additionally invokes `bo_target_curve_preview.py` in the
@@ -866,6 +882,8 @@ browser critical path.
 - `verify multiresponse and saved-model BO workflows` (API-seeded restoration;
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)
+- `verify measured X/Y import and next multiresponse recommendation`
+- `verify AI cross-link to existing GPR with selected dataset`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)
@@ -1125,9 +1143,9 @@ The standalone Gaussian Process path uses a synthetic numeric response and
 predictors to exercise the Matérn 5/2 ARD default, estimated noise, leakage-free
 K-fold validation, model/uncertainty summaries, conditional profiles, selectable
 two-predictor surfaces, checksum-verified model persistence, and latent plus
-new-observation point-prediction intervals. It also checks that the AI/ML domain
-keeps Gaussian Process Surrogate as contextual Bayesian Optimization guidance,
-not as a second executable GP method. Requested diagnostics use
+new-observation point-prediction intervals. The AI/ML domain now links to this
+same executable GPR method and existing regression route, without registering a
+second method or moving its canonical sidebar placement. Requested diagnostics use
 `.tmp/e2e-diagnostics-gaussian-process`.
 
 ## Maintenance Checklist

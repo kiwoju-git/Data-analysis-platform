@@ -2,6 +2,8 @@ import type { BayesianStudyCloseReason, BayesianStudyResponse } from "../../api"
 import { bayesianStudyCloseBlocker } from "../../bayesianStudyDraft";
 import type { StudyCloseTarget } from "./bayesianDisplay";
 import { BayesianStudyCloseConfirmation } from "./BayesianTransitionConfirmations";
+import { useI18n } from "../../i18n/LocaleProvider";
+import { datasetSourceMessages } from "../../i18n/boDatasetSource";
 
 export function BayesianStudyClosePanel({
   study,
@@ -36,6 +38,8 @@ export function BayesianStudyClosePanel({
   onCancelClose: () => void;
   onPrepareSuccessor: () => void;
 }) {
+  const { locale } = useI18n();
+  const imported = study.initial_design.policy === "dataset_observations_v1";
   if (study.status !== "active") {
     return study.lifecycle_event === null ? null : (
       <section aria-labelledby="bayesian-study-close-title">
@@ -44,7 +48,8 @@ export function BayesianStudyClosePanel({
           <strong>{study.lifecycle_event.resulting_status} · {study.lifecycle_event.reason_code}</strong>
           <p>{study.lifecycle_event.closed_at}에 종료되었으며, 관측·trial·추천은 읽기 전용입니다.</p>
           {study.lifecycle_event.note !== null ? <p>{study.lifecycle_event.note}</p> : null}
-          <button type="button" className="secondary-button" onClick={onPrepareSuccessor}>이 정의로 successor study 준비</button>
+          <button type="button" className="secondary-button" disabled={imported} aria-describedby={imported ? "bayesian-import-successor-unavailable" : undefined} onClick={onPrepareSuccessor}>이 정의로 successor study 준비</button>
+          {imported && <p id="bayesian-import-successor-unavailable">{datasetSourceMessages(locale).successorUnavailable}</p>}
         </div>
       </section>
     );

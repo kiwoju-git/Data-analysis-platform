@@ -9,6 +9,7 @@ from pydantic import TypeAdapter
 
 from app.api.v1.schemas.bayesian import BayesianLinearConstraintResponse
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.api.v1.schemas.bo_mixed_studies import (
     MixedFactorResponse,
     MixedInitialDesignResponse,
@@ -26,7 +27,12 @@ from app.services.bo_mixed_studies import (
     mixed_definition_payload,
     mixed_trial_response,
 )
-from app.services.dedicated_report_readers import digest, invalid, parsed
+from app.services.dedicated_report_readers import (
+    digest,
+    invalid,
+    parsed,
+    validate_imported_report_initial,
+)
 from app.statistics.bo_mixed_initial_design import validate_mixed_constraints
 from app.storage.bayesian_studies import (
     get_bayesian_history_revision_record,
@@ -81,7 +87,12 @@ def read_mixed_bayesian(
         for row in parsed(version.constraints_json)
     ]
     validate_mixed_constraints(domains, mixed_constraint_definitions(constraints))
-    initial = MixedInitialDesignResponse.model_validate(parsed(version.initial_design_json))
+    initial_raw = parsed(version.initial_design_json)
+    initial = (
+        DatasetImportedInitialDesign
+        if isinstance(initial_raw, dict) and initial_raw.get("policy") == "dataset_observations_v1"
+        else MixedInitialDesignResponse
+    ).model_validate(initial_raw)
     if [factor.order for factor in factors] != list(range(1, len(factors) + 1)):
         raise invalid("report_source_changed")
     definition = mixed_definition_payload(
@@ -93,6 +104,8 @@ def read_mixed_bayesian(
     )
     if digest(definition) != version.definition_sha256:
         raise invalid("report_source_changed")
+    if isinstance(initial, DatasetImportedInitialDesign):
+        validate_imported_report_initial(settings, version, initial)
     context: Any = SimpleNamespace(
         version=version, factor_domains=domains, objective=objective, constraints=constraints
     )

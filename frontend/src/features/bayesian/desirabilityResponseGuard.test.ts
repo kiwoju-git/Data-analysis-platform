@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { desirabilityBatchFixture, desirabilityFixture } from "./bayesianDesirability.fixture";
 import { buildDesirabilityRequest, defaultDesirabilityDraft } from "./bayesianDesirabilityDraft";
 import { validDesirabilityCalculation, validDesirabilitySaved } from "./desirabilityResponseGuard";
+
+it("keeps legacy numeric payloads readable but requires a consistent declared Beta solver", () => {
+  const { study, calculation } = desirabilityBatchFixture();
+  expect(validDesirabilityCalculation(calculation, study)).toBe(true);
+  calculation.items[0].acquisition.numerical_policy = "positive_beta_integral_v2";
+  expect(validDesirabilityCalculation(calculation, study)).toBe(false);
+  calculation.items[0].planning.sampler.numerical_policy = "positive_beta_integral_v2";
+  expect(validDesirabilityCalculation(calculation, study)).toBe(false);
+  for (const item of calculation.items) {
+    item.acquisition.numerical_policy = "positive_beta_integral_v2";
+    item.planning.sampler.numerical_policy = "positive_beta_integral_v2";
+  }
+  expect(validDesirabilityCalculation(calculation, study)).toBe(true);
+});
 import type { DesirabilityCurveBatch, DesirabilityCurveCalculation } from "../../api/types/bayesianDesirability";
 
 describe("versioned desirability response ownership", () => {

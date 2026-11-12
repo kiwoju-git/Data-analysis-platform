@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import { getAnalysisRunErrorDetails } from "../../analysisRunErrors";
 import { useI18n } from "../../i18n/LocaleProvider";
+import { datasetImportMessages } from "../../i18n/boDatasetImport";
 import { mixedMessages } from "../../i18n/boMixed";
 import { BayesianMixedStudyBuilder } from "./BayesianMixedStudyBuilder";
 import { BayesianMixedStudyWorkspace } from "./BayesianMixedStudyWorkspace";
@@ -34,8 +35,9 @@ import { useBayesianRetentionState } from "./hooks/useBayesianRetentionState";
 import { useBayesianStudyCatalogState } from "./hooks/useBayesianStudyCatalogState";
 import { useBayesianStudyDraftState } from "./hooks/useBayesianStudyDraftState";
 import { useBayesianStudyLifecycleState } from "./hooks/useBayesianStudyLifecycleState";
+import { BayesianDatasetImportPanel, type BayesianDatasetSourceProps } from "./BayesianDatasetImportPanel";
 
-export function BayesianOptimizationWorkspace() {
+export function BayesianOptimizationWorkspace({ version, filterSnapshot }: BayesianDatasetSourceProps = {}) {
   const { locale } = useI18n(), mixedText = mixedMessages(locale);
   const initialQuery = useMemo(
     () => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search),
@@ -64,7 +66,8 @@ export function BayesianOptimizationWorkspace() {
   const [manualSeed, setManualSeed] = useState<AugmentationManualSeed | null>(null);
   const [requestedMixedBatchId, setRequestedMixedBatchId] = useState(recommendationQueryConflict ? null : initialMixedBatchId);
   const [mixedBusy, setMixedBusy] = useState(false), [mixedConfirming, setMixedConfirming] = useState(false), [mixedCreating, setMixedCreating] = useState(false);
-  const [builderMode, setBuilderMode] = useState<"numeric" | "mixed">("numeric");
+  const [builderMode, setBuilderMode] = useState<"numeric" | "mixed" | "dataset">("numeric");
+  const [importBusy, setImportBusy] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(initialStudyId === null);
   const catalog = useBayesianStudyCatalogState(initialStudyId);
   const draft = useBayesianStudyDraftState();
@@ -149,7 +152,7 @@ export function BayesianOptimizationWorkspace() {
     desirability.isConfirming ||
     planningConfirming ||
     augmentationConfirming ||
-    mixedBusy || mixedConfirming || mixedCreating ||
+    mixedBusy || mixedConfirming || mixedCreating || importBusy ||
     replicates.isRunning ||
     retention.isChecking ||
     retention.isDeleting;
@@ -313,7 +316,10 @@ export function BayesianOptimizationWorkspace() {
         }}
       />
 
-      {builderOpen && <label>{mixedText.studyMode}<select aria-label={mixedText.studyMode} disabled={requestInFlight} value={builderMode} onChange={event => setBuilderMode(event.currentTarget.value as "numeric" | "mixed")}><option value="numeric">{mixedText.numericMode}</option><option value="mixed">{mixedText.mixedMode}</option></select></label>}
+      {builderOpen && <label className="bo-study-creation-mode">{datasetImportMessages(locale).creationMode}<select aria-label={datasetImportMessages(locale).creationMode} disabled={requestInFlight} value={builderMode} onChange={event => setBuilderMode(event.currentTarget.value as typeof builderMode)}><option value="numeric">{mixedText.numericMode}</option><option value="mixed">{mixedText.mixedMode}</option><option value="dataset">{datasetImportMessages(locale).mode}</option></select></label>}
+      {builderOpen && builderMode === "dataset" && <BayesianDatasetImportPanel version={version} filterSnapshot={filterSnapshot}
+        ownerKey={catalog.selectedStudyId ?? "new"} disabled={requestInFlight} onBusyChange={setImportBusy}
+        onCreated={created => { selectStudy(created.study_id); setBuilderOpen(false); catalog.onResetToFirstPage(); }} />}
       {builderOpen && builderMode === "mixed" && <BayesianMixedStudyBuilder ownerKey={`mixed-builder:${catalog.selectedStudyId ?? "new"}`} disabled={requestInFlight}
         onBusyChange={setMixedCreating} onCancel={() => setBuilderOpen(false)} onCreated={created => { selectStudy(created.study_id); setBuilderOpen(false); catalog.onResetToFirstPage(); }} />}
       {builderOpen && builderMode === "numeric" ? (

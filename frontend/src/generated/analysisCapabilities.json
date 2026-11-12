@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 42,
-  "metadata_schema_version": 33,
+  "api_contract_version": 43,
+  "metadata_schema_version": 34,
   "methods": [
     {
       "method_id": "eda.descriptive",
@@ -4035,15 +4035,8 @@
         "doe.latin_hypercube",
         "doe.bayesian_optimization"
       ],
-      "directContextualWorkflows": [
-        {
-          "id": "gaussian-process-surrogate",
-          "labelKey": "analysisContext.gaussianProcess.label",
-          "descriptionKey": "analysisContext.gaussianProcess.description",
-          "presentation": "card",
-          "showInSidebar": false,
-          "statusKey": "analysisContext.gaussianProcess.status"
-        }
+      "crossLinkMethodIds": [
+        "regression.gaussian_process"
       ],
       "families": []
     },
@@ -4146,18 +4139,6 @@
       "descriptionKey": "analysisContext.regressionOptimizer.description",
       "entry_kind": "contextual_information",
       "domain_id": "correlation-regression-prediction",
-      "family_id": null,
-      "visibility": "navigation"
-    },
-    {
-      "id": "gaussian-process-surrogate",
-      "labelKey": "analysisContext.gaussianProcess.label",
-      "descriptionKey": "analysisContext.gaussianProcess.description",
-      "presentation": "card",
-      "showInSidebar": false,
-      "statusKey": "analysisContext.gaussianProcess.status",
-      "entry_kind": "contextual_information",
-      "domain_id": "ai-ml-experimental-design",
       "family_id": null,
       "visibility": "navigation"
     },

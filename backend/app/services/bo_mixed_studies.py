@@ -20,6 +20,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianStudySummaryResponse,
 )
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
+from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
 from app.api.v1.schemas.bo_mixed_studies import (
     MixedCategoricalFactorRequest,
     MixedCategoricalFactorResponse,
@@ -79,7 +80,7 @@ class MixedValidatedStudy:
     factor_domains: tuple[BoFactorDomain, ...]
     objective: AnyDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
-    initial_design: MixedInitialDesignResponse
+    initial_design: MixedInitialDesignResponse | DatasetImportedInitialDesign
     trials: list[BayesianTrialRecord]
     histories: list[BayesianHistoryRevisionRecord]
     current_history: BayesianHistoryRevisionRecord
@@ -118,7 +119,7 @@ def mixed_definition_payload(
     factors: list[MixedFactorResponse],
     objective: AnyDesirabilityObjective,
     constraints: list[BayesianLinearConstraintResponse],
-    initial_design: MixedInitialDesignResponse,
+    initial_design: MixedInitialDesignResponse | DatasetImportedInitialDesign,
 ) -> dict[str, Any]:
     return {
         "study_schema_version": 7,
@@ -428,7 +429,12 @@ def load_validated_mixed_study(settings: Settings, study_id: str) -> MixedValida
             for item in json.loads(version.constraints_json)
         ]
         validate_mixed_constraints(domains, mixed_constraint_definitions(constraints))
-        initial = MixedInitialDesignResponse.model_validate(json.loads(version.initial_design_json))
+        initial_payload = json.loads(version.initial_design_json)
+        initial = (
+            DatasetImportedInitialDesign.model_validate(initial_payload)
+            if initial_payload.get("policy") == "dataset_observations_v1"
+            else MixedInitialDesignResponse.model_validate(initial_payload)
+        )
         if [item.order for item in factors] != list(range(1, len(factors) + 1)) or any(
             not item.name.strip() for item in factors
         ):
@@ -446,14 +452,16 @@ def load_validated_mixed_study(settings: Settings, study_id: str) -> MixedValida
             != version.definition_sha256
         ):
             raise ValueError("definition hash")
-        generated = generate_mixed_initial_design(
-            domains,
-            mixed_constraint_definitions(constraints),
-            seed=initial.seed,
-            size=initial.requested_size,
-        )
-        if generated.metadata != initial.model_dump(mode="json"):
-            raise ValueError("initial design metadata")
+        generated = None
+        if isinstance(initial, MixedInitialDesignResponse):
+            generated = generate_mixed_initial_design(
+                domains,
+                mixed_constraint_definitions(constraints),
+                seed=initial.seed,
+                size=initial.requested_size,
+            )
+            if generated.metadata != initial.model_dump(mode="json"):
+                raise ValueError("initial design metadata")
     except (ValueError, TypeError, KeyError, ValidationError) as exc:
         raise legacy._artifact_error() from exc
     trials = list_bayesian_trial_records(
@@ -498,7 +506,21 @@ def load_validated_mixed_study(settings: Settings, study_id: str) -> MixedValida
         batches,
         event,
     )
-    _validate_mixed_trials(bundle, generated.actual_points, generated.encoded_points)
+    if isinstance(initial, DatasetImportedInitialDesign):
+        from app.services.bo_dataset_import import validate_imported_trials
+
+        validate_imported_trials(settings, version, initial, trials)
+        expected_actual = tuple(
+            json.loads(item.actual_coordinates_json) for item in trials[: initial.generated_size]
+        )
+        expected_encoded = tuple(
+            json.loads(item.normalized_coordinates_json)
+            for item in trials[: initial.generated_size]
+        )
+    else:
+        assert generated is not None
+        expected_actual, expected_encoded = generated.actual_points, generated.encoded_points
+    _validate_mixed_trials(bundle, expected_actual, expected_encoded)
     legacy._validate_histories(version, trials, histories, history)
     from app.services.bayesian_replicates import validate_replicate_requests
 
@@ -573,7 +595,10 @@ def _validate_mixed_trials(
                 or parent.normalized_coordinates_json != trial.normalized_coordinates_json
             ):
                 raise legacy._artifact_error()
-        elif trial.replicate_of_trial_id is not None or fingerprint in seen:
+        elif trial.replicate_of_trial_id is not None or (
+            fingerprint in seen
+            and not (initial and isinstance(bundle.initial_design, DatasetImportedInitialDesign))
+        ):
             raise legacy._artifact_error()
         seen.add(fingerprint)
         earlier[trial.trial_id] = trial

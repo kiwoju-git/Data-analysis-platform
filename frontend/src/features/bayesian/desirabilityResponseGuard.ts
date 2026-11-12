@@ -37,11 +37,15 @@ export function validDesirabilityCalculation(calculation: DesirabilityCalculatio
     return request.fit_policy === null ? model.schema_version !== 4 : model.schema_version !== 5 || model.fit_diagnostics.deterministic_start_count !== request.fit_policy.deterministic_start_count;
   })) return false;
   return calculation.items.every((item, index) => {
+    const numericalPolicy = item.acquisition.numerical_policy;
+    if (numericalPolicy !== undefined && numericalPolicy !== "positive_beta_integral_v2") return false;
+    if (numericalPolicy !== calculation.items[0].acquisition.numerical_policy) return false;
     if (item.rank !== index + 1 || !sameIds(Object.keys(item.actual_coordinates), factorIds) ||
       !sameIds(Object.keys(item.normalized_coordinates), factorIds) || !sameIds(item.response_predictions.map(r => r.response_id), responseIds) ||
       (request && item.acquisition.xi_desirability !== request.xi_desirability)) return false;
     if (calculation.schema_version !== 4) {
       const planning = calculation.items[index].planning;
+      if (planning?.sampler.numerical_policy !== numericalPolicy) return false;
       if (!planning || planning.sampler.batch_step !== index ||
         planning.sampler.representative_prediction_source !== "completed_observations_base_posterior" ||
         !sameDesirabilityJson(planning.sampler.conditioned_on_selected_ranks, Array.from({ length: index }, (_, i) => i + 1))) return false;

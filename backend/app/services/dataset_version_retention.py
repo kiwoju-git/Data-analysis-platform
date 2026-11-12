@@ -321,6 +321,8 @@ def _cascade_context(
     preserved = 0
     issues: set[str] = set(dataset_context.integrity_issue_codes)
     blockers: set[str] = set()
+    if snapshot.dataset.dependencies.bayesian_study_count:
+        blockers.add("dataset_version_deletion_bayesian_study_dependency")
     if count_dataset_version_child_records(settings.workspace_root, str(version_id)):
         blockers.add("dataset_version_deletion_child_version_dependency")
     if dataset_context.integrity_state == "verified":
@@ -684,6 +686,8 @@ def _snapshot_deletion_summary(
         blockers.append("dataset_version_deletion_limit_set_dependency")
     if dependencies.job_count:
         blockers.append("dataset_version_deletion_job_dependency")
+    if dependencies.bayesian_study_count:
+        blockers.append("dataset_version_deletion_bayesian_study_dependency")
     last_version = snapshot.sibling_version_count == 0
     counts = DatasetVersionDeletionCounts(
         dataset_version_count=1,
@@ -812,6 +816,8 @@ def _verified_deletion_context(settings: Settings, version_id: UUID) -> _Deletio
         blockers.append("dataset_version_deletion_limit_set_dependency")
     if dependencies.job_count:
         blockers.append("dataset_version_deletion_job_dependency")
+    if dependencies.bayesian_study_count:
+        blockers.append("dataset_version_deletion_bayesian_study_dependency")
     counts = DatasetVersionDeletionCounts(
         dataset_version_count=1,
         dataset_root_count=1 if last_version else 0,

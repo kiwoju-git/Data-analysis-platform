@@ -57,6 +57,11 @@ from app.api.v1.schemas.bayesian_review import (
     BayesianRecommendationReviewResponse,
 )
 from app.api.v1.schemas.bo_curve_preview import CurvePreviewRequest, CurvePreviewResponse
+from app.api.v1.schemas.bo_dataset_import import (
+    DatasetImportCreateRequest,
+    DatasetImportPreflightRequest,
+)
+from app.api.v1.schemas.bo_dataset_source import DatasetImportPreflightResponse
 from app.api.v1.schemas.bo_mixed_studies import (
     MixedObservationBatchResponse,
     MixedReplicateCreateResponse,
@@ -101,8 +106,27 @@ from app.services.bayesian_studies import (
     list_bayesian_trials,
 )
 from app.services.bo_curve_preview import preview_target_curve
+from app.services.bo_dataset_import import create_dataset_import, preflight_dataset_import
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
+
+
+@router.post("/import-preflight", response_model=DatasetImportPreflightResponse)
+def dataset_import_preflight_route(
+    request: Request, body: DatasetImportPreflightRequest
+) -> DatasetImportPreflightResponse:
+    return preflight_dataset_import(request.app.state.settings, body)
+
+
+@router.post(
+    "/from-dataset",
+    response_model=BayesianStudyResponse | MixedStudyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def dataset_import_create_route(
+    request: Request, body: DatasetImportCreateRequest
+) -> BayesianStudyResponse | MixedStudyResponse:
+    return create_dataset_import(request.app.state.settings, body)
 
 
 @router.post("/target-curve-preview", response_model=CurvePreviewResponse)
