@@ -128,7 +128,7 @@ uncertainty intervals and unpublished Auto behavior are not established. No
 kernel/noise parameter was retuned merely to match a saved screenshot.
 
 Libraries actually used: NumPy2.2.6, SciPy1.15.3, scikit-learn1.7.2. No live JMP
-installation was used. Further commits in this change record evidence only;
+installation was used. Further commits record evidence and test maintenance only;
 comparison validity requires an empty application-code diff from the SHA above.
 
 ## Integration Status At This Evidence Commit
@@ -147,6 +147,22 @@ the inventory was corrected without weakening the test or changing application
 code. The entire local OpenAPI/frontend contract module then passed244 tests.
 Native gates must rerun on that documentation correction. This failed run
 is not represented as a successful full check.
+
+The next run, [43121624925](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43121624925),
+passed the Linux full check and the new BO progress journey, then failed in the
+older main BO journey's global text selector. The translated pending state now
+appears both in the batch heading and in each candidate row. The failure was
+reproduced against the local built app. Assertions now target the batch-heading
+status specifically and separately verify the candidate's pending state; none
+of the lifecycle, completion, abandonment or reload assertions were removed.
+This is test-selector maintenance, not a statistical or runtime-code change.
+The final scoped selectors passed the complete existing BO browser journey on
+the local production build, including batch creation, observation, abandonment,
+new recommendation, budget blocking, reload, study close and successor flow.
+The independent reviewer also required preserving explicit visibility assertions;
+those are retained and were included in the passing rerun. Linux full-check
+counts before that E2E failure were4361 backend tests (28 skipped) and1427
+frontend tests. Passing those checks is not a passing overall run.
 
 ## Reproduction And Rollback
 
