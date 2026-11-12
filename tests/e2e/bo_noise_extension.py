@@ -266,6 +266,15 @@ def _recommend(page: Page) -> dict:
     assert result["batch_policy"] == "greedy_mc_joint_latent_improvement_v2"
     assert result["acquisition"]["kind"] == "expected_target_improvement"
     expect(page.locator("#bayesian-batch-result-title")).to_be_visible()
+    purpose = page.locator(".bayesian-batch-result-table .bayesian-candidate-purpose").first
+    expect(purpose).to_contain_text("목표값 맞추기")
+    expect(purpose).to_contain_text("ETI")
+    saved_context = purpose.inner_text()
+    current_profile = payload["acquisition"]["exploration_profile"]
+    alternate = "exploration" if current_profile != "exploration" else "balanced"
+    page.locator(f'input[name="bayesian-exploration-profile"][value="{alternate}"]').check()
+    expect(purpose).to_have_text(saved_context, use_inner_text=True)
+    page.locator(f'input[name="bayesian-exploration-profile"][value="{current_profile}"]').check()
     _verify_kernel_summary(
         page, result["shared_model"], section="bayesian-batch-result-title"
     )
@@ -476,6 +485,7 @@ def verify_bo_noise_extension(browser: Browser, base: str, output: Path) -> dict
         assert batch["items"][1]["planning"]["effective_sample_count"] == 64
         assert batch["items"][1]["planning"]["conditioned_on_selected_ranks"] == [1]
         _observe_visible(page, [item["trial"] for item in batch["items"]])
+        page.locator("#bo-replicates-title").click()
         page.locator("#bo-replicate-parent").select_option(
             study["trials"][0]["trial_id"]
         )
@@ -599,6 +609,7 @@ def verify_bo_noise_context(browser: Browser, base: str, output: Path) -> dict:
     ) as page:
         study = _seed(page, base)
         _open(page, base, study["study_id"])
+        page.locator("#bo-replicates-title").click()
         page.locator("#bo-replicate-parent").select_option(
             study["trials"][0]["trial_id"]
         )

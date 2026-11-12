@@ -505,3 +505,17 @@ prediction model; a routing model is separate provenance, not candidate knowledg
 This completes the Auto-evidence lifecycle, not live JMP numerical parity or an
 undocumented automatic Confirm rule. See [the final evidence ledger](bo_final_validation_20261111.md)
 and [the saved-evidence contract](bo_auto_evidence_contract.md).
+
+## 13. Observed Progress And Saved Candidate Context
+
+The additive progress views show measured response/cumulative best, target
+distance when requested, observed multiresponse desirability, and actual factor
+locations. They reuse the shared interactive SVG charts; no fit is requested by
+locale, resize or view selection. Scalar goals do not acquire invented desirability
+limits. Trial number is registration order, not physical measurement time.
+
+Confirmed scalar batches now identify their saved goal/exploration preference and
+EI/ETI meaning. This is not a relabeling of Balanced EI as JMP Refine. Existing
+augmentation reasoning and saved Auto evidence remain separate. See the
+[progress and saved-output comparison audit](bo_progress_validation_20261112.md)
+for fresh test evidence, private-source handling and remaining parity limits.

@@ -3,6 +3,7 @@ import { useI18n } from "../../i18n/LocaleProvider";
 import { formatMeasurement } from "../../statisticalNumberFormat";
 import { boText } from "./boNoisePolicy";
 import { BayesianSurrogateSummary } from "./BayesianSurrogateSummary";
+import { BayesianCandidatePurpose } from "./BayesianCandidatePurpose";
 
 export function BayesianNoiseBatchResult({ batch, study }: { batch: BayesianCurrentBatchResponse; study?: { objective: { unit: string | null }; factors?: BayesianFactorResponse[] } }) {
   const { locale } = useI18n();
@@ -27,7 +28,10 @@ export function BayesianNoiseBatchResult({ batch, study }: { batch: BayesianCurr
       <td>{item.rank}</td><td>{Object.entries(item.actual_coordinates).map(([id, value]) => <div key={id}>{id}: {number(value)}</div>)}</td>
       <td>{number(item.predicted_objective_mean)}</td><td>{number(item.latent_standard_deviation)}</td><td>{number(item.predictive_standard_deviation)}</td>
       <td>{number(item.acquisition_value_raw)} ({unit})<div className="cell-subtext">{text("표준화", "Standardized")}: {number(item.acquisition_value_standardized)}</div></td>
-      <td>{item.current_trial.state}<details><summary>{text("계산 근거", "Calculation details")}</summary>
+      <td><div>{item.current_trial.state === "pending" ? text("실험 대기", "Pending") : item.current_trial.state === "completed" ? text("완료", "Completed") : text("포기", "Abandoned")}</div>
+        <BayesianCandidatePurpose goal={batch.shared_model.objective_goal_type} profile={batch.acquisition?.exploration_profile}
+          acquisition={item.acquisition_kind} xi={batch.incumbent.xi_standardized} conditionedOn={item.planning.conditioned_on_selected_ranks} />
+        <details><summary>{text("계산 근거", "Calculation details")}</summary>
         <dl className="bayesian-reason-metrics">
           <div><dt>{text("기존 trial 거리", "Nearest existing trial")}</dt><dd>{number(item.nearest_existing_distance)}</dd></div>
           <div><dt>{text("선행 선택 거리", "Nearest selected candidate")}</dt><dd>{number(item.nearest_selected_distance)}</dd></div>

@@ -24,6 +24,7 @@ import { buildDesirabilityRequest } from "./bayesianDesirabilityDraft";
 import { useBayesianDesirabilityRecommendation } from "./hooks/useBayesianDesirabilityRecommendation";
 import { BayesianTrialTable } from "./BayesianTrialTable";
 import { BayesianReplicatePanel } from "./BayesianReplicatePanel";
+import { BayesianProgressCharts } from "./BayesianProgressCharts";
 import { useBayesianReplicateState } from "./hooks/useBayesianReplicateState";
 import { validBayesianId } from "./bayesianDisplay";
 import { bayesianReviewErrorDetails } from "./bayesianReviewErrors";
@@ -330,6 +331,7 @@ export function BayesianOptimizationWorkspace() {
 
       {mixedStudy !== null && <>
         <BayesianMixedStudyWorkspace study={mixedStudy} disabled={requestInFlight} onCommitted={lifecycle.acceptMixedCommit} onRefresh={() => { void lifecycle.refreshStudy(); void catalog.onRefresh(); }} onBusyChange={setMixedBusy} />
+        <BayesianProgressCharts key={mixedStudy.study_version_id} study={mixedStudy} />
         <BayesianMixedPlanningPanel study={mixedStudy} disabled={requestInFlight} onConfirmed={mixedConfirmed} onConfirmingChange={setMixedConfirming} />
         {requestedMixedBatchId !== null && <BayesianMixedSavedBatch study={mixedStudy} batchId={requestedMixedBatchId} />}
         <BayesianStudyDeletionPanel study={mixedStudy} state={retention} disabled={requestInFlight} onDeleted={handleDeleted} />
@@ -349,6 +351,7 @@ export function BayesianOptimizationWorkspace() {
             <BayesianVectorStudySnapshot study={study} />
             <BayesianVectorObservationEntry key={study.study_id} study={study}
               onCommitted={lifecycle.acceptVectorCommit} onRefresh={() => void lifecycle.refreshStudy()} disabled={requestInFlight} />
+            <BayesianProgressCharts key={study.study_version_id} study={study} />
             <BayesianDesirabilityRecommendationPanel study={study} state={desirability}
               disabled={catalog.isLoading || lifecycle.isRestoring || lifecycle.isSavingTrial || retention.isDeleting || retention.isChecking || planningConfirming || augmentationConfirming}
               onConfirm={() => void confirmDesirability()} onRefresh={() => void refreshDesirability()} />
@@ -377,6 +380,7 @@ export function BayesianOptimizationWorkspace() {
             onCancelTransition={() => lifecycle.setPendingTransition(null)}
             onCancelObservationBatch={() => lifecycle.setPendingObservationBatch(false)}
           />
+          <BayesianProgressCharts key={study.study_version_id} study={study} />
           <BayesianReplicatePanel study={study} state={replicates} disabled={studyActionDisabled}
             totalBudget={recommendation.totalTrialBudget} onSubmit={retry => void createReplicates(retry)}
             onRefresh={() => void lifecycle.refreshStudy()} />

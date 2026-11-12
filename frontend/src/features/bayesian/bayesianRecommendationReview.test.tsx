@@ -53,10 +53,11 @@ function fixture(): BayesianRecommendationReviewResponse {
     review_id: "synthetic-review", expires_at: "2026-11-07T10:20:00Z",
     calculation: {
       schema_version: 2,
-      shared_model: { schema_version: 3, signal_kernel: { kind: "constant_times_matern_5_2_ard", amplitude: 1.25, length_scales: [0.5], amplitude_bounds: [1e-3, 1e3], length_scale_bounds: [1e-2, 1e2] } },
+      shared_model: { schema_version: 3, objective_goal_type: "maximize", signal_kernel: { kind: "constant_times_matern_5_2_ard", amplitude: 1.25, length_scales: [0.5], amplitude_bounds: [1e-3, 1e3], length_scale_bounds: [1e-2, 1e2] } },
+      incumbent: { xi_standardized: 0.01 },
       items: [{ rank: 1, actual_coordinates: { x: 1000 }, predicted_objective_mean: 1e-6,
         latent_standard_deviation: 2e-6, predictive_standard_deviation: 3e-6,
-        acquisition_value_raw: 1e-8, constraint_evaluations: [] }],
+        acquisition_value_raw: 1e-8, acquisition_kind: "expected_improvement", planning: { conditioned_on_selected_ranks: [] }, constraint_evaluations: [] }],
       search_budget: { searches: [{ all_acquisitions_zero: true }] }, warnings: [],
     },
   } as unknown as BayesianRecommendationReviewResponse;

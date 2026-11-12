@@ -1,0 +1,19 @@
+.bo-progress { container-type: inline-size; border-top: 1px solid var(--border-default); padding-block: 16px; }
+.bo-progress-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; margin-block: 12px; }
+.bo-progress-controls label { display: grid; gap: 6px; min-inline-size: 0; max-inline-size: 100%; }
+.bo-progress-controls select { min-inline-size: 130px; max-inline-size: 100%; }
+.bo-progress-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.bo-progress-grid > div { min-inline-size: 0; }
+.bo-progress h5 { margin-block: 12px 4px; font-size: 14px; font-weight: 600; }
+.bo-progress-space { max-inline-size: 640px; }
+.bo-progress p, .bo-progress summary { overflow-wrap: anywhere; }
+.bo-progress-measured, .bo-progress-completed { fill: var(--brand-nav-blue); }
+.bo-progress-best { fill: #24736b; }
+.bo-progress-pending { fill: #b27513; }
+.bo-progress-abandoned { fill: var(--text-secondary); }
+.bo-progress-best-line { stroke: #24736b; }
+.bo-progress .chart-item-selected { stroke: var(--text-primary); stroke-width: 3; }
+@container (min-width: 900px) { .bo-progress-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bo-progress-levels dl > div { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 8px; }
+.bo-progress-levels dd { margin: 0; overflow-wrap: anywhere; }
+.bayesian-candidate-purpose { display: grid; gap: 4px; min-inline-size: 0; white-space: normal; }

@@ -35,6 +35,17 @@ describe("BO V2 presentation", () => {
     expect(html).toContain("Full factor &lt;name&gt;");
     expect(html).toContain('aria-invalid="true"');
   });
+  it.each(["ko", "en"] as const)("shows saved goal and balanced preference without pretending JMP Refine in %s", locale => {
+    setCurrentLocale(locale); const batch = fixture();
+    batch.shared_model.objective_goal_type = "maximize";
+    batch.acquisition = { kind: "expected_improvement", exploration_profile: "balanced", xi_standardized: .01 };
+    batch.items[0].acquisition_kind = "expected_improvement";
+    const html = renderToStaticMarkup(<BayesianNoiseBatchResult batch={batch} />);
+    expect(html).toContain(locale === "en" ? "Goal: Maximize" : "목표: 최대화");
+    expect(html).toContain(locale === "en" ? "Strategy: Balanced" : "전략: 균형");
+    expect(html).toContain(locale === "en" ? "Selection: EI" : "선정 기준: EI");
+    expect(html).not.toContain("Refine Model");
+  });
 });
 
 function fixture(): BayesianNoiseBatchResponse {

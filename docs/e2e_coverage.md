@@ -859,6 +859,10 @@ browser critical path.
 - `verify Report Center request context` (full flow)
 - `verify RSM response validation and source ownership`
 - `verify explicit replicate retry ownership`
+- `verify measured BO history and shared interactive progress charts` (context/full;
+  scalar/vector/mixed synthetic studies, actual values and cumulative best,
+  categorical mapping, locale/resize/keyboard, pending-state pin invalidation,
+  exact-source restore and no mutation requests from view-only changes)
 - `verify multiresponse and saved-model BO workflows` (API-seeded restoration;
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)

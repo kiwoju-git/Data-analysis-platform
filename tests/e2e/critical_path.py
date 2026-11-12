@@ -56,6 +56,7 @@ from chart_formatting import verify_chart_formatting
 from report_center_context import verify_report_center_context
 from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
+from bo_progress import verify_bo_progress
 from bo_vector_history import verify_bo_vector_history
 from doe_rsm_completion import verify_doe_rsm_completion
 from gage_followup import verify_gage_followup
@@ -228,7 +229,7 @@ C\t96.0\t89\t19.5
 
 SUITE_STAGES = {
     "context": (
-        "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_vector_history", "api_translation", "chart_formatting",
+        "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "api_translation", "chart_formatting",
         "pilot_feedback", "english_system_text", "result_metric_layout",
     ),
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
@@ -239,7 +240,7 @@ SUITE_STAGES = {
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_vector_history", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
@@ -780,6 +781,9 @@ def run_browser_flow(
                 if "bo_noise_context" in stages:
                     diagnostics.step("verify explicit replicate retry ownership")
                     verify_bo_noise_context(browser, frontend_base_url, diagnostics.root / "bo-noise-context")
+                if "bo_progress" in stages:
+                    diagnostics.step("verify measured BO history and shared interactive progress charts")
+                    verify_bo_progress(browser, frontend_base_url, diagnostics.root / "bo-progress")
                 if "bo_vector_history" in stages:
                     diagnostics.step("verify multiresponse and saved-model BO workflows")
                     verify_bo_vector_history(browser, frontend_base_url, diagnostics.root / "bo-vector-history")
@@ -4338,8 +4342,13 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     result_section = page.locator(
         'section[aria-labelledby="bayesian-batch-result-title"]'
     )
+    batch_status = result_section.locator(":scope > .panel-heading > .status-pill")
     diagnostics.capture_page(page, "bayesian-batch-result.png")
-    expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
+    expect(batch_status).to_have_text("실험 대기")
+    expect(batch_status).to_be_visible()
+    candidate_rows = result_section.locator(".bayesian-batch-result-table tbody tr")
+    expect(candidate_rows).to_have_count(1)
+    expect(candidate_rows.locator("td").last).to_contain_text("실험 대기")
     expect(page.get_by_text("추천", exact=True)).to_be_visible()
     result_section.get_by_text("계산 근거", exact=True).click()
     expect(result_section).to_contain_text("constraint_1")
@@ -4351,9 +4360,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     page.get_by_label("Trial 3 관측값").fill("0.97")
     page.get_by_role("button", name="입력한 관측 1건 저장").click()
     page.get_by_role("alertdialog").get_by_role("button", name="1건 저장").click()
-    expect(result_section.get_by_text("전체 완료", exact=True)).to_be_visible(
-        timeout=20_000
-    )
+    expect(batch_status).to_have_text("전체 완료", timeout=20_000)
+    expect(batch_status).to_be_visible()
 
     expect(recommendation_button).to_be_enabled(timeout=20_000)
     recommend_batch()
@@ -4365,9 +4373,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     abandon_confirmation = page.get_by_label("Trial 4 terminal action 확인")
     expect(abandon_confirmation).to_contain_text("향후 추천에서 제외")
     abandon_confirmation.get_by_role("button", name="Abandon 확인").click()
-    expect(result_section.get_by_text("전체 포기", exact=True)).to_be_visible(
-        timeout=20_000
-    )
+    expect(batch_status).to_have_text("전체 포기", timeout=20_000)
+    expect(batch_status).to_be_visible()
 
     expect(recommendation_button).to_be_enabled(timeout=20_000)
     recommend_batch()
@@ -4376,7 +4383,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     trial_five_row = trial_five_input.locator("xpath=ancestor::tr")
     next_coordinates = trial_five_row.locator("td").nth(2).inner_text()
     assert next_coordinates != abandoned_coordinates
-    expect(result_section.get_by_text("실험 대기", exact=True)).to_be_visible()
+    expect(batch_status).to_have_text("실험 대기")
+    expect(batch_status).to_be_visible()
     expect(recommendation_button).to_be_disabled()
     expect(
         page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)
@@ -4394,11 +4402,8 @@ def verify_bayesian_optimization(page: Page, diagnostics: E2EDiagnostics) -> Non
     expect(
         page.get_by_text("남은 trial 예산보다 batch 수가 큽니다", exact=False)
     ).to_be_visible()
-    expect(
-        page.locator(
-            'section[aria-labelledby="bayesian-batch-result-title"]'
-        ).get_by_text("실험 대기", exact=True)
-    ).to_be_visible()
+    expect(batch_status).to_have_text("실험 대기")
+    expect(batch_status).to_be_visible()
 
     page.get_by_label("Trial 5 관측값").fill("0.96")
     page.get_by_role("button", name="입력한 관측 1건 저장").click()
