@@ -29,6 +29,7 @@ from app.api.v1.schemas.bo_fit_quality import (
     _ResponseModel,
 )
 from app.api.v1.schemas.bo_planning import PlanningSelectionItem
+from app.services.bo_acquisition_receipts import _ValidationBoundary, legacy_payoff_roundoff_budget
 from app.services.bo_desirability_contract import _validate_source_and_candidate
 from app.statistics.bayesian_optimization import BayesianOptimizationError, _validated_factors
 from app.statistics.bo_beta_policy import stored_beta_expected_improvement
@@ -59,6 +60,30 @@ def validate_batch_calculation_result(
     result: DesirabilityBatchCalculationResult
     | DesirabilityFitCalculationResult
     | DesirabilityCurveCalculationResult,
+) -> None:
+    _validate_batch_calculation_result(request, result, _ValidationBoundary.CALCULATION)
+
+
+def validate_stored_batch_calculation_result(
+    request: DesirabilityBatchCalculationRequest
+    | DesirabilityFitCalculationRequest
+    | DesirabilityCurveCalculationRequest,
+    result: DesirabilityBatchCalculationResult
+    | DesirabilityFitCalculationResult
+    | DesirabilityCurveCalculationResult,
+) -> None:
+    """Only for historical records whose hashes and sources are already verified."""
+    _validate_batch_calculation_result(request, result, _ValidationBoundary.STORED_RECEIPT)
+
+
+def _validate_batch_calculation_result(
+    request: DesirabilityBatchCalculationRequest
+    | DesirabilityFitCalculationRequest
+    | DesirabilityCurveCalculationRequest,
+    result: DesirabilityBatchCalculationResult
+    | DesirabilityFitCalculationResult
+    | DesirabilityCurveCalculationResult,
+    boundary: _ValidationBoundary,
 ) -> None:
     _require(request.schema_version == result.schema_version)
     _require(result.batch_size == request.batch_size == len(result.items))
@@ -94,6 +119,7 @@ def validate_batch_calculation_result(
                 request, DesirabilityFitCalculationRequest | DesirabilityCurveCalculationRequest
             )
             else None,
+            boundary=boundary,
         )
         _require(item.rank == step + 1)
         point = [item.normalized_coordinates[k] for k in factor_ids]
@@ -146,7 +172,9 @@ def validate_batch_calculation_result(
         _require(set(planning.conditional_variance_raw) == set(keys))
         _require(all(v >= 0 for v in planning.conditional_variance_raw.values()))
         if step:
-            _validate_planning_proof(result.items, result.shared_model.response_models, step, goals)
+            _validate_planning_proof(
+                result.items, result.shared_model.response_models, step, goals, boundary=boundary
+            )
         else:
             _require(sampler.exact_selected_evaluations == 0)
             _require(not sampler.selected_covariance)
@@ -185,6 +213,8 @@ def _validate_planning_proof(
     response_models: Sequence[_ResponseModelResult | _ResponseModel],
     step: int,
     goals: Any,
+    *,
+    boundary: _ValidationBoundary = _ValidationBoundary.CALCULATION,
 ) -> None:
     item = items[step]
     planning, proof, sampler = item.planning, item.planning.proof, item.planning.sampler
@@ -291,6 +321,29 @@ def _validate_planning_proof(
         for m in range(count)
     ]
     _require(proof.thresholds == thresholds)
+    if boundary is _ValidationBoundary.STORED_RECEIPT and sampler.numerical_policy is None:
+        _require(math.isfinite(planning.score) and 0 <= planning.score <= 1)
+        _require(
+            math.isfinite(planning.mc_standard_error) and 0 <= planning.mc_standard_error <= 0.5
+        )
+        _require(count >= 2)
+        # Historical sample EI can carry the frozen subtraction's range error.
+        # Propagate each sample's allowance through the mean/max bounds only;
+        # never recompute, rewrite or clamp the recorded score or standard error.
+        payoff_bounds = [
+            min(moment.mean, max(1 - threshold, 0.0)) + legacy_payoff_roundoff_budget(moment.mean)
+            if threshold < 1
+            else 0.0
+            for moment, threshold in zip(proof.sample_moments, proof.thresholds, strict=True)
+        ]
+        mean_bound = math.fsum(payoff_bounds) / count
+        _require(planning.score <= mean_bound + 16 * math.ulp(mean_bound))
+        # For n bounded observations in [0, U], SE <= U / (2 sqrt(n - 1)).
+        error_bound = max(payoff_bounds) / (2 * math.sqrt(count - 1))
+        _require(planning.mc_standard_error <= error_bound + 16 * math.ulp(error_bound))
+        if max(payoff_bounds) == 0:
+            _require(planning.score == planning.mc_standard_error == 0)
+        return
     scores = [
         stored_beta_expected_improvement(
             m.mean,

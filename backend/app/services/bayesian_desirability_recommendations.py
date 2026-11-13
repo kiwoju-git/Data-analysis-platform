@@ -52,8 +52,14 @@ from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import APP_VERSION, runtime_build_provenance, utc_now
 from app.services.bayesian_noise_recommendations import _error, _json, _sha
-from app.services.bo_desirability_batch_contract import validate_batch_calculation_result
-from app.services.bo_desirability_contract import validate_calculation_result
+from app.services.bo_desirability_batch_contract import (
+    validate_batch_calculation_result,
+    validate_stored_batch_calculation_result,
+)
+from app.services.bo_desirability_contract import (
+    validate_calculation_result,
+    validate_stored_calculation_result,
+)
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.storage.bayesian_studies import (
     BayesianRecommendationBatchItemRecord,
@@ -248,6 +254,25 @@ def _validate_calculation(request: Any, result: Any) -> None:
         validate_batch_calculation_result(request, result)
     else:
         validate_calculation_result(request, result)
+
+
+def _validate_stored_calculation(request: Any, result: Any) -> None:
+    if isinstance(
+        request,
+        DesirabilityBatchCalculationRequest
+        | DesirabilityFitCalculationRequest
+        | DesirabilityCurveCalculationRequest,
+    ):
+        if not isinstance(
+            result,
+            DesirabilityBatchCalculationResult
+            | DesirabilityFitCalculationResult
+            | DesirabilityCurveCalculationResult,
+        ):
+            raise BayesianOptimizationError("bayesian_desirability_result_invalid")
+        validate_stored_batch_calculation_result(request, result)
+    else:
+        validate_stored_calculation_result(request, result)
 
 
 def _commit(
@@ -616,7 +641,7 @@ def validate_desirability_record(
             [json.loads(t.normalized_coordinates_json) for t in trials if t.trial_number < number],
             body,
         )
-        _validate_calculation(request, result.calculation)
+        _validate_stored_calculation(request, result.calculation)
         records = list_bayesian_recommendation_batch_item_records(
             settings.workspace_root, record.batch_id
         )

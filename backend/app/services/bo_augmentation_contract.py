@@ -8,6 +8,10 @@ from typing import Any
 
 from app.api.v1.schemas.bo_augmentation import AugmentationCalculation
 from app.api.v1.schemas.bo_planning import CandidateRow
+from app.services.bo_acquisition_receipts import (
+    _ValidationBoundary,
+    validate_legacy_acquisition_receipt,
+)
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_augmentation import CONFIRM, MAXPRO, MIXED_MAXIMIN, REFINE, REFINE_V2
 from app.statistics.bo_beta_policy import stored_beta_expected_improvement
@@ -96,7 +100,13 @@ def _response_rms(row: dict[str, Any], context: list[dict[str, Any]]) -> float:
     return _finite(math.hypot(*terms))
 
 
-def _model_row(row: dict[str, Any], snapshot: dict[str, Any], policy: str) -> None:
+def _model_row(
+    row: dict[str, Any],
+    snapshot: dict[str, Any],
+    policy: str,
+    *,
+    boundary: _ValidationBoundary = _ValidationBoundary.CALCULATION,
+) -> None:
     predictions = row["response_predictions"]
     models = {item["response_id"]: item["model"] for item in snapshot["response_models"]}
     keys = [item["response_id"] for item in predictions]
@@ -116,6 +126,15 @@ def _model_row(row: dict[str, Any], snapshot: dict[str, Any], policy: str) -> No
     _require(isinstance(acquisition, dict))
     xi = _finite(snapshot["calculation_request"]["xi_desirability"])
     moments = row["desirability_moments"]
+    if boundary is _ValidationBoundary.STORED_RECEIPT and "numerical_policy" not in acquisition:
+        validate_legacy_acquisition_receipt(
+            acquisition,
+            moments["mean"],
+            moments["variance"],
+            snapshot["incumbent"]["latent_incumbent_value"],
+            xi=xi,
+        )
+        return
     expected = asdict(
         stored_beta_expected_improvement(
             moments["mean"],
@@ -141,6 +160,7 @@ def _validate(
     rows: list[dict[str, Any]],
     existing_coordinates: list[list[float]],
     mixed_domains: Any = None,
+    boundary: _ValidationBoundary = _ValidationBoundary.CALCULATION,
 ) -> None:
     if mixed_domains is None:
         if result.get("schema_version") == 2:
@@ -285,7 +305,7 @@ def _validate(
             or (selected_distance > tolerance and selected_distance >= minimum)
         )
         if snapshot is not None:
-            _model_row(row, snapshot, policy)
+            _model_row(row, snapshot, policy, boundary=boundary)
         rank = step["rank"]
         expected_threshold = threshold if policy == CONFIRM and rank > 1 else None
         _require(step["competitive_threshold"] == expected_threshold)
@@ -351,6 +371,28 @@ def validate_augmentation_binding(
             snapshot=snapshot,
             rows=rows,
             existing_coordinates=existing_coordinates,
+        )
+    except (ValueError, KeyError, TypeError, AttributeError, OverflowError):
+        raise BayesianOptimizationError("bayesian_augmentation_result_invalid") from None
+
+
+def validate_stored_augmentation_binding(
+    result: dict[str, Any],
+    *,
+    request: dict[str, Any],
+    snapshot: dict[str, Any] | None,
+    rows: list[dict[str, Any]],
+    existing_coordinates: list[list[float]],
+) -> None:
+    """Read a hash/source-verified receipt; do not replay absent-policy Beta EI."""
+    try:
+        _validate(
+            result,
+            request=request,
+            snapshot=snapshot,
+            rows=rows,
+            existing_coordinates=existing_coordinates,
+            boundary=_ValidationBoundary.STORED_RECEIPT,
         )
     except (ValueError, KeyError, TypeError, AttributeError, OverflowError):
         raise BayesianOptimizationError("bayesian_augmentation_result_invalid") from None

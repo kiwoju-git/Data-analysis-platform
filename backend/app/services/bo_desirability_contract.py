@@ -10,6 +10,10 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     DesirabilityCalculationResult as DesirabilityCalculationResult,
 )
 from app.api.v1.schemas.bo_desirability_calculation import _CalculationRequestFields
+from app.services.bo_acquisition_receipts import (
+    _ValidationBoundary,
+    validate_legacy_acquisition_receipt,
+)
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
     _validated_constraints,
@@ -24,6 +28,19 @@ def validate_calculation_result(
     _validate_source_and_candidate(request, result, result.items[0], q1_search=True)
 
 
+def validate_stored_calculation_result(
+    request: DesirabilityCalculationRequest, result: DesirabilityCalculationResult
+) -> None:
+    """Validate a hash/source-verified historical receipt without upgrading it."""
+    _validate_source_and_candidate(
+        request,
+        result,
+        result.items[0],
+        q1_search=True,
+        boundary=_ValidationBoundary.STORED_RECEIPT,
+    )
+
+
 def _validate_source_and_candidate(
     request: _CalculationRequestFields,
     result: Any,
@@ -31,11 +48,12 @@ def _validate_source_and_candidate(
     *,
     q1_search: bool,
     fit_policy: Any = None,
+    boundary: _ValidationBoundary = _ValidationBoundary.CALCULATION,
 ) -> None:
     """Check identities, observed statistics and selected payoff without any refit.
 
-    This is a calculation-boundary check, not a persistent artifact reader or a
-    substitute for independent posterior/reference tests.
+    Stored callers must already verify document hashes and source identity.
+    Neither boundary substitutes for independent posterior/reference tests.
     """
     from app.statistics.bayesian_optimization import _constraint_evaluations
     from app.statistics.bo_beta_policy import stored_beta_expected_improvement
@@ -257,6 +275,18 @@ def _validate_source_and_candidate(
     require(close(candidate.desirability_moments.second_moment, expected_moments.second_moment))
     require(close(candidate.desirability_moments.variance, expected_moments.variance))
     require(candidate.acquisition.xi_desirability == request.xi_desirability)
+    if (
+        boundary is _ValidationBoundary.STORED_RECEIPT
+        and candidate.acquisition.numerical_policy is None
+    ):
+        validate_legacy_acquisition_receipt(
+            candidate.acquisition.model_dump(mode="json"),
+            candidate.desirability_moments.mean,
+            candidate.desirability_moments.variance,
+            incumbent.latent_incumbent_value,
+            xi=request.xi_desirability,
+        )
+        return
     expected_ei = stored_beta_expected_improvement(
         expected_moments.mean,
         expected_moments.variance,

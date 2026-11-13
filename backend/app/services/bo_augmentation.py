@@ -19,7 +19,10 @@ from app.core.config import Settings
 from app.services.analysis_run_execution import utc_now
 from app.services.bayesian_noise_recommendations import _error
 from app.services.bayesian_studies import get_bayesian_study
-from app.services.bo_augmentation_contract import validate_augmentation_binding
+from app.services.bo_augmentation_contract import (
+    validate_augmentation_binding,
+    validate_stored_augmentation_binding,
+)
 from app.services.bo_auto_evidence import evidence_identity, validate_auto_evidence
 from app.services.bo_candidates_v2 import read_candidate_revision_v2
 from app.services.bo_planning import (
@@ -42,8 +45,33 @@ def validate_saved_augmentation(
     rows: list[CandidateRow],
     snapshot: dict[str, Any] | None,
 ) -> None:
+    validate_stored_augmentation_binding(
+        calculation.model_dump(mode="json", exclude_unset=True),
+        **_augmentation_binding_inputs(study, body, rows, snapshot),
+    )
+
+
+def validate_augmentation_for_commit(
+    study: Any,
+    body: AugmentationRequest,
+    calculation: AugmentationResult,
+    rows: list[CandidateRow],
+    snapshot: dict[str, Any] | None,
+) -> None:
+    """New pending trials require strict calculation validation, not receipt replay."""
     validate_augmentation_binding(
         calculation.model_dump(mode="json", exclude_unset=True),
+        **_augmentation_binding_inputs(study, body, rows, snapshot),
+    )
+
+
+def _augmentation_binding_inputs(
+    study: Any,
+    body: AugmentationRequest,
+    rows: list[CandidateRow],
+    snapshot: dict[str, Any] | None,
+) -> dict[str, Any]:
+    return dict(
         request={
             **body.model_dump(mode="json"),
             "factors": snapshot["calculation_request"]["factors"]

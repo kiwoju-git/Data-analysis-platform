@@ -33,10 +33,12 @@ from app.services.bo_augmentation import (
     _source_candidate,
     _verify_binding,
     get_augmentation_selection,
+    validate_augmentation_for_commit,
     validate_saved_augmentation,
 )
 from app.services.bo_auto_evidence import validate_auto_evidence
 from app.services.bo_planning import _current, _read_model, get_planning_model
+from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.storage import bo_planning as storage
 from app.storage.bayesian_studies import (
     BayesianRecommendationBatchItemRecord,
@@ -82,7 +84,7 @@ def confirm_augmentation_selection(
     study = get_bayesian_study(settings, study_id)
     if not isinstance(study.objective, BayesianDesirabilityObjective):
         raise _error("bayesian_augmentation_model_policy_mismatch")
-    candidate, _, identity, tolerance = _source_candidate(
+    candidate, rows, identity, tolerance = _source_candidate(
         settings, study, selected.candidate_revision_id
     )
     request = selected.request
@@ -93,6 +95,13 @@ def confirm_augmentation_selection(
         raise _error("bayesian_optimization_pending_recommendation_exists")
     if len(study.trials) + request.batch_size > request.total_trial_budget:
         raise _error("bayesian_optimization_batch_budget_exceeded")
+    snapshot = None
+    if request.model_id is not None:
+        _, snapshot, _ = _read_model(settings, study, request.model_id)
+    try:
+        validate_augmentation_for_commit(study, request, selected.calculation, rows, snapshot)
+    except BayesianOptimizationError as exc:
+        raise _error("bayesian_planning_artifact_invalid") from exc
     source = AugmentationBatchSource(
         model_id=request.model_id,
         model_sha256=request.expected_model_sha256,

@@ -34,11 +34,23 @@ def _canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
 
 
+def _frozen_legacy_formula():
+    from scipy.special import betaincc
+
+    # Compatibility oracle, not an accuracy reference: keep the original binary64
+    # operation order while using this platform's installed special functions.
+    maximum_variance = MEAN * (1 - MEAN)
+    concentration = maximum_variance / VARIANCE - 1
+    alpha, beta = MEAN * concentration, (1 - MEAN) * concentration
+    left = MEAN * float(betaincc(alpha + 1, beta, THRESHOLD))
+    right = THRESHOLD * float(betaincc(alpha, beta, THRESHOLD))
+    return left - right
+
+
 def test_new_result_records_numerical_policy_and_keeps_statistical_distribution():
     result = beta_expected_improvement(MEAN, VARIANCE, THRESHOLD)
     assert asdict(result)["numerical_policy"] == POLICY
     assert result.distribution == "beta_moment_match"
-    assert result.value != LEGACY_VALUE
 
 
 def test_legacy_nested_acquisition_serialization_and_hash_are_unchanged():
@@ -67,11 +79,11 @@ def test_new_policy_round_trips_but_unknown_or_explicit_null_policy_is_rejected(
             _Acquisition.model_validate({**payload, "numerical_policy": unsupported})
 
 
-def test_stored_dispatch_replays_frozen_legacy_value_without_upgrading_its_payload():
+def test_stored_dispatch_replays_frozen_legacy_formula_without_upgrading_its_payload():
     from app.statistics.bo_beta_policy import stored_beta_expected_improvement
 
     legacy = stored_beta_expected_improvement(MEAN, VARIANCE, THRESHOLD, numerical_policy=None)
-    assert legacy.value == LEGACY_VALUE
+    assert legacy.value == _frozen_legacy_formula()
     assert "numerical_policy" not in asdict(legacy)
     new = stored_beta_expected_improvement(MEAN, VARIANCE, THRESHOLD, numerical_policy=POLICY)
     assert asdict(new) == asdict(beta_expected_improvement(MEAN, VARIANCE, THRESHOLD))
@@ -79,6 +91,31 @@ def test_stored_dispatch_replays_frozen_legacy_value_without_upgrading_its_paylo
         stored_beta_expected_improvement(MEAN, VARIANCE, THRESHOLD, numerical_policy="unknown")
     with pytest.raises(BayesianOptimizationError, match="precision_unsupported"):
         stored_beta_expected_improvement(0.5, 1e-12, 0.5, numerical_policy=None)
+
+
+@pytest.mark.parametrize("policy", [None, POLICY])
+def test_stored_policy_dispatches_distinct_implementations(monkeypatch, policy):
+    from app.statistics import bo_beta_legacy, bo_beta_policy, bo_desirability_acquisition
+
+    legacy_result, current_result = object(), object()
+    calls = []
+
+    def legacy(mean, variance, incumbent, *, xi):
+        calls.append(("legacy", mean, variance, incumbent, xi))
+        return legacy_result
+
+    def current(mean, variance, incumbent, *, xi):
+        calls.append(("current", mean, variance, incumbent, xi))
+        return current_result
+
+    monkeypatch.setattr(bo_beta_legacy, "beta_expected_improvement", legacy)
+    monkeypatch.setattr(bo_desirability_acquisition, "beta_expected_improvement", current)
+    result = bo_beta_policy.stored_beta_expected_improvement(
+        MEAN, VARIANCE, THRESHOLD, xi=0.01, numerical_policy=policy
+    )
+    expected_route = "legacy" if policy is None else "current"
+    assert result is (legacy_result if policy is None else current_result)
+    assert calls == [(expected_route, MEAN, VARIANCE, THRESHOLD, 0.01)]
 
 
 @pytest.mark.parametrize("mixed", [False, True])
@@ -149,9 +186,7 @@ def test_conditional_score_proof_uses_stored_policy_and_rejects_mixed_policy(mon
     )
     items = [SimpleNamespace(acquisition=SimpleNamespace(numerical_policy=policy)), item]
     contract._validate_planning_proof(items, [], 1, [])
-    item.planning.score = (
-        LEGACY_VALUE if policy else beta_expected_improvement(MEAN, VARIANCE, THRESHOLD).value
-    )
+    item.planning.score = value * 1.01
     with pytest.raises(BayesianOptimizationError, match="result_invalid"):
         contract._validate_planning_proof(items, [], 1, [])
     item.planning.score = value
