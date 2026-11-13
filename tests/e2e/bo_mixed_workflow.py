@@ -20,6 +20,7 @@ from playwright.sync_api import Browser, expect, sync_playwright
 from bo_loo import verify_loo
 from bo_auto_strategy import verify_auto_strategy
 from bo_auto_evidence import verify_saved_auto_evidence
+from bo_profile_graphs import verify_profile_grid
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
@@ -70,13 +71,13 @@ def verify_mixed_builder(page, base: str) -> dict:
         "group", name="Actual-unit numeric constraints", exact=True
     )
     constraints.get_by_role("button", name="Add constraint", exact=True).click()
-    constraints.get_by_label("Constraint name", exact=True).fill(
+    constraints.get_by_label("Constraint name constraint_1", exact=True).fill(
         "Synthetic temperature bound"
     )
-    constraints.get_by_label("Temperature: Coefficient", exact=True).fill("1")
-    constraints.get_by_label("Bound", exact=True).fill("1")
-    constraints.get_by_label("Relation", exact=True).select_option("less_than_or_equal")
-    assert constraints.get_by_label("Material: Coefficient", exact=True).count() == 0
+    constraints.get_by_label("Coefficient constraint_1 x", exact=True).fill("1")
+    constraints.get_by_label("Bound constraint_1", exact=True).fill("1")
+    constraints.get_by_label("Relation constraint_1", exact=True).select_option("less_than_or_equal")
+    assert constraints.get_by_label("Coefficient constraint_1 material", exact=True).count() == 0
     builder.get_by_label("Response 1 name", exact=True).fill("Yield")
     builder.get_by_label("Response 1 lower", exact=True).fill("0")
     builder.get_by_label("Response 1 target", exact=True).fill("10abc")
@@ -172,7 +173,7 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
                     "curve_policy": "derringer_suich_linear_v1",
                     "responses": [
                         {
-                            "response_id": "yield",
+                            "response_id": "desirability",
                             "name": "Yield",
                             "unit": "g",
                             "goal": "maximize",
@@ -306,16 +307,19 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
             "한글 <raw>",
             "=FORMULA()",
         ]
-        expect(profiler.locator("svg")).to_have_count(1)
-        expect(profiler.locator("svg")).to_contain_text("한글 <raw>")
-        profiler.get_by_label("Profile quantity", exact=True).select_option("yield")
+        detail = profiler.locator(".bo-profile-detail")
+        expect(detail.locator("svg.chart-frame-svg")).to_have_count(1)
+        expect(profiler.locator(".bo-profile-levels").first).to_contain_text("한글 <raw>")
+        verify_profile_grid(page, profiler, profile["items"], model["objective"]["responses"],
+                            study["factors"][1], output, suffix="nominal")
+        profiler.get_by_label("Profile quantity", exact=True).select_option("response:desirability")
         for metric, field in (
             ("mean", "mean_raw"),
             ("latent", "latent_standard_deviation_raw"),
             ("predictive", "predictive_standard_deviation_raw"),
         ):
             profiler.get_by_label("Response display", exact=True).select_option(metric)
-            values = profiler.locator("svg [data-y]").evaluate_all(
+            values = detail.locator("svg [data-y]").evaluate_all(
                 "els => els.map(e => Number(e.dataset.y))"
             )
             for row in profile["items"]:
@@ -337,8 +341,8 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
             row["actual_coordinates"]["grade"]
             for row in ordinal_profile.value.json()["items"]
         ] == ["low", "middle", "high"]
-        expect(profiler.locator("svg")).to_contain_text("middle")
-        assert profiler.locator("svg").evaluate("""svg => {
+        expect(detail.locator("svg.chart-frame-svg")).to_contain_text("middle")
+        assert detail.locator("svg.chart-frame-svg").evaluate("""svg => {
             const clip = svg.querySelector('clipPath rect').getBBox();
             const points = [...svg.querySelectorAll('[data-point-id]')];
             return points.length === 3 && points.every(point => {

@@ -519,3 +519,43 @@ EI/ETI meaning. This is not a relabeling of Balanced EI as JMP Refine. Existing
 augmentation reasoning and saved Auto evidence remain separate. See the
 [progress and saved-output comparison audit](bo_progress_validation_20261112.md)
 for fresh test evidence, private-source handling and remaining parity limits.
+
+## 14. Measured X/Y Import And Advanced Options (API43)
+
+The historical X/Y-import gap in section 9 is superseded by the measured-data
+import contract. Header dataset/filter selection, explicit X/Y role mapping,
+completed measured trials, repeat preservation, immutable source receipt and
+idempotent creation are implemented. Candidate-row import remains a different
+operation. See [the import contract](bayesian_initial_observation_import_contract.md)
+and [the API43 baseline evidence](bo_xy_start_validation.md).
+
+The current completion branch adds an initially collapsed advanced section for
+existing actual-unit numeric constraints and explicit nominal/ordinal correlation
+policies. It reuses the existing domain parsers, limits and saved study contracts;
+it does not add a new GP calculation or claim closer JMP numerical parity.
+Editing advanced settings invalidates preflight. Referenced factors cannot be
+silently remapped or removed, and incompatible ordinal-only policies require an
+explicit correction. Current execution and integration status is recorded in
+[the completion audit](bo_completion_validation.md), not inferred from prior CI.
+
+Mixture closure/pseudocomponents remain unimplemented. Ordinary paired linear
+inequalities are not advertised as mixture-domain sampling or coding. JMP's
+undocumented Auto transition rules, maximize/minimize tail policy and exact
+same-settings fitted-output parity also remain distinct verification limits.
+
+## 15. Applied-Axis Response Graphs (API43 Follow-up)
+
+The next additive graph slice keeps the existing observed progress and
+conditional-LOO actual-by-predicted charts. It adds raw conditional-LOO residual
+plots and an all-response mean overview for the single explicitly evaluated
+profiler axis. Composite expected desirability remains separate from raw response
+units; selected-response latent and predictive SD controls remain available.
+No extra fit/evaluation occurs merely to arrange these stored values.
+
+This is not a full all-factor profiler matrix, 3D surface renderer or new JMP
+numerical parity result. Other axes require their own explicit evaluation with
+applied holds. Local diagnostic JSON and existing managed batch reports keep their
+documented scope; a live custom curve is not claimed to be in an unrelated saved
+report. The mixed selector now distinguishes a legitimate response ID named
+`desirability` from the composite quantity. See the completion audit for separate
+unit/browser/CI status rather than treating this feature description as evidence.

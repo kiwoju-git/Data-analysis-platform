@@ -34,16 +34,23 @@ def verify_loo(page, api: str, model: dict, output: Path, *, mixed: bool = False
         definition = next(row for row in model["objective"]["responses"] if row["response_id"] == response["response_id"])
         section = panel.get_by_role("region", name=definition["name"], exact=True)
         for point in response["points"]:
-            marker = section.locator(f'[data-point-id="{point["trial_id"]}"]')
+            marker = section.locator(f'.bo-loo-observed [data-point-id="{point["trial_id"]}"]')
             expect(marker).to_have_count(1)
             assert float(marker.get_attribute("data-x")) == point["predicted"]
             assert float(marker.get_attribute("data-y")) == point["observed"]
-        first = section.locator("[data-point-id]").first
-        first.focus()
-        first.press("Enter")
-        expect(first).to_have_attribute("data-selected", "true")
-        first.press("Escape")
-        expect(first).to_have_attribute("data-selected", "false")
+            residual = section.locator(f'.bo-loo-residual [data-point-id="{point["trial_id"]}"]')
+            expect(residual).to_have_count(1)
+            assert float(residual.get_attribute("data-x")) == point["predicted"]
+            assert float(residual.get_attribute("data-y")) == point["residual"]
+        zero = section.locator('.bo-loo-residual line[data-y1="0"][data-y2="0"]')
+        expect(zero).to_have_count(1)
+        for chart in (".bo-loo-observed", ".bo-loo-residual"):
+            first = section.locator(f"{chart} [data-point-id]").first
+            first.focus()
+            first.press("Enter")
+            expect(first).to_have_attribute("data-selected", "true")
+            first.press("Escape")
+            expect(first).to_have_attribute("data-selected", "false")
     for locale, language, title in (
         ("ko", "KOR", "저장 모형 LOO 진단"),
         ("en", "ENG", "Saved-model LOO diagnostics"),
@@ -55,7 +62,7 @@ def verify_loo(page, api: str, model: dict, output: Path, *, mixed: bool = False
             page.set_viewport_size({"width": width, "height": 1000})
             wait_for_layout_settled(page)
             assert translated.evaluate("e => e.scrollWidth <= e.clientWidth + 1")
-            assert translated.locator("svg [data-point-id]").count() == sum(len(row["points"]) for row in view["calculation"]["responses"])
+            assert translated.locator("svg [data-point-id]").count() == 2 * sum(len(row["points"]) for row in view["calculation"]["responses"])
             translated.screenshot(path=output / f"loo-{locale}-{width}.png")
     with page.expect_download() as download:
         panel.get_by_role("button", name="Download diagnostic JSON", exact=True).click()
@@ -92,6 +99,7 @@ def verify_source_lane(page, api: str, model: dict, view: dict, endpoint: str) -
         expect(select).to_have_value(other["model_id"])
         expect(parent.get_by_text(other["snapshot_sha256"], exact=True).first).to_be_attached()
         expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_have_count(0)
+        expect(panel.locator(".bo-loo-residual")).to_have_count(0)
         select.select_option(model["model_id"])
         expect(select).to_have_value(model["model_id"])
         expect(parent.get_by_text(model["snapshot_sha256"], exact=True).first).to_be_attached()
@@ -102,6 +110,8 @@ def verify_source_lane(page, api: str, model: dict, view: dict, endpoint: str) -
         expect(panel.get_by_text("Calculating LOO", exact=True)).to_be_visible()
         expect(panel.get_by_role("alert")).to_have_count(0)
         expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_have_count(0)
+        expect(panel.locator(".bo-loo-residual")).to_have_count(0)
         held[1].fulfill(json=view)
         expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_be_visible()
+        expect(panel.locator(".bo-loo-residual")).to_have_count(len(view["calculation"]["responses"]))
         page.unroute(endpoint)

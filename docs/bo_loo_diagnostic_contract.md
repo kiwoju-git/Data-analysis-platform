@@ -79,6 +79,16 @@ frozen-parameter and repeat-evaluation limits. Model/source changes unmount the
 old request lane; late success, failure and finally cannot populate a new source.
 Locale and resize do not request another calculation.
 
+The API43 graph follow-up adds a second chart for each response using the same
+completed diagnostic: X is its conditional LOO prediction and Y is the stored
+raw-unit residual (observed minus that prediction), with a zero reference line.
+This is not an in-sample residual, standardized/studentized diagnostic or new
+external validation. All raw trial identities remain inspectable. No additional
+fit, diagnostic request, schema version or stored model mutation is involved.
+The JSON export continues to contain the same completed view, not an invented
+managed HTML residual report. Current-run evidence is recorded separately in
+[completion validation](bo_completion_validation.md).
+
 JSON download captures only the completed displayed response, including exact
 model/config/history and calculation hashes. It is a **local convenience snapshot**,
 not a managed Report Center artifact. Users should treat the exported observation

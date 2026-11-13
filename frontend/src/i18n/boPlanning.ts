@@ -1,6 +1,8 @@
 import type { AppLocale } from "./types";
 
 const en = {
+  profileGrid: "All responses at the evaluated factor",
+  profileLevels: "Full evaluated category labels (# follows evaluated order)",
   profileQuantity: "Profile quantity", desirability: "Desirability", profileMetric: "Response display",
   deletionPlanning: "Saved planning records included in deletion", deletionModels: "Saved fitted models", deletionCandidateSets: "Candidate tables", deletionCandidateRevisions: "Candidate revisions", deletionSelections: "Saved manual and automatic selections", deletionConfirmations: "Batch confirmation records",
   confirmLock: "Batch confirmation is in progress. Selection and source edits are locked until the server responds.", openBatch: "Open saved batch",
@@ -26,6 +28,8 @@ const en = {
   profiler: "Saved-model profiler", axis: "Profile factor", point: "Evaluate complete point", curve: "Evaluate conditional curve", holds: "Actual factor settings / fixed holds", profileMeaning: "Conditional predictions use the displayed fixed holds and the exact saved model. These are not observed responses or marginal averages.", mean: "Predicted mean", latent: "Latent SD", predictive: "New-measurement predictive SD", response: "Response", profileInvalid: "Enter complete executable settings. A discrete profile is limited to 100 levels; no levels are silently skipped.", append: "Append evaluated point as new candidate revision", eligibilityOld: "Eligibility differs from the current trial list; the prediction still belongs to its saved model.", none: "Not evaluated", noSelection: "Select candidates to review.",
 };
 const ko: typeof en = {
+  profileGrid: "평가한 요인에서의 전체 반응",
+  profileLevels: "평가한 범주의 전체 이름 (#은 평가 순서)",
   profileQuantity: "Profile 대상", desirability: "Desirability", profileMetric: "반응 표시값",
   deletionPlanning: "함께 삭제되는 저장 계획 기록", deletionModels: "저장 적합 모형", deletionCandidateSets: "후보표", deletionCandidateRevisions: "후보 revision", deletionSelections: "저장 수동·자동 선택", deletionConfirmations: "배치 확정 기록",
   confirmLock: "배치를 확정하고 있습니다. 서버 응답까지 선택 및 출처 변경을 잠급니다.", openBatch: "저장 배치 열기",

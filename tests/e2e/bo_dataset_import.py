@@ -14,7 +14,7 @@ from app_readiness import diagnosed_page, wait_for_bayesian_ready
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
-def seed(page, base):
+def seed(page, base, csv_bytes=None):
     response = page.request.post(
         base + "/api/v1/datasets",
         headers={"Origin": base},
@@ -22,7 +22,9 @@ def seed(page, base):
             "file": {
                 "name": "synthetic-import.csv",
                 "mimeType": "text/csv",
-                "buffer": b"x,Yield,Cost\n6.944186141483639,40,3\n3.6300444412189226,41,4\n0.4113583179671809,42,5\n",
+                "buffer": csv_bytes
+                if csv_bytes is not None
+                else b"x,Yield,Cost\n6.944186141483639,40,3\n3.6300444412189226,41,4\n0.4113583179671809,42,5\n",
             }
         },
     )
@@ -48,6 +50,118 @@ def seed(page, base):
     )
     assert response.status == 201, response.text()
     return response.json()
+
+
+def verify_category_import(browser, base, output):
+    """Saved correlation policy is explicit; category strings remain untouched."""
+    with diagnosed_page(
+        browser,
+        output,
+        "category-import",
+        init_script="localStorage.setItem('statistical-twin.locale','en')",
+    ) as page:
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        version = seed(page, base, "등급,Yield\n낮음,40\n중간,42\n높음,44\n".encode())
+        page.goto(base + ROUTE, wait_until="domcontentloaded")
+        wait_for_bayesian_ready(page, "en", ROUTE)
+        page.locator("#active-dataset-version").select_option(version["version_id"])
+        page.locator('select:has(option[value="dataset"])').select_option("dataset")
+        form = page.get_by_role("region", name="Start BO from existing X/Y", exact=True)
+        form.get_by_label("Import study name", exact=True).fill(
+            "Synthetic category import"
+        )
+        form.get_by_label("X 1", exact=True).select_option(
+            version["columns"][0]["column_id"]
+        )
+        form.get_by_label("X 1 type", exact=True).select_option("ordinal")
+        form.get_by_label("X 1 levels", exact=True).fill("낮음\n중간\n높음")
+        form.get_by_label("Response objective", exact=True).select_option("vector")
+        form.get_by_label("Y 1", exact=True).select_option(
+            version["columns"][1]["column_id"]
+        )
+        form.get_by_label("Response 1 lower", exact=True).fill("0")
+        form.get_by_label("Response 1 target", exact=True).fill("100")
+        advanced = form.locator("details").filter(
+            has=page.get_by_text("Advanced options", exact=True)
+        )
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        policy = form.get_by_label("X 1 Category correlation policy", exact=True)
+        policy.select_option("ordinal_monotone_latent_rbf_v1")
+        form.get_by_label("X 1 type", exact=True).select_option("nominal")
+        advanced.locator("summary").click()
+        expect(form.locator('td p[role="alert"]')).to_be_visible()
+        posts = []
+        page.on(
+            "request",
+            lambda request: posts.append(request.url)
+            if request.method == "POST"
+            else None,
+        )
+        form.get_by_role("button", name="Preflight import", exact=True).click()
+        expect(form.locator(".error-box code")).to_have_text(
+            "bayesian_category_correlation_policy_invalid"
+        )
+        assert posts == [], posts
+        advanced.locator("summary").click()
+        policy.select_option("unequal_hyperspherical_correlation_v1")
+        with page.expect_response("**/bayesian-studies/import-preflight") as reviewed:
+            form.get_by_role("button", name="Preflight import", exact=True).click()
+        assert reviewed.value.status == 200, reviewed.value.text()
+        policy.select_option("equal_positive_correlation_v1")
+        expect(
+            form.get_by_role("region", name="Import review", exact=True)
+        ).to_have_count(0)
+        policy.select_option("unequal_hyperspherical_correlation_v1")
+        page.locator(".language-switcher button").filter(has_text="KOR").click()
+        expect(page.get_by_label("X 1 범주 상관 정책", exact=True)).to_have_value(
+            "unequal_hyperspherical_correlation_v1"
+        )
+        expect(page.get_by_label("X 1 수준", exact=True)).to_have_value(
+            "낮음\n중간\n높음"
+        )
+        page.set_viewport_size({"width": 1024, "height": 900})
+        page.locator(".language-switcher button").filter(has_text="ENG").click()
+        with page.expect_response("**/bayesian-studies/import-preflight") as reviewed:
+            form.get_by_role("button", name="Preflight import", exact=True).click()
+        assert reviewed.value.status == 200, reviewed.value.text()
+        assert reviewed.value.json()["n_used"] == 3
+        with page.expect_response("**/bayesian-studies/from-dataset") as created:
+            form.get_by_role(
+                "button", name="Import observations and create study", exact=True
+            ).click()
+        assert created.value.status == 201, created.value.text()
+        study = created.value.json()
+        assert study["study_schema_version"] == 7
+        assert study["factors"][0]["name"] == "등급"
+        assert study["factors"][0]["levels"] == ["낮음", "중간", "높음"]
+        assert (
+            study["factors"][0]["correlation_policy"]
+            == "unequal_hyperspherical_correlation_v1"
+        )
+        assert [row["actual_coordinates"]["factor_1"] for row in study["trials"]] == [
+            "낮음",
+            "중간",
+            "높음",
+        ]
+        api = base + "/api/v1/bayesian-studies/" + study["study_id"]
+        page.reload(wait_until="domcontentloaded")
+        wait_for_bayesian_ready(page, "en", ROUTE)
+        assert page.request.get(api).json() == study
+        page.screenshot(
+            path=str(output / "category-import-restored.png"), full_page=True
+        )
+        assert not errors, errors
+        return {
+            "synthetic": True,
+            "study_id": study["study_id"],
+            "correlation_policy": study["factors"][0]["correlation_policy"],
+            "restored_unchanged": True,
+            "korean_categories_preserved": True,
+            "invalid_policy_post_count": 0,
+            "pageerrors": errors,
+        }
 
 
 def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False):
@@ -126,6 +240,16 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
         form.get_by_label("Response 2 goal", exact=True).select_option("minimize")
         form.get_by_label("Response 2 target", exact=True).fill("1")
         form.get_by_label("Response 2 upper", exact=True).fill("10")
+        advanced = form.locator("details").filter(
+            has=page.get_by_text("Advanced options", exact=True)
+        )
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        form.get_by_role("button", name="Add constraint", exact=True).click()
+        form.get_by_label("Coefficient constraint_1 factor_1", exact=True).fill("1")
+        form.get_by_label("Bound constraint_1", exact=True).fill("10")
+        expect(form.get_by_label("X 1", exact=True)).to_be_disabled()
+        expect(form.get_by_label("X 1 type", exact=True)).to_be_disabled()
         writes = []
         layout_checks = []
         page.on(
@@ -172,6 +296,12 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
             form.get_by_role("button", name="Preflight import", exact=True).click()
         assert preflight.value.status == 200, preflight.value.text()
         assert preflight.value.json()["n_used"] == 3
+        assert preflight.value.request.post_data_json["constraints"][0]["bound"] == 10
+        form.get_by_label("Bound constraint_1", exact=True).fill("9")
+        expect(
+            form.get_by_role("region", name="Import review", exact=True)
+        ).to_have_count(0)
+        form.get_by_label("Bound constraint_1", exact=True).fill("10")
         # Editing invalidates the reviewed request before it can be committed.
         form.get_by_label("X 1 high", exact=True).fill("11")
         expect(
@@ -189,6 +319,10 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
             commit.click()
         assert created.value.status == 201, created.value.text()
         study = created.value.json()
+        assert study["constraints"][0]["bound"] == 10
+        assert study["constraints"][0]["terms"] == [
+            {"factor_id": "factor_1", "coefficient": 1}
+        ]
         assert study["completed_trial_count"] == 3 and study["pending_trial_count"] == 0
         assert [row["response_values"] for row in study["trials"]] == [
             {"response_1": 40, "response_2": 3},
@@ -252,6 +386,7 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
         original_hash = study["initial_design"]["observations_sha256"]
         restored = page.request.get(api).json()
         assert restored["initial_design"]["observations_sha256"] == original_hash
+        assert restored["constraints"] == study["constraints"]
         assert (
             restored["completed_trial_count"] == 5
             and restored["pending_trial_count"] == 0
@@ -332,6 +467,9 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
             "layout_checks": layout_checks,
             "managed_report_sha256": report["sha256"],
             "managed_report_offline_open": True,
+            "advanced_numeric_constraint_restored": restored["constraints"]
+            == study["constraints"],
+            "category_import": verify_category_import(browser, base, output),
         }
         (output / "receipt.json").write_text(
             json.dumps(receipt, indent=2), encoding="utf-8"

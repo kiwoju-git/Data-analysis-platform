@@ -1,8 +1,10 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setCurrentLocale } from "../../i18n/store";
-import { BayesianPlanningPanel, PlanningFitSummary } from "./BayesianPlanningPanel";
+import { BayesianPlanningPanel, PlanningFitSummary, PlanningProfileChart } from "./BayesianPlanningPanel";
 import { desirabilityFixture } from "./bayesianDesirability.fixture";
+import { planningBatchFixture } from "./boPlanning.fixture";
+import type { PlanningEvaluationResponse } from "../../api/types/boPlanning";
 
 describe("planning panel initial display boundary", () => {
   afterEach(() => setCurrentLocale("ko"));
@@ -23,6 +25,29 @@ describe("planning panel initial display boundary", () => {
     const html = renderToStaticMarkup(<BayesianPlanningPanel study={study} fitRequest={null} onConfirmed={vi.fn()} />);
     expect(html).toContain("Existing single-response studies remain unchanged");
     expect(html).not.toContain("Fit and save model"); expect(JSON.stringify(study)).toBe(before);
+  });
+  it.each(["continuous", "discrete_numeric"] as const)("uses only applied %s rows for separate response mean charts", domain => {
+    setCurrentLocale("en"); const { study, batch } = planningBatchFixture();
+    study.factors[0].domain_kind = domain;
+    if (domain === "discrete_numeric") study.factors[0].step = .25;
+    const items = batch.calculation.items.map(row => ({ ...row, prediction_source: "completed_observations_base_posterior" as const }));
+    const response: PlanningEvaluationResponse = { schema_version: 1, model_id: batch.source.model_id, model_sha256: batch.source.model_sha256, request_sha256: "e".repeat(64), items,
+      source_is_current: true, eligibility_source_trial_count: 4, eligibility_coordinates_sha256: "d".repeat(64), eligibility_is_current: true, model_refit: false };
+    const profile = { axis: "x", points: items.map(row => row.actual_coordinates), response }, before = JSON.stringify(profile);
+    const html = renderToStaticMarkup(<PlanningProfileChart profile={profile} study={study} sourceKey={`${batch.source.model_sha256}:${response.request_sha256}`} />);
+    expect(html).toContain('class="bo-profile-detail"'); expect(html).toContain('class="bo-profile-grid"');
+    expect((html.match(/data-profile-kind="response"/g) ?? [])).toHaveLength(batch.objective.responses.length);
+    expect((html.match(/data-profile-kind="composite"/g) ?? [])).toHaveLength(1);
+    for (const definition of batch.objective.responses) {
+      expect(html).toContain(`data-response-id="${definition.response_id}"`);
+      expect(html).toContain(`${definition.name.replace("<", "&lt;").replace(">", "&gt;")} (${definition.unit})`);
+      for (const row of items) {
+        const value = row.response_predictions.find(item => item.response_id === definition.response_id)!.mean_raw;
+        expect(html).toContain(`data-x="${row.actual_coordinates.x}" data-y="${value}"`);
+      }
+    }
+    expect(JSON.stringify(profile)).toBe(before);
+    expect(renderToStaticMarkup(<PlanningProfileChart profile={{ ...profile, axis: null }} study={study} sourceKey="same" />)).toBe("");
   });
   it.each(["en", "ko"] as const)("keeps stored optimizer warnings and metadata visible in %s", locale => {
     setCurrentLocale(locale); const { calculation } = desirabilityFixture();

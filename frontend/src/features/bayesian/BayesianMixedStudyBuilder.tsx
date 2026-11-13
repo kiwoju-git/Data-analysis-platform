@@ -11,6 +11,7 @@ import { buildMixedStudyRequest, newMixedFactor, validMixedStudy, type MixedCons
 import { buildVectorObjective, newResponseDraft, type ResponseGoalDraft } from "./bayesianVectorDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
 import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { BayesianConstraintEditor } from "./BayesianConstraintEditor";
 import "./boPlanning.css";
 
 interface Props { ownerKey: string; disabled: boolean; onCreated: (study: MixedStudyResponse) => void; onCancel: () => void; onBusyChange: (busy: boolean) => void }
@@ -51,7 +52,6 @@ export function BayesianMixedStudyBuilder({ ownerKey, disabled, onCreated, onCan
     } catch (caught) { if (guard.current(token)) { setError(augmentationFailureCode(caught)); setUncertain(!(caught instanceof ApiRequestError && caught.status >= 400 && caught.status < 500)); } }
     finally { if (guard.current(token)) { running.current = false; setCreating(false); } }
   }
-  const numeric = factors.filter(row => row.kind === "continuous" || row.kind === "discrete_numeric");
   return <section className="bo-planning" aria-label={text.title}><h3>{text.title}</h3><p>{text.categoryMeaning}</p><p>{text.parity}</p>
     <fieldset className="bo-planning-confirm-lock" disabled={disabled || creating || uncertain}>
       <div className="bo-planning-fields"><label>{text.name}<input value={name} maxLength={120} onChange={event => setName(event.currentTarget.value)} /></label><label>{text.objective}<input value={objectiveName} maxLength={80} onChange={event => setObjectiveName(event.currentTarget.value)} /></label></div>
@@ -77,13 +77,8 @@ export function BayesianMixedStudyBuilder({ ownerKey, disabled, onCreated, onCan
       </fieldset>)}
       <button type="button" className="secondary-button" disabled={factors.length >= 10} onClick={() => { const factor = newMixedFactor(nextFactor.current++); setFactors(current => [...current, factor]); }}><Plus size={16} aria-hidden="true" />{text.addFactor}</button>
       <BayesianResponseGoals draft={goalEditor} sourceKey={JSON.stringify([ownerKey, name, factors, goals])} />
-      <fieldset className="bo-planning-fieldset"><legend>{text.constraints}</legend><p>{text.constraintMeaning}</p>{constraints.map(row => <div key={row.key} className="bo-planning-fields">
-        <label>{text.constraintName}<input value={row.name} onChange={event => { const value = event.currentTarget.value; setConstraints(current => current.map(item => item.key === row.key ? { ...item, name: value } : item)); }} /></label>
-        {numeric.map(factor => <label key={factor.factorId}>{factor.name}: {text.coefficient}<input inputMode="decimal" value={row.coefficients[factor.factorId] ?? ""} onChange={event => { const value = event.currentTarget.value; setConstraints(current => current.map(item => item.key === row.key ? { ...item, coefficients: { ...item.coefficients, [factor.factorId]: value } } : item)); }} /></label>)}
-        <label>{text.relation}<select aria-label={text.relation} value={row.relation} onChange={event => { const value = event.currentTarget.value as MixedConstraintDraft["relation"]; setConstraints(current => current.map(item => item.key === row.key ? { ...item, relation: value } : item)); }}><option value="less_than_or_equal">≤</option><option value="greater_than_or_equal">≥</option></select></label>
-        <label>{text.bound}<input inputMode="decimal" value={row.bound} onChange={event => { const value = event.currentTarget.value; setConstraints(current => current.map(item => item.key === row.key ? { ...item, bound: value } : item)); }} /></label>
-        <button type="button" className="secondary-button" onClick={() => setConstraints(current => current.filter(item => item.key !== row.key))}><Trash2 size={16} aria-hidden="true" />{text.removeConstraint}</button>
-      </div>)}<button type="button" className="secondary-button" disabled={constraints.length >= 16 || numeric.length === 0} onClick={() => { const key = nextConstraint.current++; setConstraints(current => [...current, { key, name: `Constraint ${key}`, relation: "less_than_or_equal", bound: "", coefficients: {} }]); }}><Plus size={16} aria-hidden="true" />{text.addConstraint}</button></fieldset>
+      <BayesianConstraintEditor locale={locale} factors={factors} constraints={constraints} onChange={setConstraints}
+        onAdd={() => { const key = nextConstraint.current++; setConstraints(current => [...current, { key, name: `Constraint ${key}`, relation: "less_than_or_equal", bound: "", coefficients: {} }]); }} />
       <div className="bo-planning-fields"><label>{text.seed}<input inputMode="numeric" value={seed} onChange={event => setSeed(event.currentTarget.value)} /></label><label>{text.size}<input inputMode="numeric" value={size} onChange={event => setSize(event.currentTarget.value)} /></label></div><p>{text.initialPolicy}</p>
       <button type="button" className="primary-button" onClick={() => void submit()}><Save size={16} aria-hidden="true" />{text.create}</button>
     </fieldset>

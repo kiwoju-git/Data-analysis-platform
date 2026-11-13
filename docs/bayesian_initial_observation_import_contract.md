@@ -1,6 +1,6 @@
 # Bayesian Initial Observation Import Contract
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 ## Supported Source
 
@@ -9,6 +9,30 @@ The existing upload/paste, parsing confirmation, schema, and immutable canonical
 rows are reused. BO does not upload again, generate replacement X coordinates,
 attach measured Y to an LHS design, average repeats, or fit a GP during import.
 Import from an app-created LHS response revision remains unsupported.
+
+## Current UI
+
+The existing X/Y form uses only the header dataset and active filter. Its
+initially collapsed Advanced options section exposes the existing actual-unit
+numeric linear constraints (at most 16), reusing the mixed-study constraint
+editor and parser. Blank coefficients are omitted, not converted to zero;
+invalid bounds or coefficients remain string drafts and block preflight.
+Category codes never become numeric constraint coefficients.
+
+Nominal and ordinal factors offer equal-positive or unequal-hyperspherical
+correlation; only ordinal factors offer the learned monotone latent policy.
+The existing limits remain 32 levels per category, 8 for unequal correlation,
+and 64 total category parameters. Switching a latent-policy ordinal factor to
+nominal retains a visible validation error until the user explicitly selects
+an applicable policy or restores ordinal type. No policy is silently replaced.
+
+Any draft edit invalidates the current preflight and retry receipt. While a
+factor has a nonblank constraint coefficient, its column mapping, type, and
+removal controls are disabled with an explanation. The user must explicitly
+clear those coefficients or remove their constraints first. Removing unrelated
+factors does not erase constraints. Locale and viewport changes do not rewrite
+names, category identities, policies, numeric strings, mappings, goals or filters.
+No API, import schema or mixture support changes are introduced by these controls.
 
 ## API
 

@@ -11,6 +11,8 @@ const en = {
   response: "Response", raw: "Observed trials", effective: "Fitted rows", scored: "Scored trials", r2: "LOO R²", rmse: "LOO RMSE",
   formula: "R² = 1 − PRESS / centered total sum of squares, across all observed trials. Negative R² is retained.",
   constant: "Unavailable: constant observed response", observed: "Observed", predicted: "LOO predicted", residual: "LOO residual",
+  residualPoints: "Conditional LOO residual versus predicted", zeroResidual: "Observed − LOO predicted = 0", trial: "Trial ID",
+  residualMeaning: "Conditional row-LOO with fixed full-fit parameters: x is LOO predicted, y is observed minus LOO predicted, in original response units. Residual patterns do not establish independent errors.",
   observation: "Observation", points: "Observed versus LOO predicted", identity: "Observed = predicted", rows: "All diagnostic rows", source: "Exact diagnostic source", none: "Unavailable",
 };
 const ko: typeof en = {
@@ -24,6 +26,8 @@ const ko: typeof en = {
   response: "반응", raw: "관측 실험 수", effective: "적합 행 수", scored: "평가 실험 수", r2: "LOO R²", rmse: "LOO RMSE",
   formula: "R² = 1 − PRESS / 전체 관측값의 평균 중심 총제곱합입니다. 음수 R²도 그대로 표시합니다.",
   constant: "제공 불가: 관측 반응이 상수", observed: "관측값", predicted: "LOO 예측값", residual: "LOO 잔차",
+  residualPoints: "조건부 LOO 잔차 대 예측값", zeroResidual: "관측값 − LOO 예측값 = 0", trial: "실험 ID",
+  residualMeaning: "전체 적합 파라미터를 고정한 조건부 행 LOO입니다. x는 LOO 예측값, y는 관측값에서 LOO 예측값을 뺀 잔차이며 원래 반응 단위입니다. 잔차 패턴으로 오차의 독립성을 입증할 수 없습니다.",
   observation: "관측", points: "관측값 대 LOO 예측값", identity: "관측값 = 예측값", rows: "전체 진단 행", source: "정확한 진단 출처", none: "제공 불가",
 };
 export const boLooMessages = (locale: AppLocale): typeof en => locale === "en" ? en : ko;

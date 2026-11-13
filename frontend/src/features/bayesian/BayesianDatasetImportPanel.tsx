@@ -4,10 +4,13 @@ import type { AnalysisFilterSnapshot, DatasetVersionResponse } from "../../api";
 import type { AnyBayesianStudyResponse } from "../../api/types/boMixed";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { datasetImportMessages } from "../../i18n/boDatasetImport";
+import { mixedMessages } from "../../i18n/boMixed";
 import { newMixedFactor, type MixedFactorDraft } from "./boMixedDraft";
 import { newResponseDraft, type ResponseGoalDraft } from "./bayesianVectorDraft";
 import { buildDatasetImportRequest, type DatasetImportDraft } from "./boDatasetImportDraft";
 import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { BayesianConstraintEditor } from "./BayesianConstraintEditor";
+import { BayesianCategoryCorrelationEditor } from "./BayesianCategoryCorrelationEditor";
 import { useDatasetImport } from "./hooks/useDatasetImport";
 import "./boDatasetImport.css";
 
@@ -31,6 +34,7 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
   const { locale } = useI18n();
   const text = datasetImportMessages(locale);
   const next = useRef(2);
+  const nextConstraint = useRef(1);
   const [draft, setDraft] = useState<DatasetImportDraft>(() => ({
     name: "", factors: [{ ...newMixedFactor(1), columnId: "", low: "", high: "", levels: [""] }],
     responseMode: "scalar", scalarColumnId: "", goal: "maximize", target: "", tolerance: "",
@@ -40,10 +44,11 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
   const working = state.busy !== null;
   useEffect(() => { onBusyChange(working); return () => onBusyChange(false); }, [working, onBusyChange]);
   function edit(update: (current: DatasetImportDraft) => DatasetImportDraft) { state.invalidate(); setDraft(update); }
+  const referenced = (current: DatasetImportDraft, id: string) => current.constraints.some(row => (row.coefficients[id] ?? "").trim() !== "");
   function factor(key: number, field: keyof MixedFactorDraft | "columnId", value: string | string[]) {
-    edit(current => ({ ...current, factors: current.factors.map(row => row.key === key ? { ...row, [field]: value } : row) }));
+    edit(current => ({ ...current, factors: current.factors.map(row => row.key === key && !((field === "kind" || field === "columnId") && referenced(current, row.factorId)) ? { ...row, [field]: value } : row) }));
   }
-  const selectColumn = (label: string, value: string, change: (id: string) => void) => <select aria-label={label} value={value} onChange={event => change(event.currentTarget.value)}>
+  const selectColumn = (label: string, value: string, change: (id: string) => void, locked = false, description?: string) => <select aria-label={label} disabled={locked} aria-describedby={description} value={value} onChange={event => change(event.currentTarget.value)}>
     <option value="">{text.selectColumn}</option>{version.columns.map(column => <option key={column.column_id} value={column.column_id}>{column.display_name}</option>)}
   </select>;
   const goals = {
@@ -63,16 +68,18 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
       <label>{text.studyName}<input aria-label={text.studyNameInput} value={draft.name} maxLength={120} onChange={event => { const value = event.currentTarget.value; edit(current => ({ ...current, name: value })); }} /></label>
       <div className="table-wrap"><table className="result-table"><caption>{text.predictorsCaption}</caption>
         <thead><tr>{[text.column, text.type, text.domain, text.remove].map(label => <th key={label}>{label}</th>)}</tr></thead>
-        <tbody>{draft.factors.map((row, index) => <tr key={row.key}>
-          <td>{selectColumn(`X ${index + 1}`, row.columnId, value => factor(row.key, "columnId", value))}</td>
-          <td><select aria-label={`X ${index + 1} ${text.typeInput}`} value={row.kind} onChange={event => factor(row.key, "kind", event.currentTarget.value)}>
+        <tbody>{draft.factors.map((row, index) => {
+          const locked = referenced(draft, row.factorId), description = locked ? `bo-import-locked-${row.key}` : undefined;
+          return <tr key={row.key}>
+          <td>{selectColumn(`X ${index + 1}`, row.columnId, value => factor(row.key, "columnId", value), locked, description)}</td>
+          <td><select aria-label={`X ${index + 1} ${text.typeInput}`} disabled={locked} aria-describedby={description} value={row.kind} onChange={event => factor(row.key, "kind", event.currentTarget.value)}>
             <option value="continuous">{text.continuous}</option><option value="discrete_numeric">{text.discreteNumeric}</option><option value="nominal">{text.nominal}</option><option value="ordinal">{text.ordinal}</option>
-          </select></td>
+          </select>{locked && <p id={description} className="muted">{text.constrainedFactor}</p>}{row.kind === "nominal" && row.correlation === "ordinal_monotone_latent_rbf_v1" && <p role="alert">{text.incompatiblePolicy}</p>}</td>
           <td>{row.kind === "nominal" || row.kind === "ordinal" ? <label>{text.levelsHint}<textarea aria-label={`X ${index + 1} ${text.levelsInput}`} value={row.levels.join("\n")} onChange={event => factor(row.key, "levels", event.currentTarget.value.split("\n"))} /></label> : <div className="form-grid">
             {(["low", "high", ...(row.kind === "discrete_numeric" ? ["step"] : [])] as const).map(field => <label key={field}>{field === "low" ? text.lower : field === "high" ? text.upper : text.step}<input inputMode="decimal" aria-label={`X ${index + 1} ${field}`} value={row[field as "low" | "high" | "step"]} onChange={event => factor(row.key, field as "low" | "high" | "step", event.currentTarget.value)} /></label>)}
           </div>}</td>
-          <td><button type="button" className="secondary-button" title={text.removePredictor} aria-label={`${text.removePredictor} ${index + 1}`} disabled={draft.factors.length <= 1} onClick={() => edit(current => ({ ...current, factors: current.factors.filter(item => item.key !== row.key), constraints: [] }))}><Trash2 size={16} /></button></td>
-        </tr>)}</tbody></table></div>
+          <td><button type="button" className="secondary-button" title={text.removePredictor} aria-label={`${text.removePredictor} ${index + 1}`} aria-describedby={description} disabled={draft.factors.length <= 1 || locked} onClick={() => edit(current => referenced(current, row.factorId) ? current : ({ ...current, factors: current.factors.filter(item => item.key !== row.key) }))}><Trash2 size={16} /></button></td>
+        </tr>; })}</tbody></table></div>
       <button type="button" className="secondary-button" disabled={draft.factors.length >= 10} onClick={() => { const key = next.current++; edit(current => ({ ...current, factors: [...current.factors, { ...newMixedFactor(key), columnId: "", low: "", high: "", levels: [""] }] })); }}><Plus size={16} />{text.addPredictor}</button>
       <label>{text.responseObjective}<select aria-label={text.responseObjective} value={draft.responseMode} onChange={event => { const value = event.currentTarget.value as "scalar" | "vector"; edit(current => ({ ...current, responseMode: value })); }}>
         <option value="scalar">{text.singleResponse}</option><option value="vector">{text.desirabilityResponses}</option>
@@ -92,6 +99,14 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
         <option value="reject">{text.rejectMissing}</option><option value="complete_case">{text.completeCases}</option>
       </select></label>
       <p className="muted">{text.domainNotice}</p>
+      <details><summary>{text.advanced}</summary>
+        <BayesianConstraintEditor locale={locale} idPrefix="bo-import" factors={draft.factors.map(row => ({ ...row, name: draft.displayNames?.[row.columnId] ?? version.columns.find(column => column.column_id === row.columnId)?.display_name ?? row.factorId }))} constraints={draft.constraints}
+          onChange={update => edit(current => ({ ...current, constraints: update(current.constraints) }))}
+          onAdd={() => { const key = nextConstraint.current++; edit(current => ({ ...current, constraints: [...current.constraints, { key, name: `Constraint ${key}`, relation: "less_than_or_equal", bound: "", coefficients: {} }] })); }} />
+        {draft.factors.filter(row => row.kind === "nominal" || row.kind === "ordinal").map(row => <BayesianCategoryCorrelationEditor key={row.key} locale={locale} factor={row}
+          label={`X ${draft.factors.indexOf(row) + 1} ${mixedMessages(locale).correlation}`} onChange={value => factor(row.key, "correlation", value)} />)}
+        {draft.factors.some(row => row.kind === "nominal" || row.kind === "ordinal") && <p className="muted">{mixedMessages(locale).parameterLimits}</p>}
+      </details>
       <details><summary>{text.displayNames}</summary>
         <p>{text.displayNamesNotice}</p>
         {version.columns.filter(column => draft.factors.some(row => row.columnId === column.column_id) || (draft.responseMode === "scalar" ? draft.scalarColumnId === column.column_id : Object.values(draft.responseColumns).includes(column.column_id))).map(column =>

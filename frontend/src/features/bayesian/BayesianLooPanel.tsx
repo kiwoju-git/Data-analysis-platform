@@ -61,6 +61,7 @@ function LooSourcePanel({ studyId, model, mixed = false, disabled = false }: Pro
       {view.calculation.responses.map(response => {
         const definition = model.objective.responses.find(item => item.response_id === response.response_id)!;
         const range = paddedNumericRange(response.points.flatMap(point => [point.observed, point.predicted]));
+        const predictedRange = paddedNumericRange(response.points.map(point => point.predicted));
         return <section key={response.response_id} aria-label={definition.name}>
           <h5>{definition.name}</h5>
           <dl className="bo-planning-source">
@@ -70,14 +71,25 @@ function LooSourcePanel({ studyId, model, mixed = false, disabled = false }: Pro
             <div><dt>{text.r2}</dt><dd>{response.r_squared === null ? text.constant : formatMeasurement(response.r_squared, locale)}</dd></div>
             <div><dt>{text.rmse}</dt><dd>{formatMeasurement(response.rmse, locale)} {definition.unit}</dd></div>
           </dl>
-          <InteractiveScatterChart chartId={`bo-loo-${response.response_id}`} sourceKey={`${view.model_sha256}:${view.calculation_sha256}:${response.response_id}`}
+          <div className="bo-loo-observed"><InteractiveScatterChart chartId={`bo-loo-${response.response_id}`} sourceKey={`${view.model_sha256}:${view.calculation_sha256}:${response.response_id}:observed`}
             title={`${definition.name}: ${text.points}`} description={text.meaning} annotations={[text.formula]} emptyLabel={text.none}
             xLabel={text.predicted} yLabel={text.observed} xUnit={definition.unit} yUnit={definition.unit} xRange={range} yRange={range}
             referenceLines={[{ label: text.identity, x1: range.min, x2: range.max, y1: range.min, y2: range.max }]}
             points={response.points.map(point => ({ id: point.trial_id, x: point.predicted, y: point.observed, className: "bo-planning-profile-mean", title: `${text.observation} ${point.observation_index}`,
               ariaLabel: `${text.observation} ${point.observation_index}: ${text.observed} ${exact(point.observed)}, ${text.predicted} ${exact(point.predicted)}`,
-              details: [{ label: text.observation, value: String(point.observation_index) }, { label: text.observed, value: exact(point.observed) }, { label: text.predicted, value: exact(point.predicted) }, { label: text.residual, value: exact(point.residual) }],
-            }))} />
+              details: [{ label: text.trial, value: point.trial_id }, { label: text.observation, value: String(point.observation_index) }, { label: text.observed, value: exact(point.observed) }, { label: text.predicted, value: exact(point.predicted) }, { label: text.residual, value: exact(point.residual) }],
+            }))} /></div>
+          <div className="bo-loo-residual"><h6>{definition.name}: {text.residualPoints}</h6>
+            <InteractiveScatterChart chartId={`bo-loo-residual-${response.response_id}`} sourceKey={`${view.model_sha256}:${view.calculation_sha256}:${response.response_id}:residual`}
+              title={`${definition.name}: ${text.residualPoints}`} description={text.residualMeaning} annotations={[text.residualMeaning]} emptyLabel={text.none}
+              xLabel={text.predicted} yLabel={text.residual} xUnit={definition.unit} yUnit={definition.unit} xRange={predictedRange}
+              yRange={paddedNumericRange([0, ...response.points.map(point => point.residual)])}
+              referenceLines={[{ label: text.zeroResidual, x1: predictedRange.min, x2: predictedRange.max, y1: 0, y2: 0 }]}
+              points={response.points.map(point => ({ id: point.trial_id, x: point.predicted, y: point.residual, className: "bo-planning-profile-mean", title: `${text.observation} ${point.observation_index}`,
+                ariaLabel: `${text.observation} ${point.observation_index}: ${text.predicted} ${exact(point.predicted)}, ${text.residual} ${exact(point.residual)}`,
+                details: [{ label: text.trial, value: point.trial_id }, { label: text.observation, value: String(point.observation_index) }, { label: text.observed, value: exact(point.observed) }, { label: text.predicted, value: exact(point.predicted) }, { label: text.residual, value: exact(point.residual) }],
+              }))} />
+          </div>
           <details><summary>{text.rows}</summary><div className="table-wrap"><table className="result-table"><thead><tr><th>{text.observation}</th><th>{text.observed}</th><th>{text.predicted}</th><th>{text.residual}</th></tr></thead><tbody>
             {response.points.map(point => <tr key={point.trial_id}><th scope="row">{point.observation_index}</th><td>{exact(point.observed)}</td><td>{exact(point.predicted)}</td><td>{exact(point.residual)}</td></tr>)}
           </tbody></table></div></details>

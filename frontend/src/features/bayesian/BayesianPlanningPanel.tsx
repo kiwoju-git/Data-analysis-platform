@@ -16,6 +16,7 @@ import { decimalLatticeValue } from "../../doe/rsmRegion";
 import type { AugmentationManualSeed } from "./BayesianAugmentationPanel";
 import "./boPlanning.css";
 import { BayesianLooPanel } from "./BayesianLooPanel";
+import { BayesianProfileGrid } from "./BayesianProfileGrid";
 
 interface Props { study: BayesianStudyResponse; fitRequest: DesirabilityReviewRequest | null; disabled?: boolean; onConfirmed: (batchId: string) => void; onConfirmingChange?: (busy: boolean) => void; manualSeed?: AugmentationManualSeed | null }
 function initialHolds(study: BayesianStudyResponse): Record<string, string> {
@@ -165,7 +166,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   </section>;
 }
 
-function PlanningProfileChart({ profile, study, sourceKey }: { profile: NonNullable<ReturnType<typeof useBayesianPlanning>["profile"]>; study: BayesianStudyResponse; sourceKey: string }) {
+export function PlanningProfileChart({ profile, study, sourceKey }: { profile: NonNullable<ReturnType<typeof useBayesianPlanning>["profile"]>; study: BayesianStudyResponse; sourceKey: string }) {
   const { locale } = useI18n(), text = planningMessages(locale);
   const [view, setView] = useState("desirability");
   const [metric, setMetric] = useState<PlanningProfileMetric>("mean_raw");
@@ -191,9 +192,10 @@ function PlanningProfileChart({ profile, study, sourceKey }: { profile: NonNulla
     : (["mean", "sd"] as const).map(kind => ({ id: kind, label: kind === "mean" ? text.expected : text.sd, className: `bo-planning-profile-${kind}`, connect: "line" as const, pointIds: points.filter(p => p.seriesId === kind).map(p => p.id) }));
   return <><div className="bo-planning-fields"><label>{text.profileQuantity}<select aria-label={text.profileQuantity} value={selected ? view : "desirability"} onChange={event => setView(event.currentTarget.value)}><option value="desirability">{text.desirability}</option>{responses.map(response => <option key={response.response_id} value={`response:${response.response_id}`}>{response.name}</option>)}</select></label>
     {selected && <label>{text.profileMetric}<select aria-label={text.profileMetric} value={metric} onChange={event => setMetric(event.currentTarget.value as PlanningProfileMetric)}>{(Object.keys(metricLabels) as PlanningProfileMetric[]).map(key => <option key={key} value={key}>{metricLabels[key]}</option>)}</select></label>}</div>
-    <InteractiveScatterChart chartId="bo-planning-profile" sourceKey={`${sourceKey}:${selected?.response_id ?? "desirability"}:${metric}`} title={selected ? `${selected.name}: ${metricLabels[metric]}` : text.profiler} description={text.profileMeaning}
+    <div className="bo-profile-detail"><InteractiveScatterChart chartId="bo-planning-profile" sourceKey={`${sourceKey}:${selected ? `response:${selected.response_id}` : "composite"}:${metric}`} title={selected ? `${selected.name}: ${metricLabels[metric]}` : text.profiler} description={text.profileMeaning}
       points={points} annotations={[]} emptyLabel="-" xLabel={factor.name} xUnit={factor.unit} yLabel={selected?.name ?? text.desirability} yUnit={selected?.unit ?? null}
-      xRange={{ min: factor.low, max: factor.high }} yRange={selected ? paddedNumericRange(points.map(point => point.y)) : { min: 0, max: 1 }} series={series} collapsibleDetails /></>;
+      xRange={{ min: factor.low, max: factor.high }} yRange={selected ? paddedNumericRange(points.map(point => point.y)) : { min: 0, max: 1 }} series={series} collapsibleDetails /></div>
+    <BayesianProfileGrid sourceKey={sourceKey} axis={{ ...factor, category: false, range: { min: factor.low, max: factor.high } }} responses={responses} rows={profile.response.items} /></>;
 }
 
 export function PlanningFitSummary({ model: source }: { model: Pick<PlanningModelDetail, "model_id" | "snapshot_sha256" | "objective" | "response_models" | "warnings"> }) {

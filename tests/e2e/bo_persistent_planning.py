@@ -16,6 +16,7 @@ from app_readiness import (
 from playwright.sync_api import Browser, expect, sync_playwright
 from bo_loo import verify_loo
 from bo_auto_strategy import verify_auto_strategy
+from bo_profile_graphs import verify_profile_grid
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
@@ -53,7 +54,17 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
                             "target": 100,
                             "upper": None,
                             "importance": 1,
-                        }
+                        },
+                        {
+                            "response_id": "cost",
+                            "name": "Cost",
+                            "unit": "USD",
+                            "goal": "minimize",
+                            "lower": None,
+                            "target": 0,
+                            "upper": 10,
+                            "importance": 1,
+                        },
                     ],
                 },
             },
@@ -76,7 +87,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
                 "observations": [
                     {
                         "trial_id": trial["trial_id"],
-                        "response_values": {"yield": 40.0 + index},
+                        "response_values": {"yield": 40.0 + index, "cost": 8.0 - index},
                     }
                     for index, trial in enumerate(study["trials"])
                 ],
@@ -111,6 +122,8 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
             "fixed"
         )
         settings.get_by_label("%", exact=True).fill("0.2")
+        settings.get_by_label("Cost: Measurement noise", exact=True).select_option("fixed")
+        settings.get_by_label("USD", exact=True).fill("0.1")
         panel = page.get_by_role(
             "region", name="Saved model, candidates and profiler", exact=True
         )
@@ -172,6 +185,10 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
         assert curve.value.status == 200, curve.value.text()
         assert curve.value.json()["model_refit"] is False
         curve_rows = curve.value.json()["items"]
+        grid_receipt = verify_profile_grid(
+            page, profiler, curve_rows, model["objective"]["responses"],
+            study["factors"][0], output, suffix="numeric",
+        )
         write_count = len(writes)
         profiler.get_by_label("Profile quantity", exact=True).select_option(
             "response:yield"
@@ -183,7 +200,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
         ):
             profiler.get_by_label("Response display", exact=True).select_option(metric)
             for row in curve_rows:
-                marker = profiler.locator(
+                marker = profiler.locator(".bo-profile-detail").locator(
                     f'[data-point-id="{row["row_id"]}:yield:{metric}"]'
                 )
                 expect(marker).to_have_count(1)
@@ -318,6 +335,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
             "fit_posts": 1,
             "report_sha256": report["sha256"],
             "locale_resize_and_profile_display_no_fit": True,
+            "profile_grid": grid_receipt,
             "pageerrors": errors,
         }
         (output / "receipt.json").write_text(

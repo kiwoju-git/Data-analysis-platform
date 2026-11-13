@@ -24,5 +24,7 @@ describe("dataset import field labels", () => {
       onBusyChange={() => undefined} onCreated={() => undefined} />);
     for (const label of labels) expect(html).toContain(`<select aria-label="${label}"`);
     expect(html).toContain(locale === "en" ? "Start from existing X/Y" : "기존 X/Y로 시작");
+    expect(html).toContain(locale === "en" ? "<details><summary>Advanced options</summary>" : "<details><summary>고급 옵션</summary>");
+    expect(html).toContain(locale === "en" ? "Actual-unit numeric constraints" : "실제 단위 숫자 요인 제약");
   });
 });

@@ -55,4 +55,36 @@ describe("measured X/Y import request", () => {
     const result = buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input);
     expect(result).toMatchObject({ factor_mappings: [{ factor: { domain_kind: "nominal", levels: ["한글 ×", "1"] } }], response_mappings: [{ column_id: "y", response_id: "response_1" }] });
   });
+  it("serializes actual-unit constraints without adding blank coefficient terms", () => {
+    const input = draft();
+    input.factors.push({ ...newMixedFactor(2), columnId: "z" });
+    input.constraints = [{ key: 3, name: "온도 제한", relation: "greater_than_or_equal", bound: "-0.25", coefficients: { factor_1: "1.5", factor_2: "" } }];
+    const source = { ...version, columns: [...version.columns, { column_id: "z", display_name: "보조 X", unit: null }] };
+    expect(buildDatasetImportRequest(source, { expression_version: 1, conditions: [] }, input)).toMatchObject({
+      constraints: [{ constraint_id: "constraint_3", name: "온도 제한", relation: "greater_than_or_equal", bound: -0.25, terms: [{ factor_id: "factor_1", coefficient: 1.5 }] }],
+    });
+  });
+  it.each(["", "1abc", "Infinity", "1e999"])("blocks invalid constraint bound %s without changing the string draft", value => {
+    const input = draft(); input.constraints = [{ key: 1, name: "제약", relation: "less_than_or_equal", bound: value, coefficients: { factor_1: "1" } }];
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toBe("bayesian_constraints_invalid");
+    expect(input.constraints[0].bound).toBe(value);
+  });
+  it.each(["1abc", "Infinity", "1e999"])("blocks invalid constraint coefficient %s", value => {
+    const input = draft(); input.constraints = [{ key: 1, name: "제약", relation: "less_than_or_equal", bound: "1", coefficients: { factor_1: value } }];
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toBe("bayesian_constraints_invalid");
+  });
+  it.each(["equal_positive_correlation_v1", "unequal_hyperspherical_correlation_v1", "ordinal_monotone_latent_rbf_v1"] as const)("preserves explicit category policy %s and Korean levels", correlation => {
+    const input = draft(); input.responseMode = "vector"; input.responseColumns = { response_1: "y" };
+    input.responses[0] = { ...input.responses[0], lower: "0", target: "100" };
+    input.factors[0] = { ...input.factors[0], kind: "ordinal", levels: ["낮음", "높음"], correlation };
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toMatchObject({ factor_mappings: [{ factor: { name: "실험 X", levels: ["낮음", "높음"], correlation_policy: correlation } }] });
+    input.constraints = [{ key: 1, name: "잘못된 제약", relation: "less_than_or_equal", bound: "1", coefficients: { factor_1: "1" } }];
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toBe("bayesian_constraints_invalid");
+  });
+  it("blocks nominal use of ordinal-only policy and preserves existing category budgets", () => {
+    const input = draft(); input.factors[0] = { ...input.factors[0], kind: "nominal", levels: ["낮음", "높음"], correlation: "ordinal_monotone_latent_rbf_v1" };
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toBe("bayesian_category_correlation_policy_invalid");
+    input.factors[0].correlation = "unequal_hyperspherical_correlation_v1"; input.factors[0].levels = Array.from({ length: 9 }, (_, index) => String(index));
+    expect(buildDatasetImportRequest(version, { expression_version: 1, conditions: [] }, input)).toBe("bayesian_category_correlation_policy_invalid");
+  });
 });

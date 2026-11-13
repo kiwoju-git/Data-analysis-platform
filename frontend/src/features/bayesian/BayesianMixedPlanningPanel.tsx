@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { BayesianLooPanel } from "./BayesianLooPanel";
+import { BayesianProfileGrid, BayesianProfileLevelMap } from "./BayesianProfileGrid";
+import { categoryDisplayTicks } from "./bayesianProgress";
 import { BayesianAutoStrategyPanel } from "./BayesianAutoStrategyPanel";
 import { ArrowDown, ArrowUp, Check, Redo2, RefreshCw, Undo2 } from "lucide-react";
 import type { AugmentationPolicy } from "../../api/types/boAugmentation";
@@ -156,18 +158,20 @@ function MixedPredictionTable({ rows, study }: { rows: (MixedCandidateRow | Eval
 }
 export function MixedProfileView({ profile, study }: { profile: MixedProfile; study: MixedStudyResponse }) {
   const { locale } = useI18n(), text = planningMessages(locale), mixed = mixedMessages(locale), [quantity, setQuantity] = useState("desirability"), [metric, setMetric] = useState<"mean" | "latent" | "predictive">("mean");
-  const factor = study.factors.find(item => item.factor_id === profile.axis), response = study.objective.responses.find(item => item.response_id === quantity), category = factor ? isMixedCategory(factor) : false;
-  const points = profile.rows.map((row, index) => { const prediction = row.response_predictions.find(item => item.response_id === quantity); const y = quantity === "desirability" ? row.desirability_moments.mean : metric === "latent" ? prediction?.latent_standard_deviation_raw : metric === "predictive" ? prediction?.predictive_standard_deviation_raw : prediction?.mean_raw;
+  const factor = study.factors.find(item => item.factor_id === profile.axis), response = study.objective.responses.find(item => `response:${item.response_id}` === quantity), category = factor ? isMixedCategory(factor) : false;
+  const points = profile.rows.map((row, index) => { const prediction = row.response_predictions.find(item => item.response_id === response?.response_id); const y = quantity === "desirability" ? row.desirability_moments.mean : metric === "latent" ? prediction?.latent_standard_deviation_raw : metric === "predictive" ? prediction?.predictive_standard_deviation_raw : prediction?.mean_raw;
     const label = factor ? mixedValue(row.actual_coordinates[factor.factor_id]) : String(index + 1), value = y ?? NaN;
     return { id: row.row_id, x: factor && !category ? Number(row.actual_coordinates[factor.factor_id]) : index, y: value, ariaLabel: `${label}: ${exact(value)}`, title: label,
       className: "interactive-data-point", details: [{ label: factor?.name ?? text.rank, value: label }, { label: quantity === "desirability" ? text.expected : metric === "latent" ? text.latent : metric === "predictive" ? text.predictive : text.mean, value: exact(value) }] };
   });
+  const categoryTicks = category ? points.map(point => ({ value: point.x, label: point.title })) : undefined;
   return <section><p>{text.modelHash}: <code>{profile.modelHash}</code></p><dl className="bo-planning-source">{study.factors.filter(item => item.factor_id !== profile.axis).map(item => <div key={item.factor_id}><dt>{item.name}{item.unit ? ` (${item.unit})` : ""}</dt><dd>{mixedValue(profile.points[0][item.factor_id])}</dd></div>)}</dl>
-    <div className="bo-planning-controls"><label>{text.profileQuantity}<select aria-label={text.profileQuantity} value={quantity} onChange={event => setQuantity(event.currentTarget.value)}><option value="desirability">{text.desirability}</option>{study.objective.responses.map(item => <option key={item.response_id} value={item.response_id}>{item.name}</option>)}</select></label>{quantity !== "desirability" && <label>{text.profileMetric}<select aria-label={text.profileMetric} value={metric} onChange={event => setMetric(event.currentTarget.value as typeof metric)}><option value="mean">{text.mean}</option><option value="latent">{text.latent}</option><option value="predictive">{text.predictive}</option></select></label>}</div>
-    {factor && <InteractiveScatterChart annotations={[text.profileMeaning, category ? mixed.categoryMeaning : mixed.numericCurve]} chartId={`mixed-profile-${profile.modelId}`} sourceKey={`${profile.modelHash}:${JSON.stringify(profile.points)}:${quantity}:${metric}`} description={text.profileMeaning} title={category ? mixed.levelProfile : mixed.numericCurve} emptyLabel={text.none}
+    <div className="bo-planning-controls"><label>{text.profileQuantity}<select aria-label={text.profileQuantity} value={quantity} onChange={event => setQuantity(event.currentTarget.value)}><option value="desirability">{text.desirability}</option>{study.objective.responses.map(item => <option key={item.response_id} value={`response:${item.response_id}`}>{item.name}</option>)}</select></label>{quantity !== "desirability" && <label>{text.profileMetric}<select aria-label={text.profileMetric} value={metric} onChange={event => setMetric(event.currentTarget.value as typeof metric)}><option value="mean">{text.mean}</option><option value="latent">{text.latent}</option><option value="predictive">{text.predictive}</option></select></label>}</div>
+    {factor && <><div className="bo-profile-detail"><InteractiveScatterChart annotations={[text.profileMeaning, category ? mixed.categoryMeaning : mixed.numericCurve]} chartId={`mixed-profile-${profile.modelId}`} sourceKey={`${profile.modelHash}:${profile.axis}:${JSON.stringify(profile.points)}:${quantity}:${metric}`} description={text.profileMeaning} title={category ? mixed.levelProfile : mixed.numericCurve} emptyLabel={text.none}
       points={points} connectPoints={category ? undefined : "line"} xLabel={factor.name} xUnit={factor.unit} xRange={paddedNumericRange(points.map(point => point.x))}
-      xTicks={category ? points.map(point => ({ value: point.x, label: point.title })) : undefined} yLabel={quantity === "desirability" ? text.expected : `${response?.name ?? quantity}: ${metric === "latent" ? text.latent : metric === "predictive" ? text.predictive : text.mean}`} yUnit={quantity === "desirability" ? null : response?.unit}
-      yRange={paddedNumericRange(points.map(point => point.y))} />}
+      xTicks={categoryDisplayTicks(categoryTicks)} yLabel={quantity === "desirability" ? text.expected : `${response?.name ?? quantity}: ${metric === "latent" ? text.latent : metric === "predictive" ? text.predictive : text.mean}`} yUnit={quantity === "desirability" ? null : response?.unit}
+      yRange={paddedNumericRange(points.map(point => point.y))} />{categoryTicks && <BayesianProfileLevelMap ticks={categoryTicks} />}</div>
+      <BayesianProfileGrid sourceKey={`${profile.modelId}:${profile.modelHash}:${JSON.stringify(profile.points)}`} axis={{ ...factor, category, meaning: category ? mixed.categoryMeaning : mixed.numericCurve }} responses={study.objective.responses} rows={profile.rows} /></>}
     <MixedPredictionTable rows={profile.rows} study={study} />
   </section>;
 }
