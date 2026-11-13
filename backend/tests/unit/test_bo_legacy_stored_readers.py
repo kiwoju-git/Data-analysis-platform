@@ -12,7 +12,7 @@ import json
 import math
 import sqlite3
 from collections import Counter
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -216,20 +216,69 @@ def test_actual_saved_legacy_reader_preserves_other_platform_receipt_bytes_and_h
     assert state.record == original
 
 
-def test_same_legacy_result_still_fails_strict_new_calculation_binding(saved_augmentation):
+def _legacy_replay_platform(monkeypatch, replay_platform):
+    if replay_platform == "simulated_linux_matching_receipt":
+        from app.statistics import bo_beta_legacy
+
+        native = bo_beta_legacy.beta_expected_improvement
+
+        def matching_replay(*args, **kwargs):
+            return replace(native(*args, **kwargs), value=OTHER_PLATFORM_LEGACY_EI)
+
+        monkeypatch.setattr(bo_beta_legacy, "beta_expected_improvement", matching_replay)
+
+
+def _alter_ei_from_local_legacy_replay(state):
+    from app.statistics.bo_beta_policy import stored_beta_expected_improvement
+
+    snapshot = state.arguments["snapshot"]
+    for row in state.result["selected_rows"]:
+        moments = row["desirability_moments"]
+        row["acquisition"].update(
+            asdict(
+                stored_beta_expected_improvement(
+                    moments["mean"],
+                    moments["variance"],
+                    snapshot["incumbent"]["latent_incumbent_value"],
+                    xi=snapshot["calculation_request"]["xi_desirability"],
+                    numerical_policy=None,
+                )
+            )
+        )
+    acquisition = state.result["selected_rows"][0]["acquisition"]
+    step = state.result["augmentation"]["steps"][0]
+    step["score"] = acquisition["value"]
+    # A valid local baseline rules out unrelated source/options/shape failures.
+    validate_augmentation_binding(state.result, **state.arguments)
+    acquisition["value"] *= 1.01
+    step["score"] = acquisition["value"]
+    _encode_record(state)
+
+
+@pytest.mark.parametrize("replay_platform", ["native", "simulated_linux_matching_receipt"])
+def test_same_legacy_result_still_fails_strict_new_calculation_binding(
+    saved_augmentation, monkeypatch, replay_platform
+):
+    _legacy_replay_platform(monkeypatch, replay_platform)
     state = saved_augmentation
+    _alter_ei_from_local_legacy_replay(state)
     with pytest.raises(BayesianOptimizationError, match="augmentation_result_invalid"):
         validate_augmentation_binding(state.result, **state.arguments)
 
 
-def test_commit_boundary_still_rejects_a_legacy_receipt_that_reads(saved_augmentation):
+@pytest.mark.parametrize("replay_platform", ["native", "simulated_linux_matching_receipt"])
+def test_commit_boundary_still_rejects_a_legacy_receipt_that_reads(
+    saved_augmentation, monkeypatch, replay_platform
+):
+    _legacy_replay_platform(monkeypatch, replay_platform)
     state = saved_augmentation
-    body = AUGMENTATION_REQUEST.validate_python(state.request)
-    result = AUGMENTATION_RESULT.validate_python(state.result)
+    _alter_ei_from_local_legacy_replay(state)
+    restored = _read(state)
+    assert restored.calculation.model_dump(mode="json", exclude_unset=True) == state.result
     rows = [CandidateRow.model_validate(row) for row in state.arguments["rows"]]
     with pytest.raises(BayesianOptimizationError, match="augmentation_result_invalid"):
         service.validate_augmentation_for_commit(
-            state.study, body, result, rows, state.arguments["snapshot"]
+            state.study, restored.request, restored.calculation, rows, state.arguments["snapshot"]
         )
 
 

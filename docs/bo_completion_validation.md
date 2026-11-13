@@ -29,6 +29,22 @@ rollback does not roll back a workspace or undo completed experiments. No user
 workspace, dataset, model or result needs deletion; no stored schema or metadata
 migration was introduced by this change.
 
+Native validation is tracked in [PR 9](https://github.com/kiwoju-git/Data-analysis-platform/pull/9).
+The first PR head was `0d5d96c2e1c491975283bd70f6ba441ec6805bc1`, CI run
+[43418755313](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43418755313).
+A fresh static final reviewer identified two new strict-rejection tests that
+incorrectly assumed the fixed historical Linux EI differed from local replay.
+Controlled Linux-matching replay reproduced both failures locally (2 failed,
+2 passed); this was a test portability defect, not a production math change.
+The correction retains the fixed historical read fixture and instead changes a
+locally valid strict baseline by 1%, with all score links kept consistent. Both
+native and simulated matching-replay paths must reject that deliberate mismatch.
+No production arithmetic, receipt value or validation tolerance is changed by
+this follow-up. The first CI attempt is retained, not treated as the final pass.
+The corrected four parameter cases passed; the related compatibility/policy/
+augmentation set passed 101 tests. Native full CI must still validate the exact
+updated PR head; the controlled case is not called a native Linux execution.
+
 ## Confirmed Failures
 
 CI [43285568827](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43285568827), source BASE_SHA:
