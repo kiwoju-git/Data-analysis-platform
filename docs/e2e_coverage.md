@@ -883,7 +883,7 @@ browser critical path.
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)
 - `verify measured X/Y import and next multiresponse recommendation`
-- `verify AI cross-link to existing GPR with selected dataset`
+- `verify canonical GPR navigation with selected dataset`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)
 - `verify saved GP prediction request context` (full flow)

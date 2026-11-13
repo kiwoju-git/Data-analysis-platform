@@ -45,6 +45,19 @@ The corrected four parameter cases passed; the related compatibility/policy/
 augmentation set passed 101 tests. Native full CI must still validate the exact
 updated PR head; the controlled case is not called a native Linux execution.
 
+The next head, `579585abb1566c80d934cb405bfe770ddfc1d69d`, ran in
+[43419661817](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43419661817).
+Its Linux/Python 3.12 backend run finished with 4,474 passed, 29 skipped and one
+failed documentation-contract test (740.25 seconds). The coverage document still
+listed the removed AI-to-GPR link while the executable E2E stage correctly used
+canonical regression navigation. A focused Windows run reproduced that exact
+single mismatch before the one-line document correction. Neither the assertion
+nor navigation behavior was weakened. This failed run remains evidence, not a
+passing full suite; the corrected head requires a fresh native CI run.
+After correction, the entire OpenAPI/frontend/document contract test file passed
+locally: 244 tests, two existing Starlette warnings, 19.89 seconds. Command:
+`python -B -m pytest backend/tests/unit/test_openapi_frontend_contract.py -q -p no:cacheprovider`.
+
 ## Confirmed Failures
 
 CI [43285568827](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43285568827), source BASE_SHA:
