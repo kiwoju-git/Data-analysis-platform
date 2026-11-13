@@ -8,8 +8,9 @@ confirmation, measured observations, then a subsequent q1 review and exact-sourc
 reload. Locale/resize and source A-B-A checks do not authorize stale imports.
 Manual fixture writes send the exact same-origin header on each request.
 
-The `context` partition includes `bo_xy_gpr_navigation`: the AI-domain GPR card
-opens the existing regression route while retaining the header-selected dataset.
+The `context` partition includes `bo_xy_gpr_navigation`: standalone GPR opens
+from its canonical regression module while retaining the header-selected dataset.
+The AI/ML domain has no duplicate GPR card.
 Korean/English desktop/mobile and keyboard checks preserve the single canonical
 regression sidebar entry. This stage does not fit a model by default. The helper's
 explicit `--fit` option additionally runs one eight-row synthetic default GPR fit
@@ -1143,9 +1144,9 @@ The standalone Gaussian Process path uses a synthetic numeric response and
 predictors to exercise the Matérn 5/2 ARD default, estimated noise, leakage-free
 K-fold validation, model/uncertainty summaries, conditional profiles, selectable
 two-predictor surfaces, checksum-verified model persistence, and latent plus
-new-observation point-prediction intervals. The AI/ML domain now links to this
-same executable GPR method and existing regression route, without registering a
-second method or moving its canonical sidebar placement. Requested diagnostics use
+new-observation point-prediction intervals. The executable GPR method remains in
+the regression module without a duplicate AI/ML card or a second method.
+Requested diagnostics use
 `.tmp/e2e-diagnostics-gaussian-process`.
 
 ## Maintenance Checklist
