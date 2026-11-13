@@ -214,7 +214,6 @@ export const ANALYSIS_DOMAINS: readonly AnalysisDomainDefinition[] = [
     labelKey: "analysisDomains.ai.label",
     descriptionKey: "analysisDomains.ai.description",
     directMethodIds: ["doe.latin_hypercube", "doe.bayesian_optimization"],
-    crossLinkMethodIds: ["regression.gaussian_process"],
     families: [],
   },
   {

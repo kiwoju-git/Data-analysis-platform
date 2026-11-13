@@ -87,7 +87,7 @@ def verify_dashboard_navigation(page: Page, diagnostics: Any) -> None:
             diagnostics.capture_page(
                 page, f"analysis-domain-refresh-{locale}-{width}.png"
             )
-            for domain_index, expected_count in enumerate((4, 10, 3, 5, 3, 3, 5, 4)):
+            for domain_index, expected_count in enumerate((4, 10, 3, 5, 3, 2, 5, 4)):
                 page.locator(".analysis-domain-card").nth(domain_index).click()
                 cards = page.locator("button.analysis-domain-method-card")
                 expect(cards).to_have_count(expected_count)

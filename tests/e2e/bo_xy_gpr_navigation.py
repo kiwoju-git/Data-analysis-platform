@@ -1,4 +1,4 @@
-"""Built AI-to-GPR navigation with one opt-in synthetic-data model fit."""
+"""Built canonical GPR navigation with one opt-in synthetic-data model fit."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from playwright.sync_api import Browser, Page, expect, sync_playwright
 from app_readiness import diagnosed_page, wait_for_app_ready, wait_for_layout_settled
 
 AI_ROUTE = "/analysis?domain=ai-ml-experimental-design"
+REGRESSION_ROUTE = "/analysis?domain=correlation-regression-prediction"
 GP_ROUTE = "/analysis/regression/regression.gaussian_process"
 
 
@@ -219,25 +220,40 @@ def verify_bo_xy_gpr_navigation(
         wait_for_app_ready(page, "en", AI_ROUTE)
         page.locator("#active-dataset-version").select_option(version_id)
         expect(page.locator("#active-dataset-version")).to_have_value(version_id)
+        ai_landing = page.locator(
+            '.analysis-domain-landing[data-domain-id="ai-ml-experimental-design"]'
+        )
+        expect(ai_landing.locator("button.analysis-domain-method-card")).to_have_count(
+            2
+        )
+        expect(
+            ai_landing.get_by_role("button", name=method["label_en"], exact=True)
+        ).to_have_count(0)
+        page.goto(
+            base + REGRESSION_ROUTE + f"&dataset_version_id={version_id}",
+            wait_until="domcontentloaded",
+        )
         layouts = []
         for locale, language in (("en", "ENG"), ("ko", "KOR")):
             page.locator(".language-switcher button").filter(has_text=language).click()
             for width, height in ((1440, 1000), (390, 844)):
                 page.set_viewport_size({"width": width, "height": height})
-                wait_for_app_ready(page, locale, AI_ROUTE)
+                wait_for_app_ready(page, locale, REGRESSION_ROUTE)
                 landing = page.locator(
-                    '.analysis-domain-landing[data-domain-id="ai-ml-experimental-design"]'
+                    '.analysis-domain-landing[data-domain-id="correlation-regression-prediction"]'
                 )
                 expect(
                     landing.locator("button.analysis-domain-method-card")
-                ).to_have_count(3)
+                ).to_have_count(5)
                 link = landing.get_by_role(
                     "button", name=method[f"label_{locale}"], exact=True
                 )
                 expect(link).to_be_enabled()
                 wait_for_layout_settled(page)
                 assert link.evaluate("e => e.scrollWidth <= e.clientWidth + 1")
-                landing.screenshot(path=str(output / f"gpr-ai-{locale}-{width}.png"))
+                landing.screenshot(
+                    path=str(output / f"gpr-regression-{locale}-{width}.png")
+                )
                 link.focus()
                 link.press("Enter")
                 wait_for_app_ready(page, locale, GP_ROUTE)
@@ -284,7 +300,7 @@ def verify_bo_xy_gpr_navigation(
                 page.screenshot(path=str(output / f"gpr-form-{locale}-{width}.png"))
                 layouts.append({"locale": locale, "width": width, "route": GP_ROUTE})
                 page.go_back()
-                wait_for_app_ready(page, locale, AI_ROUTE)
+                wait_for_app_ready(page, locale, REGRESSION_ROUTE)
         assert not writes, writes
         navigation_writes = list(writes)
         fit_receipt = _fit(page, base, version, output) if fit else None

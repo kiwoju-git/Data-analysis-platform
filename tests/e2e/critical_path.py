@@ -59,6 +59,7 @@ from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extensio
 from bo_progress import verify_bo_progress
 from bo_dataset_import import verify_bo_dataset_import
 from bo_xy_gpr_navigation import verify_bo_xy_gpr_navigation
+from gpr_navigation import verify_gpr_navigation
 from bo_vector_history import verify_bo_vector_history
 from doe_rsm_completion import verify_doe_rsm_completion
 from gage_followup import verify_gage_followup
@@ -793,7 +794,7 @@ def run_browser_flow(
                     diagnostics.step("verify measured X/Y import and next multiresponse recommendation")
                     verify_bo_dataset_import(browser, frontend_base_url, diagnostics.root / "bo-dataset-import", isolated_workspace=True)
                 if "bo_xy_gpr_navigation" in stages:
-                    diagnostics.step("verify AI cross-link to existing GPR with selected dataset")
+                    diagnostics.step("verify canonical GPR navigation with selected dataset")
                     verify_bo_xy_gpr_navigation(browser, frontend_base_url, diagnostics.root / "bo-gpr-navigation", isolated_workspace=True)
                 if "api_translation" in stages:
                     diagnostics.step("verify API translation boundary with synthetic inputs")
@@ -3292,6 +3293,7 @@ def verify_gaussian_process_regression_and_prediction(
     diagnostics.capture_page(page, "gp-mobile.png")
     page.set_viewport_size({"width": 1440, "height": 900})
 
+    source_version_id = page.locator("#active-dataset-version").input_value()
     home = page.locator(".sidebar-group-control").filter(has_text=re.compile("^홈$"))
     home.click()
     analysis_quick_card = page.locator(".home-quick-card").filter(
@@ -3299,18 +3301,14 @@ def verify_gaussian_process_regression_and_prediction(
     )
     analysis_quick_card.wait_for(state="visible", timeout=15_000)
     analysis_quick_card.click()
-    ai_domain = page.locator(".analysis-domain-card").filter(has_text="AI/ML 실험설계")
-    ai_domain.wait_for(state="visible", timeout=15_000)
-    ai_domain.click()
-    contextual_gp = page.locator(".analysis-domain-method-card.is-contextual").filter(
-        has_text="Gaussian Process 대리모형"
+    regression_domain = page.locator(".analysis-domain-card").filter(
+        has_text="상관·회귀·예측"
     )
-    expect(contextual_gp).to_be_visible()
-    expect(contextual_gp).to_contain_text("Bayesian Optimization")
-    expect(contextual_gp).to_contain_text("BO 내부 단계")
-    expect(contextual_gp).not_to_contain_text("계획됨")
-    diagnostics.capture_page(page, "bayesian-gp-context.png")
-    diagnostics.capture_page(page, "gp-surrogate-contextual-card.png")
+    regression_domain.wait_for(state="visible", timeout=15_000)
+    regression_domain.click()
+    diagnostics.capture_page(page, "gpr-canonical-navigation.png")
+    verify_gpr_navigation(page, source_version_id, locale="ko")
+    diagnostics.capture_page(page, "gpr-canonical-panel.png")
 
 
 def verify_principal_components_analysis(

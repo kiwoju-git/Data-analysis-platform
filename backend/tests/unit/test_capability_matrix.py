@@ -201,7 +201,7 @@ def test_roadmap_and_contextual_are_not_counted_as_available_methods(
     assert gp["placement"]["domain_id"] == "correlation-regression-prediction"
     assert gp["placement"]["contextual"] is False
     ai = next(domain for domain in matrix["domains"] if domain["id"] == "ai-ml-experimental-design")
-    assert ai["crossLinkMethodIds"] == ["regression.gaussian_process"]
+    assert ai.get("crossLinkMethodIds", []) == []
     assert "regression.gaussian_process" not in ai["directMethodIds"]
     assert (
         sum(item["method_id"] == "regression.gaussian_process" for item in matrix["methods"]) == 1
