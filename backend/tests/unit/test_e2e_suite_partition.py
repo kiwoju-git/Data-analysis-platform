@@ -5,6 +5,8 @@ from __future__ import annotations
 import ast
 import copy
 import importlib
+import json
+import subprocess
 from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
@@ -35,6 +37,7 @@ STAGE_CALLS = {
     "bo_progress": "verify_bo_progress",
     "bo_vector_history": "verify_bo_vector_history",
     "bo_dataset_import": "verify_bo_dataset_import",
+    "bo_profile_constraints": "verify_profile_constraints",
     "bo_xy_gpr_navigation": "verify_bo_xy_gpr_navigation",
     "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
@@ -77,6 +80,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "bo_progress",
         "bo_vector_history",
         "bo_dataset_import",
+        "bo_profile_constraints",
         "bo_xy_gpr_navigation",
         "api_translation",
         "dataset_context",
@@ -118,6 +122,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "bo_vector_history" in driver.suite_stage_ids("context")
     assert "bo_xy_gpr_navigation" in driver.suite_stage_ids("context")
     assert "bo_dataset_import" in driver.suite_stage_ids("workflows")
+    assert "bo_profile_constraints" in driver.suite_stage_ids("workflows")
+    assert "bo_profile_constraints" not in driver.suite_stage_ids("context")
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
     assert "pilot_groups" in driver.suite_stage_ids("workflows")
@@ -189,6 +195,218 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
     ]
     assert calls == expected
     assert zoom_calls == (["gage_six_panel"] if "gage_six_panel" in expected else [])
+    assert closed == [True]
+
+
+@pytest.fixture
+def runner_boundaries(driver, monkeypatch):
+    events = []
+
+    def run(command, **kwargs):
+        events.append(("build", command, kwargs))
+        assert kwargs["check"] is True
+        output = Path(command[command.index("--outDir") + 1])
+        assert not output.exists(), "A workflow must never reuse stale built assets"
+        output.mkdir()
+        (output / "index.html").write_text("<html>synthetic built UI</html>", encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    def start(command, **kwargs):
+        events.append(("start", command, kwargs))
+        return SimpleNamespace()
+
+    monkeypatch.delenv("DATALAB_FRONTEND_DIST", raising=False)
+    monkeypatch.setattr(driver, "npm_command", lambda: "synthetic-npm")
+    monkeypatch.setattr(driver.subprocess, "run", run)
+    monkeypatch.setattr(driver.subprocess, "Popen", start)
+    monkeypatch.setattr(driver, "terminate_process", lambda _process: None)
+    monkeypatch.setattr(driver, "wait_for_url", lambda *_args: None)
+    monkeypatch.setattr(
+        driver, "run_browser_flow", lambda *args, **kwargs: events.append(("flow", args, kwargs))
+    )
+    return events
+
+
+@pytest.mark.parametrize("suite", ["full", "workflows", "context", "data", "prediction"])
+def test_runner_builds_only_workflows_in_fresh_owned_directory(
+    driver, monkeypatch, tmp_path, runner_boundaries, suite
+):
+    diagnostics = tmp_path / "evidence"
+    workspace = tmp_path / "synthetic space \ud55c\uae00"
+    monkeypatch.setattr(
+        driver.sys,
+        "argv",
+        [
+            "critical_path.py",
+            "--suite",
+            suite,
+            "--workspace-root",
+            str(workspace),
+            "--diagnostics-root",
+            str(diagnostics),
+            "--backend-port",
+            "18011",
+            "--frontend-port",
+            "15199",
+            "--keep-workspace",
+        ],
+    )
+    assert driver.main() == 0
+    builds = [event for event in runner_boundaries if event[0] == "build"]
+    assert len(builds) == (1 if suite == "workflows" else 0)
+    backend = next(event for event in runner_boundaries if event[0] == "start")
+    flow = next(event for event in runner_boundaries if event[0] == "flow")
+    assert flow[1][0] == "http://127.0.0.1:15199"
+    if suite == "workflows":
+        assert runner_boundaries[0][0] == "build"
+        command = builds[0][1]
+        assert command[:7] == [
+            "synthetic-npm",
+            "--prefix",
+            "frontend",
+            "run",
+            "build",
+            "--",
+            "--outDir",
+        ]
+        output = Path(command[7])
+        assert output.parent.parent == workspace
+        assert output.name == "frontend-dist"
+        assert builds[0][2]["env"]["VITE_API_BASE_URL"] == "/"
+        assert backend[2]["env"]["DATALAB_FRONTEND_DIST"] == str(output)
+        assert flow[2]["built_workflow_base_url"] == "http://127.0.0.1:18011"
+        manifest = json.loads((diagnostics / "suite-manifest.json").read_text(encoding="utf-8"))
+        assert manifest.get("frontend_modes") == {
+            "bo_dataset_import": "built",
+            "bo_profile_constraints": "built",
+            "chart_interactions": "dev",
+            "result_chart_models": "dev",
+            "pilot_groups": "built",
+            "fractional_completion": "built",
+            "doe_rsm_completion": "built",
+            "doe_browser_zoom": "built",
+            "gage_followup": "built",
+            "gage_six_panel": "built",
+            "bo_noise_extension": "built",
+            "desktop_resize": "dev",
+            "localization_shell": "built",
+            "legacy_workflow": "dev",
+        }
+    else:
+        assert "DATALAB_FRONTEND_DIST" not in backend[2]["env"]
+        assert flow[2].get("built_workflow_base_url") is None
+
+
+@pytest.mark.parametrize("flag", ONLY_FLAGS)
+def test_focused_checks_keep_source_frontend(
+    driver, monkeypatch, tmp_path, runner_boundaries, flag
+):
+    monkeypatch.setattr(
+        driver.sys,
+        "argv",
+        ["critical_path.py", f"--{flag}-only", "--workspace-root", str(tmp_path)],
+    )
+    assert driver.main() == 0
+    assert not any(event[0] == "build" for event in runner_boundaries)
+    flow = next(event for event in runner_boundaries if event[0] == "flow")
+    assert flow[2].get("built_workflow_base_url") is None
+
+
+def test_workflow_build_resolves_relative_output_for_npm_script_directory(
+    driver, monkeypatch, tmp_path, runner_boundaries
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        driver.sys,
+        "argv",
+        ["critical_path.py", "--suite", "workflows", "--workspace-root", "relative workspace"],
+    )
+    assert driver.main() == 0
+    build = next(event for event in runner_boundaries if event[0] == "build")
+    output = Path(build[1][-1])
+    assert output.is_absolute(), "npm scripts resolve relative --outDir against frontend/"
+    assert output.parent.parent == tmp_path / "relative workspace"
+
+
+@pytest.mark.parametrize("failure", ["command_failed", "missing_output"])
+def test_workflow_build_failure_stops_before_servers_and_browser(
+    driver, monkeypatch, tmp_path, runner_boundaries, failure
+):
+    def fail(command, **_kwargs):
+        if failure == "command_failed":
+            raise subprocess.CalledProcessError(1, command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(driver.subprocess, "run", fail)
+    monkeypatch.setattr(
+        driver.sys,
+        "argv",
+        ["critical_path.py", "--suite", "workflows", "--workspace-root", str(tmp_path)],
+    )
+    assert driver.main() == 1
+    assert not runner_boundaries
+
+
+def test_workflow_dispatch_routes_dev_fixtures_without_moving_built_journeys(
+    driver, monkeypatch, tmp_path
+):
+    calls = []
+    navigations = []
+    closed = []
+
+    def navigate(url, **_kwargs):
+        navigations.append(url)
+        raise LegacyBoundary()
+
+    context = SimpleNamespace(
+        add_init_script=lambda _script: None,
+        new_page=lambda: SimpleNamespace(goto=navigate),
+    )
+    browser = SimpleNamespace(
+        close=lambda: closed.append(True), new_context=lambda **_kwargs: context
+    )
+
+    @contextmanager
+    def playwright():
+        yield SimpleNamespace(chromium=SimpleNamespace(launch=lambda **_kwargs: browser))
+
+    monkeypatch.setattr(driver, "sync_playwright", playwright)
+    for stage, name in STAGE_CALLS.items():
+
+        def invoke(*args, _stage=stage, **_kwargs):
+            calls.append((_stage, args[1]))
+            if _stage == "doe_rsm_completion":
+                return {"design_id": "synthetic-design", "analysis_id": "synthetic-analysis"}
+            if _stage == "gage_six_panel":
+                return {"fixture": "synthetic"}
+
+        monkeypatch.setattr(driver, name, invoke)
+    monkeypatch.setattr(driver, "verify_gage_six_panel_zoom", lambda *_args: None)
+    diagnostics = SimpleNamespace(root=tmp_path, step=lambda _label: None)
+    with pytest.raises(LegacyBoundary):
+        driver.run_browser_flow(
+            "http://source",
+            diagnostics,
+            "http://built",
+            suite="workflows",
+            built_workflow_base_url="http://built",
+        )
+    assert calls == [
+        ("bo_dataset_import", "http://built"),
+        ("bo_profile_constraints", "http://built"),
+        ("chart_interactions", "http://source"),
+        ("result_chart_models", "http://source"),
+        ("pilot_groups", "http://built"),
+        ("fractional_completion", "http://built"),
+        ("doe_rsm_completion", "http://built"),
+        ("doe_browser_zoom", "http://built"),
+        ("gage_followup", "http://built"),
+        ("gage_six_panel", "http://built"),
+        ("bo_noise_extension", "http://built"),
+        ("desktop_resize", "http://source"),
+        ("localization_shell", "http://built"),
+    ]
+    assert navigations == ["http://source"]
     assert closed == [True]
 
 
@@ -312,7 +530,7 @@ def test_vector_context_includes_actual_target_curve_entry_and_recommendations()
     )
 
 
-def test_context_keeps_regular_and_numeric_mixed_auto_evidence_journeys():
+def test_context_keeps_regular_and_auto_evidence_without_duplicate_profile_fit():
     tree = ast.parse((ROOT / "tests/e2e/bo_vector_history.py").read_text(encoding="utf-8"))
     entry = next(
         node
@@ -340,10 +558,42 @@ def test_context_keeps_regular_and_numeric_mixed_auto_evidence_journeys():
         ordinary = [
             node
             for node in calls
-            if all(keyword.arg != "auto_evidence_only" for keyword in node.keywords)
+            if all(
+                keyword.arg not in {"auto_evidence_only", "profile_constraints_only"}
+                for keyword in node.keywords
+            )
+        ]
+        constrained = [
+            node
+            for node in calls
+            if any(
+                keyword.arg == "profile_constraints_only"
+                and isinstance(keyword.value, ast.Constant)
+                and keyword.value.value is True
+                for keyword in node.keywords
+            )
         ]
         assert len(evidence) == 1, name
         assert len(ordinary) == 1, name
+        assert not constrained, name
+        assert len(calls) == 2, name
+
+
+def test_profile_stage_selects_existing_constrained_only_journey(driver, monkeypatch, tmp_path):
+    planning = importlib.import_module("bo_persistent_planning")
+    calls = []
+    browser = object()
+
+    def verify(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"synthetic": True, "fit_posts": 1}
+
+    monkeypatch.setattr(planning, "verify_persistent_planning", verify)
+    assert planning.verify_profile_constraints(browser, "http://built", tmp_path) == {
+        "synthetic": True,
+        "fit_posts": 1,
+    }
+    assert calls == [((browser, "http://built", tmp_path), {"profile_constraints_only": True})]
 
 
 def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():

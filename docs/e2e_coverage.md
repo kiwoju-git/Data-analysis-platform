@@ -8,6 +8,13 @@ confirmation, measured observations, then a subsequent q1 review and exact-sourc
 reload. Locale/resize and source A-B-A checks do not authorize stale imports.
 Manual fixture writes send the exact same-origin header on each request.
 
+The `bo_profile_constraints` stage immediately follows import in `workflows` and
+uses the same built application origin. It runs the existing constrained-only
+saved-model profiler journey once, retaining all grid/detail assertions and its
+receipt. The ordinary planning and Auto-evidence journeys remain in `context`;
+the extra constrained fit is not duplicated there. The full ordered journey
+also includes this named stage, using its unchanged source-serving mode.
+
 The `context` partition includes `bo_xy_gpr_navigation`: standalone GPR opens
 from its canonical regression module while retaining the header-selected dataset.
 The AI/ML domain has no duplicate GPR card.
@@ -71,6 +78,22 @@ diagnostics directory. `--suite` and focused `--*-only` options are mutually
 exclusive. Actual dispatch and coverage-union tests guard the partition contract.
 The failed-child recorder captures bounded Windows TCP state aggregates only on
 failure; these host-wide counts are not proof of browser socket exhaustion.
+
+The unfocused `workflows` partition builds the current frontend into its fresh,
+owned temporary run directory before starting servers. A failed build or missing
+`index.html` fails the run; existing `frontend/dist` output is never reused.
+Its real application stages use the existing loopback API's built-UI serving
+path, including Gage, DOE, BO import and localization. The development-only
+`chart_interactions`, `result_chart_models` and `desktop_resize` fixture pages
+remain on Vite; these `/tests/*.html` entry points import source components and
+are not release assets. The legacy journey also uses Vite: startup and lazy-panel
+fault injection deliberately
+intercept `/src/App.tsx` and `RegressionAnalysisPanels.ts*`, and their source-based
+assertions are unchanged. Other partitions, `full`, and focused flags remain
+source-served. The manifest's `frontend_modes` records this stage-by-stage split;
+`logs/frontend-build.log` records the build. No stage, retry, timeout or readiness
+condition is removed or relaxed by this routing change. A passing built workflow
+does not replace the development-source fault-injection evidence.
 
 ## Capability Help Remediation
 
@@ -850,6 +873,7 @@ browser critical path.
 
 `tests/e2e/critical_path.py` currently prints these major step markers in order:
 
+- `build isolated workflow frontend` (unfocused `workflows` only)
 - `wait for backend health`
 - `wait for frontend dev server`
 - `verify English default and persistent Korean switch`
@@ -884,6 +908,7 @@ browser critical path.
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)
 - `verify measured X/Y import and next multiresponse recommendation`
+- `verify constrained saved-model profiler values and status`
 - `verify canonical GPR navigation with selected dataset`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)

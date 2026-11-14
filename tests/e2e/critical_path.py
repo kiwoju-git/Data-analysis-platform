@@ -58,6 +58,7 @@ from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from bo_progress import verify_bo_progress
 from bo_dataset_import import verify_bo_dataset_import
+from bo_persistent_planning import verify_profile_constraints
 from bo_xy_gpr_navigation import verify_bo_xy_gpr_navigation
 from gpr_navigation import verify_gpr_navigation
 from bo_vector_history import verify_bo_vector_history
@@ -238,17 +239,20 @@ SUITE_STAGES = {
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
-        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import",
+        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import", "bo_profile_constraints",
         "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_profile_constraints", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
     "desktop_resize", "localization_shell", "legacy_workflow",
 )
+WORKFLOW_DEV_STAGES = frozenset({
+    "chart_interactions", "result_chart_models", "desktop_resize", "legacy_workflow",
+})
 
 
 def suite_stage_ids(suite: str) -> tuple[str, ...]:
@@ -300,7 +304,13 @@ def main() -> int:
     diagnostics.record("E2E diagnostics initialized")
     if not any(value for key, value in vars(args).items() if key.endswith("_only")):
         (diagnostics.root / "suite-manifest.json").write_text(
-            json.dumps({"schema_version": 1, "suite": args.suite, "stages": suite_stage_ids(args.suite)}, indent=2),
+            json.dumps({
+                "schema_version": 1, "suite": args.suite, "stages": suite_stage_ids(args.suite),
+                "frontend_modes": {
+                    stage: "built" if args.suite == "workflows" and stage not in WORKFLOW_DEV_STAGES else "dev"
+                    for stage in suite_stage_ids(args.suite)
+                },
+            }, indent=2),
             encoding="utf-8",
         )
     log_root = diagnostics.log_root
@@ -333,6 +343,22 @@ def main() -> int:
         backend_log = backend_log_path.open("wb")
         frontend_log = frontend_log_path.open("wb")
         log_handles.extend([backend_log, frontend_log])
+
+        if args.suite == "workflows":
+            diagnostics.step("build isolated workflow frontend")
+            frontend_dist = (workspace_root / "frontend-dist").resolve()
+            with (log_root / "frontend-build.log").open("wb") as build_log:
+                subprocess.run(
+                    [npm_command(), "--prefix", "frontend", "run", "build", "--", "--outDir", str(frontend_dist)],
+                    cwd=repo_root,
+                    env=frontend_env,
+                    stdout=build_log,
+                    stderr=subprocess.STDOUT,
+                    check=True,
+                )
+            if not (frontend_dist / "index.html").is_file():
+                raise RuntimeError("Workflow frontend build did not produce index.html")
+            backend_env["DATALAB_FRONTEND_DIST"] = str(frontend_dist)
 
         backend_process = subprocess.Popen(
             [
@@ -405,6 +431,7 @@ def main() -> int:
             args.report_center_context_only,
             args.analysis_completion_only,
             suite=args.suite,
+            built_workflow_base_url=backend_base_url if args.suite == "workflows" else None,
         )
         print("E2E critical path passed")
         return 0
@@ -713,8 +740,11 @@ def run_browser_flow(
     analysis_completion_only: bool = False,
     *,
     suite: str = "full",
+    built_workflow_base_url: str | None = None,
 ) -> None:
     stages = suite_stage_ids(suite)
+    source_frontend_base_url = frontend_base_url
+    frontend_base_url = built_workflow_base_url or frontend_base_url
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page: Page | None = None
@@ -793,6 +823,9 @@ def run_browser_flow(
                 if "bo_dataset_import" in stages:
                     diagnostics.step("verify measured X/Y import and next multiresponse recommendation")
                     verify_bo_dataset_import(browser, frontend_base_url, diagnostics.root / "bo-dataset-import", isolated_workspace=True)
+                if "bo_profile_constraints" in stages:
+                    diagnostics.step("verify constrained saved-model profiler values and status")
+                    verify_profile_constraints(browser, frontend_base_url, diagnostics.root / "bo-profile-constraints")
                 if "bo_xy_gpr_navigation" in stages:
                     diagnostics.step("verify canonical GPR navigation with selected dataset")
                     verify_bo_xy_gpr_navigation(browser, frontend_base_url, diagnostics.root / "bo-gpr-navigation", isolated_workspace=True)
@@ -812,9 +845,9 @@ def run_browser_flow(
                     diagnostics.step("verify two-editor schema concurrency")
                     verify_schema_concurrency(browser, frontend_base_url, diagnostics.root / "schema-concurrency", isolated_workspace=True)
             if "chart_interactions" in stages:
-                verify_chart_interactions(browser, frontend_base_url, diagnostics.root)
+                verify_chart_interactions(browser, source_frontend_base_url, diagnostics.root)
             if "result_chart_models" in stages:
-                verify_result_chart_models(browser, frontend_base_url, diagnostics.root)
+                verify_result_chart_models(browser, source_frontend_base_url, diagnostics.root)
             if "chart_formatting" in stages:
                 diagnostics.step("verify chart axis formatting")
                 verify_chart_formatting(browser, frontend_base_url, diagnostics.root / "chart-formatting")
@@ -860,8 +893,10 @@ def run_browser_flow(
                 verify_bo_noise_extension(browser, frontend_base_url, diagnostics.root / "bo-noise-extension")
             if "legacy_workflow" not in stages:
                 return
-            verify_desktop_resize(browser, frontend_base_url, diagnostics.root)
+            verify_desktop_resize(browser, source_frontend_base_url, diagnostics.root)
             verify_localization_shell(browser, frontend_base_url, diagnostics)
+            # These checks intentionally intercept source modules, not bundled assets.
+            frontend_base_url = source_frontend_base_url
             context = browser.new_context(accept_downloads=True)
             # Preserve lazy-module evidence across the long source/Vite workflow;
             # Chromium's default 250-entry resource buffer fills before Reports.
