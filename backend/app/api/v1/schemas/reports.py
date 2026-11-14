@@ -121,6 +121,16 @@ class BayesianBatchAttachment(ReportModel):
     result_payload_sha256: Sha256
 
 
+class BayesianViewAttachment(ReportModel):
+    kind: Literal["view"] = "view"
+    view_id: UUID
+    model_id: UUID
+    model_sha256: Sha256
+    model_config_sha256: Sha256
+    request_sha256: Sha256
+    view_sha256: Sha256
+
+
 class BayesianHistoryReportSource(ReportModel):
     kind: Literal["bayesian_history_revision"] = "bayesian_history_revision"
     study_id: UUID
@@ -129,7 +139,10 @@ class BayesianHistoryReportSource(ReportModel):
     history_revision_id: UUID
     expected_source_sha256: Sha256
     attachment: Annotated[
-        NoBayesianAttachment | BayesianRecommendationAttachment | BayesianBatchAttachment,
+        NoBayesianAttachment
+        | BayesianRecommendationAttachment
+        | BayesianBatchAttachment
+        | BayesianViewAttachment,
         Field(discriminator="kind"),
     ] = Field(default_factory=NoBayesianAttachment)
 

@@ -5,6 +5,10 @@ import { useI18n } from "../../i18n/LocaleProvider";
 import { datasetImportMessages } from "../../i18n/boDatasetImport";
 import { mixedMessages } from "../../i18n/boMixed";
 import { BayesianMixedStudyBuilder } from "./BayesianMixedStudyBuilder";
+import { BayesianMixtureStudyBuilder } from "./BayesianMixtureStudyBuilder";
+import { BayesianMixtureWorkspace } from "./BayesianMixtureWorkspace";
+import { BayesianMixtureSavedBatch } from "./BayesianMixtureSavedBatch";
+import { mixtureMessages } from "../../i18n/boMixture";
 import { BayesianMixedStudyWorkspace } from "./BayesianMixedStudyWorkspace";
 import { BayesianMixedPlanningPanel } from "./BayesianMixedPlanningPanel";
 import { BayesianMixedSavedBatch } from "./BayesianMixedSavedBatch";
@@ -18,6 +22,7 @@ import { BayesianVectorStudySnapshot } from "./BayesianVectorStudySnapshot";
 import { BayesianVectorObservationEntry } from "./BayesianVectorObservationEntry";
 import { BayesianDesirabilityRecommendationPanel } from "./BayesianDesirabilityRecommendationPanel";
 import { BayesianPlanningPanel } from "./BayesianPlanningPanel";
+import { BayesianSavedViews } from "./BayesianSavedViews";
 import { BayesianPlanningSavedBatch } from "./BayesianPlanningSavedBatch";
 import { BayesianAugmentationPanel, type AugmentationManualSeed } from "./BayesianAugmentationPanel";
 import { BayesianAugmentationSavedBatch } from "./BayesianAugmentationSavedBatch";
@@ -49,8 +54,10 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
   const initialPlanningBatchId = validBayesianId(initialQuery.get("planning_batch_id"));
   const initialAugmentationBatchId = validBayesianId(initialQuery.get("augmentation_batch_id"));
   const initialMixedBatchId = validBayesianId(initialQuery.get("mixed_planning_batch_id"));
+  const initialMixtureBatchId = validBayesianId(initialQuery.get("mixture_planning_batch_id"));
   const recommendationQueryConflict =
-    [initialRecommendationId, initialBatchId, initialPlanningBatchId, initialAugmentationBatchId, initialMixedBatchId].filter(value => value !== null).length > 1 ||
+    [initialRecommendationId, initialBatchId, initialPlanningBatchId, initialAugmentationBatchId, initialMixedBatchId, initialMixtureBatchId].filter(value => value !== null).length > 1 ||
+    (initialQuery.has("mixture_planning_batch_id") && initialMixtureBatchId === null) ||
     (initialQuery.has("planning_batch_id") && initialPlanningBatchId === null) ||
     (initialQuery.has("augmentation_batch_id") && initialAugmentationBatchId === null) ||
     (initialQuery.has("mixed_planning_batch_id") && initialMixedBatchId === null);
@@ -65,8 +72,9 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
   const [requestedAugmentationBatchId, setRequestedAugmentationBatchId] = useState(recommendationQueryConflict ? null : initialAugmentationBatchId);
   const [manualSeed, setManualSeed] = useState<AugmentationManualSeed | null>(null);
   const [requestedMixedBatchId, setRequestedMixedBatchId] = useState(recommendationQueryConflict ? null : initialMixedBatchId);
+  const [requestedMixtureBatchId, setRequestedMixtureBatchId] = useState(recommendationQueryConflict ? null : initialMixtureBatchId);
   const [mixedBusy, setMixedBusy] = useState(false), [mixedConfirming, setMixedConfirming] = useState(false), [mixedCreating, setMixedCreating] = useState(false);
-  const [builderMode, setBuilderMode] = useState<"numeric" | "mixed" | "dataset">("numeric");
+  const [builderMode, setBuilderMode] = useState<"numeric" | "mixed" | "mixture" | "dataset">("numeric");
   const [importBusy, setImportBusy] = useState(false);
   const [builderOpen, setBuilderOpen] = useState(initialStudyId === null);
   const catalog = useBayesianStudyCatalogState(initialStudyId);
@@ -111,6 +119,7 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
   const study =
     lifecycle.study?.study_id === catalog.selectedStudyId ? lifecycle.study : null;
   const mixedStudy = lifecycle.mixedStudy?.study_id === catalog.selectedStudyId ? lifecycle.mixedStudy : null;
+  const mixtureStudy = lifecycle.mixtureStudy?.study_id === catalog.selectedStudyId ? lifecycle.mixtureStudy : null;
   const scalarStudy = study?.objective.goal_type !== "desirability" ? study : null;
   const recommendation = useBayesianRecommendationState({
     selectedStudyId: scalarStudy?.study_id ?? null,
@@ -136,7 +145,7 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
     recommendation.batch?.study_id === catalog.selectedStudyId
       ? recommendation.batch
       : null;
-  const retention = useBayesianRetentionState(study ?? mixedStudy);
+  const retention = useBayesianRetentionState(study ?? mixedStudy ?? mixtureStudy);
   const replicates = useBayesianReplicateState(study);
   const requestInFlight =
     catalog.isLoading ||
@@ -169,12 +178,14 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
       : null) ??
     ((study !== null && requestedMixedBatchId !== null) || (mixedStudy !== null && [requestedRecommendationId, requestedBatchId, requestedPlanningBatchId, requestedAugmentationBatchId].some(value => value !== null))
       ? "bayesian_recommendation_query_conflict" : null) ??
+    (((study !== null || mixedStudy !== null) && requestedMixtureBatchId !== null) || (mixtureStudy !== null && [requestedRecommendationId, requestedBatchId, requestedPlanningBatchId, requestedAugmentationBatchId, requestedMixedBatchId].some(value => value !== null)) ? "bayesian_recommendation_query_conflict" : null) ??
     lifecycle.error ??
     recommendation.error ??
     retention.error ??
     catalog.error;
 
   function selectStudy(studyId: string | null) {
+    setRequestedMixtureBatchId(null);
     catalog.onSelect(studyId);
     setRequestedRecommendationId(null);
     setRequestedBatchId(null);
@@ -316,7 +327,9 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
         }}
       />
 
-      {builderOpen && <label className="bo-study-creation-mode">{datasetImportMessages(locale).creationMode}<select aria-label={datasetImportMessages(locale).creationMode} disabled={requestInFlight} value={builderMode} onChange={event => setBuilderMode(event.currentTarget.value as typeof builderMode)}><option value="numeric">{mixedText.numericMode}</option><option value="mixed">{mixedText.mixedMode}</option><option value="dataset">{datasetImportMessages(locale).mode}</option></select></label>}
+      {builderOpen && <label className="bo-study-creation-mode">{datasetImportMessages(locale).creationMode}<select aria-label={datasetImportMessages(locale).creationMode} disabled={requestInFlight} value={builderMode} onChange={event => setBuilderMode(event.currentTarget.value as typeof builderMode)}><option value="numeric">{mixedText.numericMode}</option><option value="mixed">{mixedText.mixedMode}</option><option value="mixture">{mixtureMessages(locale).title}</option><option value="dataset">{datasetImportMessages(locale).mode}</option></select></label>}
+      {builderOpen && builderMode === "mixture" && <BayesianMixtureStudyBuilder key={catalog.selectedStudyId ?? "new-mixture"} ownerKey={`mixture-builder:${catalog.selectedStudyId ?? "new"}`} disabled={requestInFlight}
+        onBusyChange={setMixedCreating} onCancel={() => setBuilderOpen(false)} onCreated={created => { selectStudy(created.study_id); setBuilderOpen(false); catalog.onResetToFirstPage(); }} />}
       {builderOpen && builderMode === "dataset" && <BayesianDatasetImportPanel version={version} filterSnapshot={filterSnapshot}
         ownerKey={catalog.selectedStudyId ?? "new"} disabled={requestInFlight} onBusyChange={setImportBusy}
         onCreated={created => { selectStudy(created.study_id); setBuilderOpen(false); catalog.onResetToFirstPage(); }} />}
@@ -341,6 +354,12 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
         <BayesianMixedPlanningPanel study={mixedStudy} disabled={requestInFlight} onConfirmed={mixedConfirmed} onConfirmingChange={setMixedConfirming} />
         {requestedMixedBatchId !== null && <BayesianMixedSavedBatch study={mixedStudy} batchId={requestedMixedBatchId} />}
         <BayesianStudyDeletionPanel study={mixedStudy} state={retention} disabled={requestInFlight} onDeleted={handleDeleted} />
+      </>}
+      {mixtureStudy !== null && <>
+        <BayesianMixtureWorkspace study={mixtureStudy} disabled={requestInFlight} onBusyChange={setMixedBusy} onRefresh={() => { void lifecycle.refreshStudy(); void catalog.onRefresh(); }} initialSelectionId={initialQuery.get("study_id") === mixtureStudy.study_id ? validBayesianId(initialQuery.get("mixture_selection_id")) : null}
+          onConfirmed={batchId => { setRequestedMixtureBatchId(batchId); replaceBayesianQuery({ study_id: mixtureStudy.study_id, mixture_planning_batch_id: batchId, batch_id: null, recommendation_id: null, planning_batch_id: null, augmentation_batch_id: null }); }} />
+        {requestedMixtureBatchId !== null && <BayesianMixtureSavedBatch study={mixtureStudy} batchId={requestedMixtureBatchId} />}
+        <BayesianStudyDeletionPanel study={mixtureStudy} state={retention} disabled={requestInFlight} onDeleted={handleDeleted} />
       </>}
 
       {error !== null ? <BayesianError code={error} /> : null}
@@ -447,6 +466,9 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
           />
         </>
       ) : null}
+      {(mixedStudy ?? study ?? mixtureStudy)?.objective.goal_type === "desirability" && <BayesianSavedViews
+        studyId={(mixedStudy ?? study ?? mixtureStudy)!.study_id} contextKey={(mixedStudy ?? study ?? mixtureStudy)!.study_version_id}
+        initialViewId={initialQuery.get("study_id") === (mixedStudy ?? study ?? mixtureStudy)!.study_id && initialQuery.getAll("view_id").length === 1 && validBayesianId(initialQuery.get("view_id")) ? initialQuery.get("view_id") : null} />}
     </section>
   );
 }
@@ -468,6 +490,8 @@ function replaceBayesianQuery(values: Record<string, string | null>) {
   if (typeof window === "undefined") return;
   const url = new URL(window.location.href);
   if (!("mixed_planning_batch_id" in values)) url.searchParams.delete("mixed_planning_batch_id");
+  if (!("mixture_selection_id" in values)) url.searchParams.delete("mixture_selection_id");
+  if (!("mixture_planning_batch_id" in values)) url.searchParams.delete("mixture_planning_batch_id");
   Object.entries(values).forEach(([key, value]) => {
     if (value === null) url.searchParams.delete(key);
     else url.searchParams.set(key, value);

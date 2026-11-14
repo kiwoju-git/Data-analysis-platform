@@ -52,6 +52,15 @@ def _definition(
 
 
 DEFINITIONS = {
+    "bayesian_view": _definition(
+        "doe.bayesian_optimization",
+        "bayesian_saved_view",
+        "bayesian",
+        ("source", "definition", "history"),
+        ("warnings",),
+        (1,),
+        "1.0.0",
+    ),
     "factorial": _definition(
         "doe.factorial_design",
         "factorial_analysis",

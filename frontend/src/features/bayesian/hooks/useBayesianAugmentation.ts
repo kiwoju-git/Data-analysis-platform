@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as api from "../../../api/boAugmentation";
 import * as planning from "../../../api/boPlanning";
 import type { AutoStrategyView } from "../../../api/boAutoStrategy";
-import type { AutoEvidenceRequest, AugmentationPolicy } from "../../../api/types/boAugmentation";
+import type { AutoEvidenceRequest, AugmentationPolicy, AugmentationRenewalLineage, AugmentationRenewalRequest } from "../../../api/types/boAugmentation";
 import type { BayesianStudyResponse } from "../../../api/types/bayesian";
 import type { AugmentationSelectionRequest, AugmentationSelectionResponse, CandidateRevisionCreateRequestV2 } from "../../../api/types/boAugmentation";
 import type { CandidatePage, CandidateRevisionSummaryV2, CandidateSource, PlanningModelDetail, PlanningModelSummary } from "../../../api/types/boPlanning";
@@ -11,9 +11,11 @@ import { bayesianRequestId } from "../bayesianRequestId";
 import { augmentationFailureCode as errorCode, augmentationRequest, augmentationSource, initialAugmentationDraft, validAugmentationBatch, validAugmentationPage, validAugmentationSelection, type AugmentationDraft } from "../boAugmentationDraft";
 import { createPlanningCommitFence, createPlanningRequestFence, planningId, planningStudyKey, validPlanningModel } from "../boPlanningDraft";
 import { sameDesirabilityJson } from "../desirabilityResponseGuard";
+import { augmentationNeedsRenewal, validAugmentationRenewal, validRenewalLineage } from "../boAugmentationRenewal";
 
 type Mutation = { kind: "candidates"; request: CandidateRevisionCreateRequestV2 } |
-  { kind: "review"; request: AugmentationSelectionRequest } | { kind: "confirm"; selection: AugmentationSelectionResponse };
+  { kind: "review"; request: AugmentationSelectionRequest } | { kind: "confirm"; selection: AugmentationSelectionResponse } |
+  { kind: "renew"; selection: AugmentationSelectionResponse; request: AugmentationRenewalRequest };
 interface Options { study: BayesianStudyResponse; disabled: boolean; onConfirmed: (batchId: string) => void }
 
 export function useBayesianAugmentation({ study, disabled, onConfirmed }: Options) {
@@ -31,6 +33,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   const [draft, setDraft] = useState(() => initialAugmentationDraft(study));
   const [autoReference, setAutoReference] = useState<AutoEvidenceRequest | null>(null);
   const [selection, setSelection] = useState<AugmentationSelectionResponse | null>(null);
+  const [renewal, setRenewal] = useState<AugmentationRenewalLineage | null>(null);
   const [busy, setBusy] = useState<Mutation["kind"] | "read" | null>(null), [catalogLoading, setCatalogLoading] = useState(false);
   const [error, setError] = useState<string | null>(null), [retry, setRetry] = useState<Mutation | null>(null);
   const own = stateOwner.current === token;
@@ -54,7 +57,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   useEffect(() => {
     mounted.current = true; stateOwner.current = token; operation.invalidate(); running.current = false;
     setAutoReference(null);
-    setCatalog({ candidates: [], models: [] }); setPage(null); setModel(null); setDraft(initialAugmentationDraft(study)); setSelection(null); setError(null); setRetry(null);
+    setCatalog({ candidates: [], models: [] }); setPage(null); setModel(null); setDraft(initialAugmentationDraft(study)); setSelection(null); setRenewal(null); setError(null); setRetry(null);
     if (!confirmation.pending()) setBusy(null);
     void latestRefresh.current();
     return () => { mounted.current = false; operation.invalidate(); catalogLane.current += 1; };
@@ -67,6 +70,7 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
     operation.invalidate(); running.current = false; setBusy(null); setError(null); setRetry(null);
     if (clearSelection) setAutoReference(null);
     if (clearSelection) setSelection(null);
+    if (clearSelection) setRenewal(null);
     return true;
   }
   function updateDraft<K extends keyof AugmentationDraft>(field: K, value: AugmentationDraft[K]) {
@@ -94,12 +98,17 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
         const value = await api.createAugmentationCandidates(study.study_id, snapshot.request);
         if (!ownerCurrent()) return;
         if (!validAugmentationPage(value, study) || value.revision.candidate_set_id !== snapshot.request.candidate_set_id || value.revision.parent_revision_id !== snapshot.request.expected_head_revision_id) throw new Error("bayesian_augmentation_response_mismatch");
-        setPage(value); setSelection(null);
+        setPage(value); setSelection(null); setRenewal(null);
       } else if (snapshot.kind === "review") {
         const value = await api.createAugmentation(study.study_id, snapshot.request);
         if (!ownerCurrent()) return;
         if (!validAugmentationSelection(value, study, snapshot.request)) throw new Error("bayesian_augmentation_response_mismatch");
-        setSelection(value);
+        setSelection(value); setRenewal(null);
+      } else if (snapshot.kind === "renew") {
+        const value = await api.renewAugmentation(study.study_id, snapshot.selection.selection_id, snapshot.request);
+        if (!ownerCurrent()) return;
+        if (!validAugmentationRenewal(value, study, snapshot.selection, snapshot.request.request_id)) throw new Error("bayesian_augmentation_response_mismatch");
+        setSelection(value.selection); setRenewal(value.lineage);
       } else {
         const saved = snapshot.selection;
         const value = await api.confirmAugmentation(study.study_id, saved.selection_id, { expected_config_sha256: saved.config_sha256, expected_result_sha256: saved.result_sha256 });
@@ -152,7 +161,10 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
           if (!current()) return;
           if (!validPlanningModel(fitted, study) || fitted.snapshot_sha256 !== value.request.expected_model_sha256) throw new Error("bayesian_augmentation_response_mismatch");
         }
-        setPage(candidates); setModel(fitted); setSelection(value);
+        const lineage = await api.fetchAugmentationRenewal(study.study_id, id);
+        if (!current()) return;
+        if (lineage !== null && !validRenewalLineage(lineage, value)) throw new Error("bayesian_augmentation_response_mismatch");
+        setPage(candidates); setModel(fitted); setSelection(value); setRenewal(lineage);
         setDraft({ policy: value.request.policy, batchSize: String(value.request.batch_size), budget: String(value.request.total_trial_budget), distance: String(value.request.min_batch_distance_normalized),
           evaluations: String(value.request.max_evaluations), moments: String(value.request.max_moment_evaluations), seconds: String(value.request.time_budget_ms / 1000) });
       }
@@ -162,16 +174,26 @@ export function useBayesianAugmentation({ study, disabled, onConfirmed }: Option
   const basePreview = own ? augmentationRequest(study, page, model, draft, "00000000-0000-0000-0000-000000000000") : null;
   const preview: AugmentationSelectionRequest | null = basePreview && autoReference
     ? { ...basePreview, schema_version: 4, auto_strategy: autoReference } : basePreview;
-  const canConfirm = own && selection !== null && selection.source_is_current && selection.confirmed_batch_id === null && study.status === "active" && study.pending_trial_count === 0 &&
+  const canDecide = own && selection !== null && selection.source_is_current && selection.confirmed_batch_id === null && study.status === "active" && study.pending_trial_count === 0 &&
     selection.request.expected_history_revision_id === study.observation_history.history_revision_id && selection.request.expected_history_sha256 === study.observation_history.observation_history_sha256 && selection.request.expected_trial_count === study.trial_count;
+  const needsRenewal = own && selection !== null && augmentationNeedsRenewal(selection);
+  const canConfirm = canDecide && !needsRenewal;
   return { catalog: own ? catalog : { models: [], candidates: [] }, page: own ? page : null, model: own ? model : null,
     draft: own ? draft : initialAugmentationDraft(study), selection: own ? selection : null, busy: own ? busy : null, catalogLoading,
     error: own ? error : null, canRetry: own && retry !== null, isConfirming: confirmation.pending(), canReview: preview !== null, canConfirm,
+    needsRenewal, canRenew: canDecide && needsRenewal, renewal: own ? renewal : null,
     updateDraft, applyAuto, clearAuto: () => { if (autoReference) invalidate(); }, autoReference,
     invalidateDraft: invalidate, createCandidates, refresh,
     openPage: (id: string, offset = 0) => void read("page", id, offset), openModel: (id: string) => void read("model", id), openSelection: (id: string) => void read("selection", id),
     review: () => { if (preview) { try { void mutate({ kind: "review", request: { ...preview, request_id: bayesianRequestId() } }); } catch (caught) { setError(errorCode(caught)); } } },
     confirm: () => { if (canConfirm && selection) void mutate({ kind: "confirm", selection }); },
+    renew: () => {
+      if (!canDecide || !needsRenewal || !selection) return;
+      try {
+        void mutate({ kind: "renew", selection: JSON.parse(JSON.stringify(selection)) as AugmentationSelectionResponse,
+          request: { request_id: bayesianRequestId(), expected_config_sha256: selection.config_sha256, expected_result_sha256: selection.result_sha256 } });
+      } catch (caught) { setError(errorCode(caught)); }
+    },
     retry: () => { if (retry) void mutate(retry); },
   };
 }

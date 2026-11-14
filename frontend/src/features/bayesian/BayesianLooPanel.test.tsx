@@ -2,9 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { setCurrentLocale } from "../../i18n/store";
 import { BayesianLooPanel } from "./BayesianLooPanel";
-import { requestBoLoo } from "../../api/boLoo";
+import { evaluateBoView } from "../../api/boViews";
 
-vi.mock("../../api/boLoo", () => ({ requestBoLoo: vi.fn() }));
+vi.mock("../../api/boViews", async importOriginal => ({
+  ...await importOriginal<typeof import("../../api/boViews")>(),
+  evaluateBoView: vi.fn(),
+}));
 describe("saved source conditional LOO boundary", () => {
   afterEach(() => { setCurrentLocale("ko"); vi.clearAllMocks(); });
   it.each(["en", "ko"] as const)("requires explicit calculation and states limits in %s", locale => {
@@ -17,7 +20,7 @@ describe("saved source conditional LOO boundary", () => {
     expect(html).toContain(locale === "en" ? "not refitted cross-validation" : "재적합하는 교차검증이나 독립 외부 검증이 아닙니다");
     expect(html).toContain(locale === "en" ? "does not automatically switch" : "자동 전환하지 않습니다");
     expect(html).not.toContain("<svg data-chart");
-    expect(requestBoLoo).not.toHaveBeenCalled();
+    expect(evaluateBoView).not.toHaveBeenCalled();
     expect(JSON.stringify(model)).toBe(before);
   });
 });

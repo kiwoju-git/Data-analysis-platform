@@ -55,6 +55,11 @@ def verify_profile_grid(
         )
         if categorical:
             expect(chart.locator("path.interactive-data-line")).to_have_count(0)
+        for row in rows:
+            marker = chart.locator(f'[data-point-id="{row["row_id"]}"]')
+            assert marker.evaluate("element => element.tagName") == (
+                "circle" if row["constraints_satisfied"] else "polygon"
+            )
         first = chart.locator("[data-point-id]").first
         first.focus()
         first.press("Enter")
@@ -90,6 +95,15 @@ def verify_profile_grid(
             expect(page.locator("html")).to_have_attribute("lang", locale)
             # Use a locale-independent locator after switching language.
             current = page.locator(".bo-profile-grid")
+            for row in rows:
+                status = (
+                    "Within the stored constraints." if row["constraints_satisfied"] else "Outside the stored constraints."
+                ) if locale == "en" else (
+                    "저장된 제약 조건 안입니다." if row["constraints_satisfied"] else "저장된 제약 조건을 벗어납니다."
+                )
+                markers = current.locator(f'[data-point-id="{row["row_id"]}"]')
+                assert markers.count() == len(responses) + 1
+                assert all(status in item for item in markers.evaluate_all("els => els.map(e => e.getAttribute('aria-label'))"))
             for width in (1024, 1440):
                 page.set_viewport_size({"width": width, "height": 1000})
                 wait_for_layout_settled(page)
@@ -139,6 +153,8 @@ def verify_profile_grid(
         "axis": factor["factor_id"],
         "response_count": len(responses),
         "rows_per_chart": len(rows),
+        "constraint_violations_per_chart": sum(not row["constraints_satisfied"] for row in rows),
+        "constraint_marker_and_accessibility_verified": True,
         "exact_coordinates": True,
         "display_only_api_writes": writes,
         "layouts": layouts,

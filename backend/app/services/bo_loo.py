@@ -14,11 +14,25 @@ from app.storage.bo_planning import planning_sha
 def get_loo_view(
     settings: Settings, study_id: UUID, model_id: UUID, body: LooRequest, *, mixed: bool = False
 ) -> LooView:
-    if mixed:
+    from app.services.bo_mixture_studies import (
+        is_mixture_study,
+        load_validated_mixture_study,
+        mixture_study_response,
+    )
+
+    mixture = is_mixture_study(settings, str(study_id))
+    study: Any
+    if mixture:
+        from app.services.bo_mixture_workflow import read_mixture_model
+
+        bundle = load_validated_mixture_study(settings, str(study_id))
+        record, snapshot, _ = read_mixture_model(settings, bundle, model_id)
+        study = mixture_study_response(bundle)
+    elif mixed:
         from app.services.bo_mixed_models import read_mixed_model
         from app.services.bo_mixed_studies import get_mixed_study
 
-        study: Any = get_mixed_study(settings, study_id)
+        study = get_mixed_study(settings, study_id)
         record, snapshot, _ = read_mixed_model(settings, study, model_id)
     else:
         study = get_bayesian_study(settings, study_id)
@@ -32,7 +46,11 @@ def get_loo_view(
     # A concurrent observation can advance the head while the worker reads its
     # immutable snapshot. Refresh only status, never replace the diagnostic source.
     current = (
-        get_mixed_study(settings, study_id) if mixed else get_bayesian_study(settings, study_id)
+        mixture_study_response(load_validated_mixture_study(settings, str(study_id)))
+        if mixture
+        else get_mixed_study(settings, study_id)
+        if mixed
+        else get_bayesian_study(settings, study_id)
     )
     try:
         calculation = LooCalculation.model_validate(result)

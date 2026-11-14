@@ -213,7 +213,12 @@ def _prepare(
         )
         body, definition = render_lhs_body(payload, locale), DEFINITIONS["lhs"]
     elif source.kind == "bayesian_history_revision":
-        payload, title, created = read_bayesian(settings, source)
+        if source.attachment.kind == "view":
+            from app.services.bo_view_report import read_view_report
+
+            payload, title, created = read_view_report(settings, source)
+        else:
+            payload, title, created = read_bayesian(settings, source)
         payload["provenance"] = {
             "source": source.model_dump(mode="json"),
             "created_at": created,
@@ -224,7 +229,12 @@ def _prepare(
             "/analysis/doe/doe.bayesian_optimization",
             "managed",
         )
-        body, definition = render_bayesian_body(payload, locale), DEFINITIONS["bayesian"]
+        if source.attachment.kind == "view":
+            from app.services.bo_view_report import render_view_body
+
+            body, definition = render_view_body(payload, locale), DEFINITIONS["bayesian_view"]
+        else:
+            body, definition = render_bayesian_body(payload, locale), DEFINITIONS["bayesian"]
     elif source.kind == "regression_prediction" and source.prediction.storage == "doe_prediction":
         ref_prediction = source.prediction
         analysis_payload, title, _ = _doe_analysis(settings, ref_prediction.source)
@@ -478,7 +488,10 @@ def _catalog_page(
             "FROM bayesian_observation_history_revisions UNION ALL SELECT 'bo_recommendation',"
             "source_history_revision_id,created_at,recommendation_id FROM bayesian_recommendations "
             "UNION ALL SELECT 'bo_batch',source_history_revision_id,created_at,batch_id "
-            "FROM bayesian_recommendation_batches"
+            "FROM bayesian_recommendation_batches "
+            "UNION ALL SELECT 'bo_view',m.source_history_revision_id,w.created_at,w.view_id "
+            "FROM bayesian_saved_views w JOIN bayesian_planning_models m ON m.model_id=w.model_id "
+            "AND m.study_version_id=w.study_version_id"
         ),
     }
     if kind not in queries:
@@ -619,6 +632,31 @@ def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> Rep
         (identifier,),
     ).fetchone()
     attachment: dict[str, Any] = {"kind": "none"}
+    if kind == "bo_view":
+        view = connection.execute(
+            "SELECT w.model_id,w.config_sha256,w.result_sha256 FROM bayesian_saved_views w "
+            "JOIN bayesian_planning_models m ON m.model_id=w.model_id "
+            "AND m.study_version_id=w.study_version_id "
+            "WHERE w.view_id=? AND w.study_version_id=? AND m.source_history_revision_id=?",
+            (extra, result["study_version_id"], identifier),
+        ).fetchone()
+        if view is None:
+            raise invalid("report_source_changed")
+        model = connection.execute(
+            "SELECT snapshot_sha256,config_sha256 FROM bayesian_planning_models WHERE model_id=?",
+            (view["model_id"],),
+        ).fetchone()
+        if model is None:
+            raise invalid("report_source_changed")
+        attachment = {
+            "kind": "view",
+            "view_id": extra,
+            "model_id": view["model_id"],
+            "model_sha256": model[0],
+            "model_config_sha256": model[1],
+            "request_sha256": view["config_sha256"],
+            "view_sha256": view["result_sha256"],
+        }
     if kind in {"bo_recommendation", "bo_batch"}:
         table, id_column = (
             ("bayesian_recommendations", "recommendation_id")
@@ -639,6 +677,15 @@ def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> Rep
                 "inner_rec" if kind == "bo_recommendation" else "inner_batch"
             ],
         }
+        if kind == "bo_batch":
+            schema = connection.execute(
+                "SELECT result_schema_version FROM bayesian_recommendation_batches "
+                "WHERE batch_id=?",
+                (extra,),
+            ).fetchone()
+            if schema is not None and schema[0] == 13:
+                # Mixture13 stores one canonical selection payload, without an inner envelope hash.
+                attachment["result_payload_sha256"] = record["result_sha256"]
     source = BayesianHistoryReportSource.model_validate(
         dict(
             kind="bayesian_history_revision",
@@ -658,13 +705,14 @@ def _catalog_descriptor(connection: sqlite3.Connection, row: sqlite3.Row) -> Rep
             "SELECT result_schema_version FROM bayesian_recommendation_batches WHERE batch_id=?",
             (extra,),
         ).fetchone()
-        if batch is not None and batch["result_schema_version"] in {8, 9, 10, 11, 12}:
+        if batch is not None and batch["result_schema_version"] in {8, 9, 10, 11, 12, 13}:
             query_key = {
                 8: "planning_batch_id",
                 9: "augmentation_batch_id",
                 10: "mixed_planning_batch_id",
                 11: "augmentation_batch_id",
                 12: "mixed_planning_batch_id",
+                13: "mixture_planning_batch_id",
             }[batch["result_schema_version"]]
             descriptor = descriptor.model_copy(
                 update={
@@ -746,7 +794,7 @@ def _source_is_stale(connection: sqlite3.Connection, source: ReportSourceRef) ->
         return row is None or bool(row[0])
     if source.kind == "bayesian_history_revision":
         attachment = source.attachment
-        if attachment.kind != "none":
+        if attachment.kind == "recommendation" or attachment.kind == "batch":
             table, id_column, child_id = (
                 ("bayesian_recommendations", "recommendation_id", attachment.recommendation_id)
                 if attachment.kind == "recommendation"
@@ -836,5 +884,7 @@ def _supported_open_target(source: ReportSourceRef, fallback: str) -> str:
             query["recommendation_id"] = str(source.attachment.recommendation_id)
         elif source.attachment.kind == "batch":
             query["batch_id"] = str(source.attachment.batch_id)
+        elif source.attachment.kind == "view":
+            query["view_id"] = str(source.attachment.view_id)
         return "/analysis/doe/doe.bayesian_optimization?" + urlencode(query)
     return fallback

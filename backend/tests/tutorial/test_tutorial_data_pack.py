@@ -129,7 +129,7 @@ def test_tutorial_expected_versions_and_input_hashes_match_sources() -> None:
         if method_id == "doe.bayesian_optimization":
             # The recorded tutorial deliberately exercises the legacy schema-1 route.
             assert section["method_version"] == "0.6.0"
-            assert METHOD_VERSIONS[method_id] == "0.16.0"
+            assert METHOD_VERSIONS[method_id] == "0.17.0"
         else:
             assert section["method_version"] == METHOD_VERSIONS[method_id]
         assert section["input_file_sha256"] in input_hashes
@@ -194,7 +194,7 @@ def test_tutorial_bayesian_legacy_result_keeps_actual_algorithm_version(tmp_path
     ) as client:
         actual = smoke._collect_bayesian_result(client, METHOD_VERSIONS)
     assert actual["method_version"] == "0.6.0"
-    assert METHOD_VERSIONS[actual["method_id"]] == "0.16.0"
+    assert METHOD_VERSIONS[actual["method_id"]] == "0.17.0"
     assert actual["result"]["completed_observation_count"] == 5
     assert actual["result"]["trial_state"] == "pending"
     assert EXPECTED_RESULTS_PATH.read_bytes() == expected_bytes

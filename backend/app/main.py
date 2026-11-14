@@ -30,6 +30,7 @@ from app.core.trusted_lan import TrustedLanMiddleware
 from app.services.analysis_run_exports import recover_analysis_export_quarantine_files
 from app.services.analysis_run_retention import recover_analysis_run_quarantine_files
 from app.services.bayesian_review import BayesianReviewStore
+from app.services.bo_view_receipts import BoViewReceiptStore
 from app.services.dataset_cell_corrections import recover_dataset_cell_correction_files
 from app.services.dataset_version_retention import recover_dataset_version_quarantine_files
 from app.services.workspace_asset_retention import recover_workspace_asset_quarantine_files
@@ -67,6 +68,7 @@ def create_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncCont
                 yield
             finally:
                 app.state.bayesian_reviews.clear()
+                app.state.bo_view_receipts.clear()
 
     return lifespan
 
@@ -85,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = app_settings
     app.state.bayesian_reviews = BayesianReviewStore()
+    app.state.bo_view_receipts = BoViewReceiptStore()
     app.add_middleware(
         RequestBodyLimitMiddleware,
         max_request_bytes=app_settings.request_byte_limit,
@@ -119,6 +122,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(bayesian_studies_router, prefix="/api/v1")
     app.include_router(bo_planning_router, prefix="/api/v1")
     app.include_router(bo_mixed_workflow_router, prefix="/api/v1")
+    from app.api.v1.bo_mixture_workflow import router as bo_mixture_workflow_router
+
+    app.include_router(bo_mixture_workflow_router, prefix="/api/v1")
     app.include_router(datasets_router, prefix="/api/v1")
     app.include_router(dataset_versions_router, prefix="/api/v1")
     app.include_router(doe_designs_router, prefix="/api/v1")

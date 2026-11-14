@@ -239,6 +239,13 @@ def read_lhs(settings: Settings, source: LhsDesignReportSource) -> tuple[dict[st
 def read_bayesian(
     settings: Settings, source: BayesianHistoryReportSource
 ) -> tuple[dict[str, Any], str, str]:
+    from app.services.bo_mixture_studies import is_mixture_study
+
+    if is_mixture_study(settings, str(source.study_id)):
+        from app.services.bo_mixture_report_source import read_mixture_bayesian
+
+        return read_mixture_bayesian(settings, source)
+
     from app.services.bo_mixed_studies import is_mixed_study
 
     if is_mixed_study(settings, str(source.study_id)):

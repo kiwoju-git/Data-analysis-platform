@@ -154,14 +154,15 @@ def test_auto_evidence_exact_source_replay_report_and_restore(tmp_path, monkeypa
         insert = bo_planning.insert_planning_selection
         before_race = _database_rows(settings.workspace_root)
 
-        def changed_routing_before_commit(root, record):
+        def changed_routing_before_commit(root, record, *, renewal=None):
+            assert renewal is None
             with sqlite3.connect(metadata_db_path(root)) as connection:
                 connection.execute(
                     "UPDATE bayesian_planning_models SET snapshot_sha256=? WHERE model_id=?",
                     ("0" * 64, model["model_id"]),
                 )
             try:
-                return insert(root, record)
+                return insert(root, record, renewal=renewal)
             finally:
                 with sqlite3.connect(metadata_db_path(root)) as connection:
                     connection.execute(

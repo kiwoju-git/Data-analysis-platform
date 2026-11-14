@@ -17,6 +17,10 @@ import type { AugmentationManualSeed } from "./BayesianAugmentationPanel";
 import "./boPlanning.css";
 import { BayesianLooPanel } from "./BayesianLooPanel";
 import { BayesianProfileGrid } from "./BayesianProfileGrid";
+import { BayesianProfileMatrix } from "./BayesianProfileMatrix";
+import { useBoDiagnosticView } from "./hooks/useBoDiagnosticView";
+import { matrixFromReceipt } from "./boSavedViews";
+import { BoViewSaveAction } from "./BoViewSaveAction";
 
 interface Props { study: BayesianStudyResponse; fitRequest: DesirabilityReviewRequest | null; disabled?: boolean; onConfirmed: (batchId: string) => void; onConfirmingChange?: (busy: boolean) => void; manualSeed?: AugmentationManualSeed | null }
 function initialHolds(study: BayesianStudyResponse): Record<string, string> {
@@ -46,6 +50,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   const [inputError, setInputError] = useState(false);
   const [holds, setHolds] = useState(() => initialHolds(study));
   const [axis, setAxis] = useState(study.factors[0]?.factor_id ?? "");
+  const matrix = useBoDiagnosticView(`${sourceKey}:${JSON.stringify({ holds, axis, fitRequest, name, count, seed, content, header, budget })}`);
   const latestStudy = useRef(study); latestStudy.current = study;
   useEffect(() => {
     setPastePreview(null); setInputError(false); setContent(""); setHolds(initialHolds(latestStudy.current));
@@ -53,7 +58,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   }, [sourceKey]);
   const supported = study.objective.goal_type === "desirability" && [5, 6].includes(study.study_schema_version);
   if (!supported) return <section className="bo-planning"><h3>{text.title}</h3><p>{text.unsupported}</p></section>;
-  const busy = state.busy !== null, page = state.page, model = state.model;
+  const busy = state.busy !== null || matrix.pending, page = state.page, model = state.model;
   const canEdit = state.canMutate && page?.revision.source_is_current === true && page.revision.source_trial_count === study.trial_count;
   const countValue = planningInteger(count, 1, 10000), seedValue = planningInteger(seed, 0, 2147483647);
   const fitIsCurrent = fitRequest !== null && fitRequest.expected_history_revision_id === study.observation_history.history_revision_id && fitRequest.expected_history_sha256 === study.observation_history.observation_history_sha256;
@@ -75,6 +80,11 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   function importRows(replace: boolean) {
     if (!preview || !name.trim()) { setInputError(true); return; }
     state.createCandidates(name, { kind: "explicit_rows", points: preview.points }, replace);
+  }
+  function evaluateMatrix() {
+    if (!model || study.objective.goal_type !== "desirability" || !point) return;
+    void matrix.run({ studyId: study.study_id, modelId: model.model_id, modelHash: model.snapshot_sha256, historyHash: model.history_sha256, responseIds: model.objective.responses.map(row => row.response_id), factorIds: study.factors.map(row => row.factor_id) },
+      { kind: "profiler_matrix", expected_model_sha256: model.snapshot_sha256, expected_history_sha256: model.history_sha256, holds: point, points_per_axis: 21, time_budget_ms: 120000 });
   }
   return <section className="bo-planning" aria-label={text.title}>
     <h3>{text.title}</h3><p>{text.meaning}</p>
@@ -152,7 +162,9 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
           <input inputMode="decimal" value={holds[factor.factor_id] ?? ""} onChange={event => { const value = event.currentTarget.value; if (state.invalidateProfile()) setHolds(previous => ({ ...previous, [factor.factor_id]: value })); }} /></label>)}</div></fieldset>
         <label className="bo-planning-label">{text.axis}<select aria-label={text.axis} value={axis} onChange={event => { const value = event.currentTarget.value; if (state.invalidateProfile()) setAxis(value); }}>{study.factors.map(f => <option key={f.factor_id} value={f.factor_id}>{f.name}</option>)}</select></label>
         <div className="bo-planning-actions"><button type="button" className="secondary-button" disabled={disabled || busy || !point} onClick={() => { if (point) state.evaluateProfile([point], null); }}><ChartLine size={16} aria-hidden="true" />{text.point}</button>
-          <button type="button" className="secondary-button" disabled={disabled || busy || !curve} onClick={() => { if (curve) state.evaluateProfile(curve, axis); }}><ChartLine size={16} aria-hidden="true" />{text.curve}</button></div>
+          <button type="button" className="secondary-button" disabled={disabled || busy || !curve} onClick={() => { if (curve) state.evaluateProfile(curve, axis); }}><ChartLine size={16} aria-hidden="true" />{text.curve}</button>
+          <button type="button" className="secondary-button" disabled={disabled || busy || !point} onClick={evaluateMatrix}><ChartLine size={16} aria-hidden="true" />{text.evaluateMatrix}</button></div>
+        <p>{text.matrixBudget}</p>{matrix.busy && <p role="status">{text.busy}</p>}{matrix.error && <p role="alert">{text.matrixFailed}</p>}{matrix.receipt && <><BayesianProfileMatrix view={matrixFromReceipt(matrix.receipt)} /><BoViewSaveAction receipt={matrix.receipt} /></>}
         {(!point || !curve) && <p>{text.profileInvalid}</p>}
         {state.profile && <>
           {!state.profile.response.eligibility_is_current && <p>{text.eligibilityOld}</p>}
@@ -175,18 +187,22 @@ export function PlanningProfileChart({ profile, study, sourceKey }: { profile: N
   const factor = study.factors.find(f => f.factor_id === profile.axis);
   if (!factor) return null;
   const metricLabels = { mean_raw: text.mean, latent_standard_deviation_raw: text.latent, predictive_standard_deviation_raw: text.predictive };
-  const points: InteractiveScatterPoint[] = selected ? planningResponseProfilePoints(profile.response, factor.factor_id, selected.response_id, metric).map(row => ({
+  const constraints = new Map(profile.response.items.map(row => [row.row_id, row.constraints_satisfied]));
+  const constraintLabel = (satisfied: boolean) => satisfied ? text.constraintsSatisfied : text.constraintFailure;
+  const points: InteractiveScatterPoint[] = selected ? planningResponseProfilePoints(profile.response, factor.factor_id, selected.response_id, metric).map(row => {
+    const satisfied = constraints.get(row.rowId) === true, constraint = constraintLabel(satisfied);
+    return {
     id: `${row.rowId}:${selected.response_id}:${metric}`, seriesId: "response", x: row.x, y: row.value,
-    marker: "circle", markerRadius: 3, className: "bo-planning-profile-mean", title: metricLabels[metric],
-    ariaLabel: `${factor.name}: ${exact(row.x)}, ${selected.name}: ${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}`,
-    details: [{ label: factor.name, value: exact(row.x) }, { label: `${selected.name}: ${metricLabels[metric]}`, value: `${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}` }],
-  })) : profile.response.items.flatMap(row => (["mean", "sd"] as const).map((kind, i) => {
+    marker: satisfied ? "circle" : "diamond", warning: !satisfied, markerRadius: 3, className: "bo-planning-profile-mean", title: metricLabels[metric],
+    ariaLabel: `${factor.name}: ${exact(row.x)}, ${selected.name}: ${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}, ${text.constraintStatus}: ${constraint}`,
+    details: [{ label: factor.name, value: exact(row.x) }, { label: `${selected.name}: ${metricLabels[metric]}`, value: `${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}` }, { label: text.constraintStatus, value: constraint }],
+  }; }) : profile.response.items.flatMap(row => (["mean", "sd"] as const).map((kind, i) => {
     const value = kind === "mean" ? row.desirability_moments.mean : Math.sqrt(row.desirability_moments.variance);
-    const label = kind === "mean" ? text.expected : text.sd;
+    const label = kind === "mean" ? text.expected : text.sd, constraint = constraintLabel(row.constraints_satisfied);
     return { id: `${row.row_id}:${kind}`, seriesId: kind, x: row.actual_coordinates[factor.factor_id], y: value,
-      marker: i === 0 ? "circle" : "square", markerRadius: 3, className: `bo-planning-profile-${kind}`,
-      title: label, ariaLabel: `${factor.name}: ${exact(row.actual_coordinates[factor.factor_id])}, ${label}: ${exact(value)}`,
-      details: [{ label: factor.name, value: exact(row.actual_coordinates[factor.factor_id]) }, { label, value: exact(value) }], };
+      marker: !row.constraints_satisfied ? "diamond" : i === 0 ? "circle" : "square", warning: !row.constraints_satisfied, markerRadius: 3, className: `bo-planning-profile-${kind}`,
+      title: label, ariaLabel: `${factor.name}: ${exact(row.actual_coordinates[factor.factor_id])}, ${label}: ${exact(value)}, ${text.constraintStatus}: ${constraint}`,
+      details: [{ label: factor.name, value: exact(row.actual_coordinates[factor.factor_id]) }, { label, value: exact(value) }, { label: text.constraintStatus, value: constraint }], };
   }));
   const series = selected ? [{ id: "response", label: metricLabels[metric], className: "bo-planning-profile-mean", connect: "line" as const, pointIds: points.map(point => point.id) }]
     : (["mean", "sd"] as const).map(kind => ({ id: kind, label: kind === "mean" ? text.expected : text.sd, className: `bo-planning-profile-${kind}`, connect: "line" as const, pointIds: points.filter(p => p.seriesId === kind).map(p => p.id) }));

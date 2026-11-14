@@ -86,6 +86,21 @@ beforeEach(() => { api.preflightDatasetImport.mockReset(); api.createDatasetStud
 afterEach(() => { runners.splice(0).forEach(runner => runner.unmount()); setCurrentLocale("ko"); });
 
 describe("import advanced controls", () => {
+  it("keeps mixture toggles in inline native checkbox labels", () => {
+    const runner = mount();
+    const checkboxLabel = (caption: string, index = 0) => elements(runner.output).filter(node => node.type === "label" && React.Children.toArray(node.props.children as React.ReactNode).includes(caption))[index];
+    const toggle = checkboxLabel("Mixture study");
+    expect(toggle.props.className).toBe("checkbox-label");
+    const input = elements(toggle).find(node => node.type === "input" && node.props.type === "checkbox")!;
+    expect(input.props.checked).toBe(false);
+    runner.act(() => (input.props.onChange as (event: { currentTarget: { checked: boolean } }) => void)({ currentTarget: { checked: true } }));
+    expect(elements(runner.output).filter(node => node.type === "input" && node.props.type === "checkbox")).toHaveLength(3);
+    for (let index = 0; index < 2; index++) {
+      const component = checkboxLabel("Mixture components", index);
+      expect(component.props.className).toBe("checkbox-label");
+      expect(elements(component).some(node => node.type === "input" && node.props.type === "checkbox")).toBe(true);
+    }
+  });
   it("guards only referenced factor removal, kind and mapped column, preserving constraints and the goal", async () => {
     const runner = mapped(); edit(runner, "Goal", "minimize"); click(runner, "Add predictor"); edit(runner, "X 2", "z"); edit(runner, "X 2 low", "0"); edit(runner, "X 2 high", "1"); constrained(runner);
     expect(field(runner, "X 1").props.disabled).toBe(true); expect(field(runner, "X 1 type").props.disabled).toBe(true);

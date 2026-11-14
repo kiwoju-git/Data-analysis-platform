@@ -53,7 +53,7 @@ METHOD_VERSIONS: dict[str, str] = {
     "doe.latin_hypercube": "0.3.0",
     "doe.response_surface": "0.5.0",
     "doe.response_optimizer": "0.5.0",
-    "doe.bayesian_optimization": "0.16.0",
+    "doe.bayesian_optimization": "0.17.0",
 }
 
 LEGACY_METHOD_ID_ALIASES: dict[str, str] = {

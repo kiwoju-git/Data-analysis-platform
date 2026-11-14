@@ -8,12 +8,19 @@ the stored package versions, not ``restored.metadata()``'s runtime versions.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import asdict
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from app.statistics.bayesian_optimization import BayesianOptimizationError
+from app.statistics.bo_factor_domains import (
+    BoFactorDomain,
+    BoNumericFactorDomain,
+    BoPseudocomponentFactorDomain,
+    bo_factor_domains_to_payload,
+)
 from app.statistics.bo_kernels import BoKernelSpec, kernel_family, signal_kernel
 from app.statistics.bo_surrogate import BoSurrogate, BoSurrogatePolicy, split_signal_noise
 
@@ -162,6 +169,12 @@ class _Snapshot(_Strict):
     fit: _Fit
 
 
+class _AffineSnapshot(_Snapshot):
+    schema_version: Literal[2]  # type: ignore[assignment]
+    policy: Literal["bo_numeric_affine_surrogate_state_v1"]  # type: ignore[assignment]
+    factor_domains: dict[str, Any]
+
+
 def _invalid() -> BayesianOptimizationError:
     return BayesianOptimizationError(ERROR_CODE)
 
@@ -193,7 +206,9 @@ def _check_json_tree(payload: Any) -> None:
             raise _invalid()
 
 
-def _validated_snapshot(payload: Any) -> _Snapshot:
+def _validated_snapshot(
+    payload: Any, affine_factor_domains: Sequence[BoFactorDomain] | None = None
+) -> _Snapshot:
     _check_json_tree(payload)
     if (
         type(payload) is not dict
@@ -203,7 +218,19 @@ def _validated_snapshot(payload: Any) -> _Snapshot:
     ):
         raise _invalid()
     try:
-        result = _Snapshot.model_validate(payload)
+        if affine_factor_domains is None:
+            result: _Snapshot = _Snapshot.model_validate(payload)
+        else:
+            if not all(
+                isinstance(f, BoNumericFactorDomain) for f in affine_factor_domains
+            ) or not any(
+                isinstance(f, BoPseudocomponentFactorDomain) for f in affine_factor_domains
+            ):
+                raise _invalid()
+            affine = _AffineSnapshot.model_validate(payload)
+            if affine.factor_domains != bo_factor_domains_to_payload(affine_factor_domains):
+                raise _invalid()
+            result = affine
     except ValidationError:
         raise _invalid() from None
     diagnostics = payload["fit"]["diagnostics"]
@@ -317,7 +344,10 @@ def _check_fit(state: _Snapshot, parameter_count: int) -> None:
 
 
 def load_bo_surrogate(
-    payload: Any, *, expected_training_targets_scaled: Any | None = None
+    payload: Any,
+    *,
+    expected_training_targets_scaled: Any | None = None,
+    affine_factor_domains: Sequence[BoFactorDomain] | None = None,
 ) -> BoSurrogate:
     """Restore known numeric kernels and validated arrays, without fitting.
 
@@ -326,9 +356,19 @@ def load_bo_surrogate(
     """
     import numpy as np
 
-    state = _validated_snapshot(payload)
+    state = _validated_snapshot(payload, affine_factor_domains)
     training = state.training
     n, dimensions = len(training.x_normalized), len(training.x_normalized[0])
+    upper: Any = 1
+    if affine_factor_domains is not None:
+        if len(affine_factor_domains) != dimensions:
+            raise _invalid()
+        upper = np.array(
+            [
+                f.encoded_high if isinstance(f, BoPseudocomponentFactorDomain) else 1.0
+                for f in affine_factor_domains
+            ]
+        )
     if (
         any(len(row) != dimensions for row in training.x_normalized)
         or len(training.targets_scaled) != n
@@ -348,7 +388,7 @@ def load_bo_surrogate(
     targets = np.array(training.targets_scaled, dtype=float)
     if (
         np.any(points < 0)
-        or np.any(points > 1)
+        or np.any(points > upper)
         or np.any(np.triu(lower, 1) != 0)
         or np.any(np.diag(lower) <= 0)
     ):
@@ -415,7 +455,12 @@ def _target_list(values: Any) -> Any:
     return values
 
 
-def dump_bo_surrogate(model: BoSurrogate, *, training_targets_scaled: Any) -> dict[str, Any]:
+def dump_bo_surrogate(
+    model: BoSurrogate,
+    *,
+    training_targets_scaled: Any,
+    affine_factor_domains: Sequence[BoFactorDomain] | None = None,
+) -> dict[str, Any]:
     """Create a new snapshot; never infer missing targets from the stored solve."""
     import numpy as np
 
@@ -430,8 +475,10 @@ def dump_bo_surrogate(model: BoSurrogate, *, training_targets_scaled: Any) -> di
     if model.kernel_spec is not None and model.kernel_spec.kind != family:
         raise _invalid()
     payload = {
-        "schema_version": SNAPSHOT_SCHEMA_VERSION,
-        "policy": SNAPSHOT_POLICY,
+        "schema_version": SNAPSHOT_SCHEMA_VERSION if affine_factor_domains is None else 2,
+        "policy": SNAPSHOT_POLICY
+        if affine_factor_domains is None
+        else "bo_numeric_affine_surrogate_state_v1",
         "kernel": {
             "family": family,
             "amplitude": float(signal.k1.constant_value),
@@ -463,7 +510,9 @@ def dump_bo_surrogate(model: BoSurrogate, *, training_targets_scaled: Any) -> di
             "package_versions": model.metadata()["package_versions"],
         },
     }
-    state = _validated_snapshot(payload)
+    if affine_factor_domains is not None:
+        payload["factor_domains"] = bo_factor_domains_to_payload(affine_factor_domains)
+    state = _validated_snapshot(payload, affine_factor_domains)
     detached = state.model_dump(mode="json")
-    load_bo_surrogate(detached)
+    load_bo_surrogate(detached, affine_factor_domains=affine_factor_domains)
     return detached

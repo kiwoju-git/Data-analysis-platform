@@ -33,7 +33,7 @@ def test_metadata_33_upgrade_is_additive_and_preserves_generated_study(tmp_path,
             table: db.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()
             for table in tables
         }
-    assert metadata.initialize_metadata_store(tmp_path).schema_version == 34
+    assert metadata.initialize_metadata_store(tmp_path).schema_version == metadata.SCHEMA_VERSION
     with sqlite3.connect(metadata.metadata_db_path(tmp_path)) as db:
         assert {
             table: db.execute(f"SELECT * FROM {table} ORDER BY rowid").fetchall()

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { AnalysisFilterSnapshot, DatasetVersionResponse } from "../../api";
 import type { AnyBayesianStudyResponse } from "../../api/types/boMixed";
+import type { MixtureStudy } from "../../api/boMixture";
+import { mixtureMessages } from "../../i18n/boMixture";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { datasetImportMessages } from "../../i18n/boDatasetImport";
 import { mixedMessages } from "../../i18n/boMixed";
@@ -20,7 +22,7 @@ export interface BayesianDatasetSourceProps {
 }
 interface Props extends BayesianDatasetSourceProps {
   ownerKey: string; disabled: boolean; onBusyChange: (value: boolean) => void;
-  onCreated: (value: AnyBayesianStudyResponse) => void;
+  onCreated: (value: AnyBayesianStudyResponse | MixtureStudy) => void;
 }
 export function BayesianDatasetImportPanel(props: Props) {
   const { locale } = useI18n();
@@ -66,13 +68,19 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
     <fieldset disabled={state.busy === "create" || (disabled && !working)}>
       <legend>{text.mappingLegend}</legend>
       <label>{text.studyName}<input aria-label={text.studyNameInput} value={draft.name} maxLength={120} onChange={event => { const value = event.currentTarget.value; edit(current => ({ ...current, name: value })); }} /></label>
+      <label className="checkbox-label"><input type="checkbox" checked={!!draft.mixture} onChange={event => { const checked = event.currentTarget.checked; edit(current => {
+        if (!checked) return { ...current, mixture: undefined };
+        const rows = current.factors.length < 2 ? [...current.factors, { ...newMixedFactor(next.current++), columnId: "", low: "", high: "" }] : current.factors;
+        return { ...current, factors: rows, mixture: { total: "1", unit: "g", coding: "auto", componentKeys: [] } };
+      }); }} />{mixtureMessages(locale).title}</label>
+      {draft.mixture && <><div className="form-grid">{(["total", "unit"] as const).map(field => <label key={field}>{mixtureMessages(locale)[field]}<input value={draft.mixture![field]} inputMode={field === "total" ? "decimal" : "text"} onChange={event => { const value = event.currentTarget.value; edit(current => current.mixture ? { ...current, mixture: { ...current.mixture, [field]: value } } : current); }} /></label>)}<label>{mixtureMessages(locale).coding}<select aria-label={mixtureMessages(locale).coding} value={draft.mixture.coding} onChange={event => { const coding = event.currentTarget.value as "lower" | "upper" | "auto"; edit(current => current.mixture ? { ...current, mixture: { ...current.mixture, coding } } : current); }}>{(["lower", "upper", "auto"] as const).map(value => <option key={value} value={value}>{mixtureMessages(locale)[value]}</option>)}</select></label></div><p>{mixtureMessages(locale).closure}</p></>}
       <div className="table-wrap"><table className="result-table"><caption>{text.predictorsCaption}</caption>
         <thead><tr>{[text.column, text.type, text.domain, text.remove].map(label => <th key={label}>{label}</th>)}</tr></thead>
         <tbody>{draft.factors.map((row, index) => {
           const locked = referenced(draft, row.factorId), description = locked ? `bo-import-locked-${row.key}` : undefined;
           return <tr key={row.key}>
           <td>{selectColumn(`X ${index + 1}`, row.columnId, value => factor(row.key, "columnId", value), locked, description)}</td>
-          <td><select aria-label={`X ${index + 1} ${text.typeInput}`} disabled={locked} aria-describedby={description} value={row.kind} onChange={event => factor(row.key, "kind", event.currentTarget.value)}>
+          <td>{draft.mixture && <label className="checkbox-label"><input type="checkbox" checked={draft.mixture.componentKeys.includes(row.key)} disabled={locked} onChange={event => { const checked = event.currentTarget.checked; edit(current => current.mixture ? { ...current, factors: current.factors.map(factor => factor.key === row.key && checked ? { ...factor, kind: "continuous" } : factor), mixture: { ...current.mixture, componentKeys: checked ? [...current.mixture.componentKeys, row.key] : current.mixture.componentKeys.filter(key => key !== row.key) } } : current); }} />{mixtureMessages(locale).components}</label>}<select aria-label={`X ${index + 1} ${text.typeInput}`} disabled={locked || !!draft.mixture?.componentKeys.includes(row.key)} aria-describedby={description} value={row.kind} onChange={event => factor(row.key, "kind", event.currentTarget.value)}>
             <option value="continuous">{text.continuous}</option><option value="discrete_numeric">{text.discreteNumeric}</option><option value="nominal">{text.nominal}</option><option value="ordinal">{text.ordinal}</option>
           </select>{locked && <p id={description} className="muted">{text.constrainedFactor}</p>}{row.kind === "nominal" && row.correlation === "ordinal_monotone_latent_rbf_v1" && <p role="alert">{text.incompatiblePolicy}</p>}</td>
           <td>{row.kind === "nominal" || row.kind === "ordinal" ? <label>{text.levelsHint}<textarea aria-label={`X ${index + 1} ${text.levelsInput}`} value={row.levels.join("\n")} onChange={event => factor(row.key, "levels", event.currentTarget.value.split("\n"))} /></label> : <div className="form-grid">
@@ -81,8 +89,9 @@ function ImportForm({ version, filterSnapshot, disabled, onBusyChange, onCreated
           <td><button type="button" className="secondary-button" title={text.removePredictor} aria-label={`${text.removePredictor} ${index + 1}`} aria-describedby={description} disabled={draft.factors.length <= 1 || locked} onClick={() => edit(current => referenced(current, row.factorId) ? current : ({ ...current, factors: current.factors.filter(item => item.key !== row.key) }))}><Trash2 size={16} /></button></td>
         </tr>; })}</tbody></table></div>
       <button type="button" className="secondary-button" disabled={draft.factors.length >= 10} onClick={() => { const key = next.current++; edit(current => ({ ...current, factors: [...current.factors, { ...newMixedFactor(key), columnId: "", low: "", high: "", levels: [""] }] })); }}><Plus size={16} />{text.addPredictor}</button>
+      {draft.mixture && draft.responseMode === "scalar" && <p role="alert">{locale === "ko" ? "혼합물은 만족도 반응 목표가 필요합니다. 반응 목적을 직접 선택하십시오. 기존 단일 반응은 자동 변환하지 않습니다." : "Mixtures require desirability response goals. Select the response objective explicitly; existing scalar goals are not converted."}</p>}
       <label>{text.responseObjective}<select aria-label={text.responseObjective} value={draft.responseMode} onChange={event => { const value = event.currentTarget.value as "scalar" | "vector"; edit(current => ({ ...current, responseMode: value })); }}>
-        <option value="scalar">{text.singleResponse}</option><option value="vector">{text.desirabilityResponses}</option>
+        <option value="scalar" disabled={!!draft.mixture}>{text.singleResponse}</option><option value="vector">{text.desirabilityResponses}</option>
       </select></label>
       {draft.responseMode === "scalar" ? <div className="form-grid">
         <label>Y{selectColumn("Y", draft.scalarColumnId, value => edit(current => ({ ...current, scalarColumnId: value })))}</label>

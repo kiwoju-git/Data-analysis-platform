@@ -24,6 +24,7 @@ from app.statistics.bo_factor_domains import (
     BoCorrelationPolicy,
     BoFactorDomain,
     BoNumericFactorDomain,
+    BoPseudocomponentFactorDomain,
     category_parameter_count,
     validate_bo_factor_domains,
 )
@@ -169,6 +170,7 @@ class BoFactorKernel(Kernel):  # type: ignore[misc]
         category_specs: tuple[BoCategoryKernelSpec, ...],
         category_parameters: Any,
         category_parameter_bounds: Any = "fixed",
+        numeric_coordinate_upper: tuple[float, ...] | None = None,
     ) -> None:
         # sklearn.clone requires constructor arguments to be retained unchanged.
         self.numeric_kernel = numeric_kernel
@@ -176,6 +178,7 @@ class BoFactorKernel(Kernel):  # type: ignore[misc]
         self.category_specs = category_specs
         self.category_parameters = category_parameters
         self.category_parameter_bounds = category_parameter_bounds
+        self.numeric_coordinate_upper = numeric_coordinate_upper
 
     def _parameters(self) -> tuple[Any, Any]:
         if not isinstance(self.numeric_indices, tuple) or not isinstance(
@@ -193,6 +196,14 @@ class BoFactorKernel(Kernel):  # type: ignore[misc]
         ):
             raise _invalid()
         _numeric_kernel_payload(self.numeric_kernel, len(self.numeric_indices))
+        if self.numeric_coordinate_upper is not None:
+            if not isinstance(self.numeric_coordinate_upper, tuple):
+                raise _invalid()
+            coordinate_upper = _numeric_array(self.numeric_coordinate_upper)
+            if coordinate_upper.shape != (len(self.numeric_indices),) or np.any(
+                coordinate_upper < 0
+            ):
+                raise _invalid()
         count = sum(spec.parameter_count for spec in self.category_specs)
         if count > MAX_BO_CATEGORY_PARAMETERS:
             raise _invalid()
@@ -302,7 +313,12 @@ class BoFactorKernel(Kernel):  # type: ignore[misc]
         if matrix.ndim != 2 or matrix.shape[1] != expected or not 0 <= len(matrix) <= 10_000:
             raise _invalid()
         numeric = matrix[:, self.numeric_indices]
-        if np.any(numeric < 0) or np.any(numeric > 1):
+        upper = (
+            1
+            if self.numeric_coordinate_upper is None
+            else np.asarray(self.numeric_coordinate_upper)
+        )
+        if np.any(numeric < 0) or np.any(numeric > upper):
             raise _invalid()
         for spec in self.category_specs:
             codes = matrix[:, spec.index]
@@ -404,7 +420,10 @@ def build_bo_factor_kernel(factors: Sequence[BoFactorDomain], spec: BoKernelSpec
             default = 1.0 / (category.level_count - 1)
         parameters.extend([default] * category.parameter_count)
         bounds.extend([category.parameter_bounds] * category.parameter_count)
-    result = BoFactorKernel(numeric, numeric_indices, categories, parameters, bounds)
+    coordinate_upper = _coordinate_upper(factors)
+    result = BoFactorKernel(
+        numeric, numeric_indices, categories, parameters, bounds, coordinate_upper
+    )
     result._parameters()
     return result
 
@@ -470,9 +489,11 @@ def bo_factor_kernel_to_payload(kernel: BoFactorKernel) -> dict[str, Any]:
     if type(kernel) is not BoFactorKernel:
         raise _invalid()
     parameters, bounds = kernel._parameters()
-    return {
-        "schema_version": 1,
-        "kind": "bo_product_factor_signal_v1",
+    payload = {
+        "schema_version": 1 if kernel.numeric_coordinate_upper is None else 2,
+        "kind": "bo_product_factor_signal_v1"
+        if kernel.numeric_coordinate_upper is None
+        else "bo_product_factor_signal_affine_coordinates_v1",
         "numeric_indices": list(kernel.numeric_indices),
         "categories": [
             {
@@ -489,24 +510,36 @@ def bo_factor_kernel_to_payload(kernel: BoFactorKernel) -> dict[str, Any]:
             kernel.numeric_kernel, len(kernel.numeric_indices)
         ),
     }
+    if kernel.numeric_coordinate_upper is not None:
+        payload["numeric_coordinate_upper"] = list(kernel.numeric_coordinate_upper)
+    return payload
 
 
 def bo_factor_kernel_from_payload(payload: Any) -> BoFactorKernel:
+    affine = isinstance(payload, dict) and payload.get("schema_version") == 2
     if (
         not isinstance(payload, dict)
         or set(payload)
-        != {
-            "schema_version",
-            "kind",
-            "numeric_indices",
-            "categories",
-            "parameters",
-            "parameter_bounds",
-            "numeric_signal",
-        }
+        != (
+            {
+                "schema_version",
+                "kind",
+                "numeric_indices",
+                "categories",
+                "parameters",
+                "parameter_bounds",
+                "numeric_signal",
+            }
+            | ({"numeric_coordinate_upper"} if affine else set())
+        )
         or type(payload["schema_version"]) is not int
-        or payload["schema_version"] != 1
-        or payload["kind"] != "bo_product_factor_signal_v1"
+        or payload["schema_version"] != (2 if affine else 1)
+        or payload["kind"]
+        != (
+            "bo_product_factor_signal_affine_coordinates_v1"
+            if affine
+            else "bo_product_factor_signal_v1"
+        )
     ):
         raise _invalid()
     if (
@@ -563,7 +596,12 @@ def bo_factor_kernel_from_payload(payload: Any) -> BoFactorKernel:
     parameters = _numeric_array(payload["parameters"]).copy()
     bounds_value = payload["parameter_bounds"]
     bounds = bounds_value if isinstance(bounds_value, str) else _numeric_array(bounds_value).copy()
-    result = BoFactorKernel(signal, numeric_indices, tuple(categories), parameters, bounds)
+    upper = None
+    if affine:
+        if type(payload["numeric_coordinate_upper"]) is not list:
+            raise _invalid()
+        upper = tuple(payload["numeric_coordinate_upper"])
+    result = BoFactorKernel(signal, numeric_indices, tuple(categories), parameters, bounds, upper)
     result._parameters()
     return result
 
@@ -582,8 +620,22 @@ def validate_bo_factor_kernel_domains(
         for index, factor in enumerate(factors)
         if isinstance(factor, BoCategoricalFactorDomain)
     )
-    if kernel.numeric_indices != numeric or kernel.category_specs != categories:
+    if (
+        kernel.numeric_indices != numeric
+        or kernel.category_specs != categories
+        or kernel.numeric_coordinate_upper != _coordinate_upper(factors)
+    ):
         raise ValueError("bayesian_factor_kernel_domain_mismatch")
+
+
+def _coordinate_upper(factors: Sequence[BoFactorDomain]) -> tuple[float, ...] | None:
+    if not any(isinstance(f, BoPseudocomponentFactorDomain) for f in factors):
+        return None
+    return tuple(
+        f.encoded_high if isinstance(f, BoPseudocomponentFactorDomain) else 1.0
+        for f in factors
+        if isinstance(f, BoNumericFactorDomain)
+    )
 
 
 def hyperspherical_parameters_from_correlation(correlation: Any) -> Any:

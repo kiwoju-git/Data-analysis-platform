@@ -12,7 +12,7 @@ from playwright.sync_api import expect
 def verify_loo(page, api: str, model: dict, output: Path, *, mixed: bool = False) -> dict:
     family = "/mixed-planning-models/" if mixed else "/planning-models/"
     model_url = api + family + model["model_id"]
-    endpoint = model_url + "/loo"
+    endpoint = api + "/planning-models/" + model["model_id"] + "/view-evaluations"
     before = page.request.get(api).json()
     before_model = page.request.get(model_url).json()
     requests = []
@@ -26,7 +26,20 @@ def verify_loo(page, api: str, model: dict, output: Path, *, mixed: bool = False
     with page.expect_response(endpoint, timeout=90000) as calculated:
         panel.get_by_role("button", name="Calculate LOO", exact=True).click()
     assert calculated.value.status == 200, calculated.value.text()
-    view = calculated.value.json()
+    receipt = calculated.value.json()
+    payload = receipt["payload"]
+    view = {
+        "schema_version": 1,
+        "study_id": payload["source"]["study_id"],
+        "model_id": payload["source"]["model_id"],
+        "model_sha256": payload["source"]["model_sha256"],
+        "config_sha256": payload["source"]["model_config_sha256"],
+        "source_history_revision_id": payload["source"]["history_revision_id"],
+        "history_sha256": payload["source"]["history_sha256"],
+        "source_is_current": model["source_is_current"],
+        "calculation_sha256": payload["calculation_sha256"],
+        "calculation": payload["calculation"],
+    }
     expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_be_enabled()
     assert view["model_sha256"] == model["snapshot_sha256"]
     assert view["history_sha256"] == model["history_sha256"]
@@ -72,12 +85,12 @@ def verify_loo(page, api: str, model: dict, output: Path, *, mixed: bool = False
     assert page.request.get(api).json() == before
     page.remove_listener("request", record)
     if not mixed:
-        verify_source_lane(page, api, model, view, endpoint)
+        verify_source_lane(page, api, model, receipt, endpoint)
     (output / "loo-receipt.json").write_text(json.dumps(view, indent=2), encoding="utf-8")
     return view
 
 
-def verify_source_lane(page, api: str, model: dict, view: dict, endpoint: str) -> None:
+def verify_source_lane(page, api: str, model: dict, receipt: dict, endpoint: str) -> None:
     # A second real model is only synthetic test setup, not a fabricated response.
     parsed = urlsplit(api)
     base = f"{parsed.scheme}://{parsed.netloc}"
@@ -106,12 +119,12 @@ def verify_source_lane(page, api: str, model: dict, view: dict, endpoint: str) -
         panel.get_by_role("button", name="Calculate LOO", exact=True).click()
         expect(panel.get_by_text("Calculating LOO", exact=True)).to_be_visible()
         assert len(held) == 2
-        held[0].fulfill(status=409 if old_error else 200, json={"error": {"code": "synthetic_late_failure"}} if old_error else view)
+        held[0].fulfill(status=409 if old_error else 200, json={"error": {"code": "synthetic_late_failure"}} if old_error else receipt)
         expect(panel.get_by_text("Calculating LOO", exact=True)).to_be_visible()
         expect(panel.get_by_role("alert")).to_have_count(0)
         expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_have_count(0)
         expect(panel.locator(".bo-loo-residual")).to_have_count(0)
-        held[1].fulfill(json=view)
+        held[1].fulfill(json=receipt)
         expect(panel.get_by_role("button", name="Download diagnostic JSON")).to_be_visible()
-        expect(panel.locator(".bo-loo-residual")).to_have_count(len(view["calculation"]["responses"]))
+        expect(panel.locator(".bo-loo-residual")).to_have_count(len(receipt["payload"]["calculation"]["responses"]))
         page.unroute(endpoint)

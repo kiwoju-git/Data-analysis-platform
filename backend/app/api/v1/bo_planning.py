@@ -5,11 +5,17 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, status
 
 from app.api.v1.schemas import bo_planning as dto
+from app.api.v1.schemas import bo_views as view_dto
 from app.api.v1.schemas.bo_augmentation import (
     AugmentationRequest,
     AugmentationSelectionResponse,
 )
 from app.api.v1.schemas.bo_augmentation_batch import AugmentationBatchResponse
+from app.api.v1.schemas.bo_augmentation_renewal import (
+    AugmentationRenewalLineage,
+    AugmentationRenewalRequest,
+    AugmentationRenewalResponse,
+)
 from app.api.v1.schemas.bo_auto_strategy import AutoStrategyRequest, AutoStrategyView
 from app.api.v1.schemas.bo_candidates_v2 import (
     CandidatePageV2,
@@ -24,6 +30,54 @@ from app.services import bo_planning as service
 from app.services.bo_planning_batches import confirm_planning_selection, get_planning_batch
 
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-planning"])
+
+
+@router.post(
+    "/{study_id}/planning-models/{model_id}/view-evaluations",
+    response_model=view_dto.ViewEvaluationReceipt,
+)
+def evaluate_saved_view(
+    request: Request, study_id: UUID, model_id: UUID, body: view_dto.ViewEvaluationRequest
+) -> view_dto.ViewEvaluationReceipt:
+    from app.services.bo_views import evaluate_view
+
+    return evaluate_view(
+        request.app.state.settings, request.app.state.bo_view_receipts, study_id, model_id, body
+    )
+
+
+@router.post(
+    "/{study_id}/views", response_model=view_dto.SavedView, status_code=status.HTTP_201_CREATED
+)
+def save_diagnostic_view(
+    request: Request, study_id: UUID, body: view_dto.SaveViewRequest
+) -> view_dto.SavedView:
+    from app.services.bo_views import save_view
+
+    return save_view(request.app.state.settings, request.app.state.bo_view_receipts, study_id, body)
+
+
+@router.get("/{study_id}/views", response_model=view_dto.SavedViewList)
+def list_diagnostic_views(request: Request, study_id: UUID) -> view_dto.SavedViewList:
+    from app.services.bo_views import list_views
+
+    return list_views(request.app.state.settings, study_id)
+
+
+@router.get("/{study_id}/views/{view_id}", response_model=view_dto.SavedView)
+def read_diagnostic_view(request: Request, study_id: UUID, view_id: UUID) -> view_dto.SavedView:
+    from app.services.bo_views import read_view
+
+    return read_view(request.app.state.settings, study_id, view_id)
+
+
+@router.get("/{study_id}/views/{view_id}/report-source", response_model=ReportSourceDescriptor)
+def diagnostic_view_report_source(
+    request: Request, study_id: UUID, view_id: UUID
+) -> ReportSourceDescriptor:
+    from app.services.bo_view_report import resolve_view_report_source
+
+    return resolve_view_report_source(request.app.state.settings, study_id, view_id)
 
 
 @router.post(
@@ -66,6 +120,37 @@ def get_augmentation(
     from app.services.bo_augmentation import get_augmentation_selection
 
     return get_augmentation_selection(request.app.state.settings, study_id, selection_id)
+
+
+@router.post(
+    "/{study_id}/augmentations/{selection_id}/renew",
+    response_model=AugmentationRenewalResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def renew_augmentation(
+    request: Request, study_id: UUID, selection_id: UUID, body: AugmentationRenewalRequest
+) -> AugmentationRenewalResponse:
+    from app.services.bo_augmentation_renewal import renew_augmentation_selection
+
+    return renew_augmentation_selection(request.app.state.settings, study_id, selection_id, body)
+
+
+@router.get(
+    "/{study_id}/augmentations/{selection_id}/renewal",
+    response_model=AugmentationRenewalLineage | None,
+)
+def read_augmentation_renewal(
+    request: Request, study_id: UUID, selection_id: UUID
+) -> AugmentationRenewalLineage | None:
+    from app.services.bo_augmentation import get_augmentation_selection
+    from app.storage.bo_planning import get_augmentation_renewal
+
+    settings = request.app.state.settings
+    selected = get_augmentation_selection(settings, study_id, selection_id)
+    lineage = get_augmentation_renewal(
+        settings.workspace_root, str(selection_id), str(selected.study_version_id)
+    )
+    return None if lineage is None else AugmentationRenewalLineage.model_validate(lineage)
 
 
 @router.post(

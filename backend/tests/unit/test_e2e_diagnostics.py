@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import subprocess
@@ -34,6 +35,26 @@ def browser_fixture():
     page.content.return_value = "<html lang='ko'></html>"
     page.screenshot.return_value = b"synthetic-image"
     return browser, context, page
+
+
+def test_chart_fixture_failure_keeps_actual_child_evidence(diagnostics, tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3] / "tests/e2e"))
+    charts = importlib.import_module("result_charts")
+    monkeypatch.setattr(charts, "diagnosed_page", diagnostics.diagnosed_page)
+    browser, context, page = browser_fixture()
+    page.url = "http://127.0.0.1/tests/chart-interaction.html"
+    original = AssertionError("Synthetic chart fixture navigation failed")
+    page.goto.side_effect = original
+    with pytest.raises(AssertionError) as caught:
+        charts.verify_chart_interactions(browser, "http://127.0.0.1", tmp_path)
+    assert caught.value is original
+    target = tmp_path / "chart-interactions"
+    assert getattr(original, "e2e_child_diagnostics", None) == str(target)
+    evidence = json.loads((target / "failure.json").read_text(encoding="utf-8"))
+    assert evidence["url"] == page.url
+    assert evidence["stage"] == "chart-interactions"
+    context.tracing.stop.assert_called_once_with(path=str(target / "trace.zip"))
+    context.close.assert_called_once()
 
 
 def test_capture_and_cleanup_failures_do_not_replace_original(diagnostics, tmp_path, monkeypatch):

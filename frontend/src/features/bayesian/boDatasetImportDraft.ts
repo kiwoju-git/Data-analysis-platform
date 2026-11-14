@@ -3,6 +3,8 @@ import type { DatasetImportRequest } from "../../api/types/boDatasetImport";
 import { parseDoeResponseNumber } from "../../doe/doeResponsePaste";
 import { buildVectorObjective, type ResponseGoalDraft } from "./bayesianVectorDraft";
 import { parseMixedConstraintDefinitions, parseMixedFactorDefinitions, type MixedConstraintDraft, type MixedFactorDraft } from "./boMixedDraft";
+import type { MixtureDatasetImportRequest } from "../../api/boMixture";
+import { buildMixtureDatasetRequest } from "./boMixtureDraft";
 
 export interface DatasetImportFactorDraft extends MixedFactorDraft { columnId: string }
 export interface DatasetImportDraft {
@@ -11,11 +13,13 @@ export interface DatasetImportDraft {
   responses: ResponseGoalDraft[]; responseColumns: Record<string, string>;
   constraints: MixedConstraintDraft[]; missingPolicy: "reject" | "complete_case";
   displayNames?: Record<string, string>;
+  mixture?: { total: string; unit: string; coding: "lower" | "upper" | "auto"; componentKeys: number[] };
 }
 type ImportVersion = Pick<DatasetVersionResponse, "version_id" | "schema_hash"> & {
   columns: Pick<DatasetColumnResponse, "column_id" | "display_name" | "unit">[];
 };
-export function buildDatasetImportRequest(version: ImportVersion, filter: AnalysisFilterSnapshot, draft: DatasetImportDraft): DatasetImportRequest | string {
+export function buildDatasetImportRequest(version: ImportVersion, filter: AnalysisFilterSnapshot, draft: DatasetImportDraft): DatasetImportRequest | MixtureDatasetImportRequest | string {
+  if (draft.mixture) return buildMixtureDatasetRequest(version, filter, draft);
   const invalid = "bayesian_import_mapping_invalid";
   if (!draft.name.trim() || draft.name.trim().length > 120) return invalid;
   const column = (id: string) => version.columns.find(item => item.column_id === id);

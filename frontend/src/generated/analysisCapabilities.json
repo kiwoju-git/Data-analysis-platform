@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 43,
-  "metadata_schema_version": 34,
+  "api_contract_version": 44,
+  "metadata_schema_version": 37,
   "methods": [
     {
       "method_id": "eda.descriptive",
@@ -2894,7 +2894,7 @@
     },
     {
       "method_id": "doe.bayesian_optimization",
-      "method_version": "0.16.0",
+      "method_version": "0.17.0",
       "module_id": "doe",
       "label_ko": "베이지안 최적화",
       "label_en": "Bayesian Optimization",
@@ -2912,6 +2912,41 @@
       "disabled_reason": null,
       "entry_kind": "catalog_method",
       "reports": [
+        {
+          "source_kind": "doe_analysis",
+          "method_id": "doe.bayesian_optimization",
+          "summary_type": "bayesian_saved_view",
+          "accepted_schemas": [
+            1
+          ],
+          "renderer_id": "dedicated_bayesian",
+          "renderer_version": "1.0.0",
+          "variants": [
+            {
+              "variant_id": "bayesian",
+              "sections": [
+                {
+                  "section_id": "source",
+                  "core": true
+                },
+                {
+                  "section_id": "definition",
+                  "core": true
+                },
+                {
+                  "section_id": "history",
+                  "core": true
+                },
+                {
+                  "section_id": "warnings",
+                  "core": false
+                }
+              ]
+            }
+          ],
+          "level": "assessed_from_exact_stored_payload",
+          "historical_reading": "declared_schemas_only_no_rewrite"
+        },
         {
           "source_kind": "bayesian_history_revision",
           "method_id": "doe.bayesian_optimization",

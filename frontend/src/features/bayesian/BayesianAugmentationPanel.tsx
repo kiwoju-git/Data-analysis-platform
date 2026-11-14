@@ -15,6 +15,7 @@ import { PlanningFitSummary } from "./BayesianPlanningPanel";
 import { BayesianAutoStrategyPanel } from "./BayesianAutoStrategyPanel";
 import { BayesianAutoEvidence } from "./BayesianAutoEvidence";
 import { autoEvidenceMessages } from "../../i18n/boAutoEvidence";
+import { AugmentationRenewalNotice } from "./AugmentationRenewalNotice";
 import "./boPlanning.css";
 
 export interface AugmentationManualSeed { id: string; studyId: string; modelId: string; points: Record<string, number>[] }
@@ -90,7 +91,10 @@ function AugmentationBody({ study, disabled, onConfirmed, onConfirmingChange, on
     </fieldset>
     {state.model && !modelFree && <PlanningFitSummary model={state.model} />}
     <details><summary>{text.openReview}</summary><label>{text.reviewId}<input value={savedId} disabled={lock} onChange={event => setSavedId(event.currentTarget.value)} /></label><button type="button" className="secondary-button" disabled={lock || !planningId(savedId)} onClick={() => state.openSelection(savedId)}><FolderOpen size={16} aria-hidden="true" />{text.openReview}</button></details>
-    {state.selection && <><AugmentationSelectionDetails selection={state.selection} study={study} /><div className="bo-planning-actions">
+    {state.selection && <><AugmentationSelectionDetails selection={state.selection} study={study} />
+      <AugmentationRenewalNotice required={state.needsRenewal} lineage={state.renewal} confirmed={state.selection.confirmed_batch_id !== null}
+        disabled={lock || !state.canRenew} onRenew={state.renew} onOpenOriginal={state.openSelection} />
+      <div className="bo-planning-actions">
       <button type="button" className="primary-button" disabled={lock || !state.canConfirm} onClick={state.confirm}><Check size={16} aria-hidden="true" />{common.confirm}</button>
       {state.selection.confirmed_batch_id && <button type="button" className="secondary-button" onClick={() => onConfirmed(state.selection!.confirmed_batch_id!)}>{common.openBatch}</button>}
       {onManual && <button type="button" className="secondary-button" disabled={lock || !manualAvailable} onClick={() => { if (state.selection && state.model) onManual({ id: `${state.selection.selection_id}:${++manualSequence.current}`, studyId: study.study_id, modelId: state.model.model_id, points: state.selection.calculation.selected_rows.map(row => ({ ...row.actual_coordinates })) }); }}><ListPlus size={16} aria-hidden="true" />{text.manual}</button>}

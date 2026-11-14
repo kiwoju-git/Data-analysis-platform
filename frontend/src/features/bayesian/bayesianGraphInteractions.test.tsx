@@ -1,14 +1,18 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { requestBoLoo, type BoLooView } from "../../api/boLoo";
+import type { BoLooView } from "../../api/boLoo";
+import { evaluateBoView, type BoViewReceipt } from "../../api/boViews";
 import { setCurrentLocale } from "../../i18n/store";
 import { InteractiveScatterChart, type InteractiveScatterChartProps } from "../../charts/InteractiveScatterChart";
 import { BayesianLooPanel } from "./BayesianLooPanel";
 import { MixedProfileView } from "./BayesianMixedPlanningPanel";
 import { mixedPlanningFixture } from "./boMixedPlanning.test.fixture";
 
-vi.mock("../../api/boLoo", () => ({ requestBoLoo: vi.fn() }));
+vi.mock("../../api/boViews", async importOriginal => ({
+  ...await importOriginal<typeof import("../../api/boViews")>(),
+  evaluateBoView: vi.fn(),
+}));
 type Element = React.ReactElement<Record<string, unknown>>;
 type Slot = { value?: unknown; deps?: React.DependencyList; cleanup?: () => void };
 const dispatcher = (React as unknown as { __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: { ReactCurrentDispatcher: { current: unknown } } }).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
@@ -82,12 +86,20 @@ describe("applied BO graph interactions", () => {
       source_history_revision_id: model.source_history_revision_id, history_sha256: model.history_sha256, source_is_current: true, calculation_sha256: "f".repeat(64),
       calculation: { schema_version: 1, policy: "fixed_full_fit_parameters_row_loo_v1", evaluation_unit: "individual_observed_trial", normalization_policy: "frozen_full_fit_mean_scale", r_squared_policy: "one_minus_press_over_raw_centered_tss", model_refit: false, auto_routing_applied: false, warnings: [],
         responses: model.objective.responses.map((response, index) => ({ response_id: response.response_id, raw_observation_count: 3, effective_training_count: 2, n_scored: 3, rmse: index === 0 ? 1 : 0, r_squared: index === 0 ? -2 : null, r_squared_reason: index === 0 ? null : "constant_observations", points: index === 0 ? points : points.map(point => ({ ...point, predicted: 5, residual: 0 })) })) } };
-    vi.mocked(requestBoLoo).mockResolvedValue(view);
+    const receipt: BoViewReceipt = { receipt_id: "loo-receipt", request_sha256: "d".repeat(64), view_sha256: "e".repeat(64), expires_at: "2026-11-14T00:20:00Z",
+      payload: { schema_version: 1, kind: "conditional_loo", model_refit: false, responses: model.objective.responses,
+        source: { study_id: model.study_id, study_version_id: model.study_version_id, definition_sha256: model.definition_sha256,
+          model_id: model.model_id, model_sha256: model.snapshot_sha256, model_config_sha256: model.config_sha256,
+          history_revision_id: model.source_history_revision_id, history_sha256: model.history_sha256 },
+        calculation_sha256: view.calculation_sha256, calculation: view.calculation } };
+    vi.mocked(evaluateBoView).mockResolvedValue(receipt);
     const outer = BayesianLooPanel({ studyId: model.study_id, model, contextKey: "source", mixed: true }) as React.ReactElement;
     const runner = new Runner(() => (outer.type as (props: unknown) => React.ReactNode)(outer.props));
     expect(charts(runner)).toHaveLength(0);
     const run = elements(runner.output).find(node => node.type === "button" && node.props.onClick);
     runner.act(() => (run!.props.onClick as () => void)()); await runner.flush();
+    expect(evaluateBoView).toHaveBeenCalledWith(model.study_id, model.model_id,
+      { kind: "conditional_loo", expected_model_sha256: model.snapshot_sha256, expected_history_sha256: model.history_sha256 }, expect.any(AbortSignal));
     expect(charts(runner)).toHaveLength(model.objective.responses.length * 2);
     for (const [index, response] of view.calculation.responses.entries()) {
       const chart = charts(runner).find(item => item.chartId === `bo-loo-residual-${response.response_id}`)!;
@@ -104,6 +116,6 @@ describe("applied BO graph interactions", () => {
     expect(html).toContain(locale === "en" ? "constant observed response" : "관측 반응이 상수");
     expect(html).toContain("-2");
     runner.act(() => setCurrentLocale(locale === "en" ? "ko" : "en"));
-    expect(requestBoLoo).toHaveBeenCalledTimes(1);
+    expect(evaluateBoView).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,7 @@
 import type { RuntimeCapabilities, RuntimeInfoResponse } from "./api";
 
-export const EXPECTED_API_CONTRACT_VERSION = 43;
-export const MINIMUM_METADATA_SCHEMA_VERSION = 34;
+export const EXPECTED_API_CONTRACT_VERSION = 44;
+export const MINIMUM_METADATA_SCHEMA_VERSION = 37;
 
 export const REQUIRED_RUNTIME_CAPABILITIES = [
   "asset_management",
@@ -34,6 +34,9 @@ export const REQUIRED_RUNTIME_CAPABILITIES = [
   "bayesian_mixed_factor_planning",
   "bayesian_auto_strategy_advice",
   "bayesian_auto_selection_evidence",
+  "bayesian_saved_diagnostic_views",
+  "bayesian_augmentation_renewal",
+  "bayesian_mixture_planning",
   "bayesian_objective_goal_modes",
 ] as const satisfies readonly (keyof RuntimeCapabilities)[];
 

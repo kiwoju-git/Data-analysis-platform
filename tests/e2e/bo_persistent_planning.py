@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from uuid import uuid4
 
@@ -17,11 +18,16 @@ from playwright.sync_api import Browser, expect, sync_playwright
 from bo_loo import verify_loo
 from bo_auto_strategy import verify_auto_strategy
 from bo_profile_graphs import verify_profile_grid
+from bo_saved_views import verify_saved_matrix
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
-def verify_persistent_planning(browser: Browser, base: str, output: Path, *, auto_evidence_only=False) -> dict:
+def verify_profile_constraints(browser: Browser, base: str, output: Path, *, synthetic_workspace: Path | None = None) -> dict:
+    return verify_persistent_planning(browser, base, output, profile_constraints_only=True, synthetic_workspace=synthetic_workspace)
+
+
+def verify_persistent_planning(browser: Browser, base: str, output: Path, *, auto_evidence_only=False, profile_constraints_only=False, synthetic_workspace: Path | None = None) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -36,6 +42,9 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
                 "name": "Synthetic persistent planning",
                 "initial_design_seed": 42,
                 "initial_design_size": 3,
+                "constraints": [{"constraint_id": "upper_x", "name": "Synthetic X bound",
+                    "terms": [{"factor_id": "x", "coefficient": 1}],
+                    "relation": "less_than_or_equal", "bound": 6}] if profile_constraints_only else [],
                 "factors": [
                     {"factor_id": "x", "name": "Temperature", "low": 0, "high": 10}
                 ],
@@ -135,6 +144,45 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
             panel.get_by_role("button", name="Fit and save model", exact=True).click()
         assert fitted.value.status == 201, fitted.value.text()
         model = fitted.value.json()
+        if profile_constraints_only:
+            profiler = panel.get_by_role("region", name="Saved-model profiler", exact=True)
+            verify_saved_matrix(browser, page, api, model, profiler, "Evaluate all factors", output / "saved-matrix")
+            with page.expect_response(api + f"/planning-models/{model['model_id']}/evaluate", timeout=90000) as curve:
+                profiler.get_by_role("button", name="Evaluate conditional curve", exact=True).click()
+            assert curve.value.status == 200, curve.value.text()
+            rows = curve.value.json()["items"]
+            assert any(not row["constraints_satisfied"] for row in rows)
+            detail = profiler.locator(".bo-profile-detail")
+            for row in rows:
+                for kind in ("mean", "sd"):
+                    marker = detail.locator(f'[data-point-id="{row["row_id"]}:{kind}"]')
+                    expect(marker).to_have_count(1)
+                    if not row["constraints_satisfied"]:
+                        assert marker.evaluate("element => element.tagName") == "polygon"
+                        expect(marker).to_have_attribute("aria-label", re.compile("Outside the stored constraints"))
+            profiler.get_by_label("Profile quantity", exact=True).select_option("response:yield")
+            for metric in ("mean_raw", "latent_standard_deviation_raw", "predictive_standard_deviation_raw"):
+                profiler.locator(".bo-planning-fields").get_by_label("Response display", exact=True).select_option(metric)
+                for row in rows:
+                    marker = detail.locator(f'[data-point-id="{row["row_id"]}:yield:{metric}"]')
+                    expect(marker).to_have_count(1)
+                    assert float(marker.get_attribute("data-y")) == row["response_predictions"][0][metric]
+                    assert marker.evaluate("element => element.tagName") == ("circle" if row["constraints_satisfied"] else "polygon")
+            grid = verify_profile_grid(page, profiler, rows, model["objective"]["responses"], study["factors"][0], output, suffix="constraints")
+            assert page.request.get(api).json() == before
+            assert sum(url == api + "/planning-models" for url in writes) == 1
+            assert not errors, errors
+            receipt = {"synthetic": True, "model_sha256": model["snapshot_sha256"],
+                "fit_posts": 1, "profile_grid": grid, "pageerrors": errors,
+                "saved_matrix": json.loads((output / "saved-matrix/saved-profiler-receipt.json").read_text(encoding="utf-8"))}
+            if synthetic_workspace is not None:
+                from bo_legacy_renewal import verify_legacy_renewal
+
+                receipt["legacy_renewal"] = verify_legacy_renewal(page, api, model, output / "legacy-renewal", synthetic_workspace)
+                assert sum(url == api + "/planning-models" for url in writes) == 1
+                assert not errors, errors
+            (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+            return receipt
         verify_loo(page, api, model, output)
         auto_selection = verify_auto_strategy(page, api, model, output)
         if auto_evidence_only:
@@ -349,13 +397,14 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--auto-evidence-only", action="store_true")
+    parser.add_argument("--profile-constraints-only", action="store_true")
     args = parser.parse_args()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         try:
             print(
                 json.dumps(
-                    verify_persistent_planning(browser, args.base_url, args.output, auto_evidence_only=args.auto_evidence_only)
+                    verify_persistent_planning(browser, args.base_url, args.output, auto_evidence_only=args.auto_evidence_only, profile_constraints_only=args.profile_constraints_only)
                 )
             )
         finally:

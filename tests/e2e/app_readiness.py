@@ -240,10 +240,15 @@ def wait_for_app_ready(
     page: Page, expected_locale: str, expected_route: str, *, timeout_ms: int = 15_000
 ) -> None:
     """Network inactivity, provider locale and a rendered route are distinct gates."""
-    expect(page.locator("#root .app-shell")).to_be_visible(timeout=15_000)
-    expect(page.locator(".app-shell")).to_have_attribute(
-        "data-runtime-state", "compatible", timeout=15_000
+    expect(page.locator("#root > *")).to_be_visible(timeout=timeout_ms)
+    # App is lazy-loaded before its runtime request starts. The shell only
+    # exists after compatibility succeeds, so it cannot identify App mounting.
+    runtime = page.locator("#root [data-runtime-state]")
+    expect(runtime).to_be_visible(timeout=timeout_ms)
+    expect(runtime).to_have_attribute(
+        "data-runtime-state", "compatible", timeout=timeout_ms
     )
+    expect(page.locator("#root .app-shell")).to_be_visible(timeout=timeout_ms)
     expect(page.locator("html")).to_have_attribute("data-app-locale", expected_locale)
     expect(page.locator("html")).to_have_attribute("lang", expected_locale)
     path = urlsplit(expected_route).path

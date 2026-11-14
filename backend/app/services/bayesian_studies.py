@@ -68,6 +68,12 @@ from app.api.v1.schemas.bo_mixed_studies import (
     MixedTrialListResponse,
     MixedTrialTransitionResponse,
 )
+from app.api.v1.schemas.bo_mixture_lifecycle import (
+    MixtureObservationBatchResponse,
+    MixtureStudyCloseResponse,
+    MixtureTrialListResponse,
+    MixtureTrialTransitionResponse,
+)
 from app.core.config import Settings
 from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.core.errors import ApiError
@@ -155,6 +161,7 @@ SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
         "0.14.0",
         "0.15.0",
         "0.16.0",
+        "0.17.0",
     }
 )
 SUPPORTED_BAYESIAN_CLOSE_METHOD_VERSIONS: Final = SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS
@@ -409,7 +416,10 @@ def bayesian_initial_design_csv(
     study_id: UUID,
 ) -> tuple[bytes, str]:
     from app.services.bo_mixed_studies import is_mixed_study, mixed_initial_design_csv
+    from app.services.bo_mixture_studies import is_mixture_study, mixture_initial_design_csv
 
+    if is_mixture_study(settings, str(study_id)):
+        return mixture_initial_design_csv(settings, study_id)
     if is_mixed_study(settings, str(study_id)):
         return mixed_initial_design_csv(settings, study_id)
     study = get_bayesian_study(settings, study_id)
@@ -479,10 +489,13 @@ def list_bayesian_studies(
         load_validated_mixed_study,
         mixed_study_summary,
     )
+    from app.services.bo_mixture_studies import is_mixture_study, load_validated_mixture_study
 
     records = list_bayesian_study_records(settings.workspace_root, offset=offset, limit=limit)
     items = [
-        mixed_study_summary(load_validated_mixed_study(settings, record.study_id))
+        mixed_study_summary(load_validated_mixture_study(settings, record.study_id))
+        if is_mixture_study(settings, record.study_id)
+        else mixed_study_summary(load_validated_mixed_study(settings, record.study_id))
         if is_mixed_study(settings, record.study_id)
         else _study_summary(_load_validated_study(settings, record.study_id))
         for record in records
@@ -501,9 +514,20 @@ def list_bayesian_trials(
     *,
     offset: int,
     limit: int,
-) -> BayesianTrialListResponse | MixedTrialListResponse:
+) -> BayesianTrialListResponse | MixedTrialListResponse | MixtureTrialListResponse:
     bundle = load_lifecycle_study(settings, str(study_id))
     page = bundle.trials[offset : offset + limit]
+    if bundle.version.schema_version == 8:
+        from app.services.bo_mixture_studies import mixture_trial_response
+
+        return MixtureTrialListResponse(
+            study_id=study_id,
+            study_version_id=bundle.version.study_version_id,
+            total=len(bundle.trials),
+            offset=offset,
+            limit=limit,
+            items=[mixture_trial_response(bundle, item) for item in page],
+        )
     if bundle.version.schema_version == 7:
         from app.services.bo_mixed_studies import mixed_trial_response
 
@@ -597,7 +621,11 @@ def complete_bayesian_observations_batch(
     settings: Settings,
     study_id: UUID,
     body: BayesianObservationBatchCreateRequest,
-) -> BayesianObservationBatchCreateResponse | MixedObservationBatchResponse:
+) -> (
+    BayesianObservationBatchCreateResponse
+    | MixedObservationBatchResponse
+    | MixtureObservationBatchResponse
+):
     bundle = load_lifecycle_study(settings, str(study_id))
     if str(body.expected_study_version_id) != bundle.version.study_version_id:
         raise ApiError(
@@ -825,7 +853,9 @@ def abandon_bayesian_trial(
     study_id: UUID,
     trial_id: UUID,
     body: BayesianTrialAbandonRequest | None = None,
-) -> BayesianTrialTransitionResponse | MixedTrialTransitionResponse:
+) -> (
+    BayesianTrialTransitionResponse | MixedTrialTransitionResponse | MixtureTrialTransitionResponse
+):
     bundle = load_lifecycle_study(settings, str(study_id))
     if bundle.study.status != "active":
         raise _study_closed_error()
@@ -895,7 +925,7 @@ def close_bayesian_study(
     settings: Settings,
     study_id: UUID,
     body: BayesianStudyCloseRequest,
-) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
+) -> BayesianStudyCloseResponse | MixedStudyCloseResponse | MixtureStudyCloseResponse:
     bundle = load_lifecycle_study(settings, str(study_id))
     if bundle.study.status != "active":
         if bundle.lifecycle_event is not None and _close_request_matches_event(
@@ -1901,7 +1931,7 @@ def _validate_histories(
             raise _artifact_error() from exc
         if (
             history.study_version_id != version.study_version_id
-            or history.schema_version != (2 if version.schema_version in {5, 6, 7} else 1)
+            or history.schema_version != (2 if version.schema_version in {5, 6, 7, 8} else 1)
             or history.completed_trial_count != len(completed_ids)
             or history.previous_history_sha256 != previous_sha
             or len(completed_ids) != len(set(completed_ids))
@@ -2304,6 +2334,8 @@ def _build_bayesian_study_deletion_preflight(
         candidate_revision_count=graph.candidate_revision_count,
         planning_selection_count=graph.planning_selection_count,
         planning_confirmation_count=graph.planning_confirmation_count,
+        augmentation_renewal_count=graph.augmentation_renewal_count,
+        saved_view_count=graph.saved_view_count,
         lifecycle_event_count=graph.lifecycle_event_count,
         metadata_record_count=(
             1
@@ -2320,6 +2352,8 @@ def _build_bayesian_study_deletion_preflight(
             + graph.candidate_revision_count
             + graph.planning_selection_count
             + graph.planning_confirmation_count
+            + graph.augmentation_renewal_count
+            + graph.saved_view_count
             + graph.lifecycle_event_count
             + graph.report_count
         ),
@@ -2542,9 +2576,18 @@ def _lifecycle_event_response(
     )
 
 
-def _close_response(bundle: Any) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
+def _close_response(
+    bundle: Any,
+) -> BayesianStudyCloseResponse | MixedStudyCloseResponse | MixtureStudyCloseResponse:
     if bundle.lifecycle_event is None:
         raise _artifact_error()
+    if bundle.version.schema_version == 8:
+        from app.services.bo_mixture_studies import mixture_study_response
+
+        return MixtureStudyCloseResponse(
+            study=mixture_study_response(bundle),
+            lifecycle_event=_lifecycle_event_response(bundle.lifecycle_event),
+        )
     if bundle.version.schema_version == 7:
         from app.services.bo_mixed_studies import mixed_study_response
 

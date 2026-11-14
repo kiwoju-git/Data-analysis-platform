@@ -12,16 +12,15 @@ from app_readiness import diagnosed_page
 
 
 def verify_chart_interactions(browser: Browser, base_url: str, output: Path) -> None:
-    context = browser.new_context(viewport={"width": 1280, "height": 800})
-    page = context.new_page()
-    requests: list[str] = []
-    page.on(
-        "request",
-        lambda request: requests.append(request.url)
-        if request.url.startswith(f"{base_url}/api/")
-        else None,
-    )
-    try:
+    with diagnosed_page(browser, output, "chart-interactions") as page:
+        page.set_viewport_size({"width": 1280, "height": 800})
+        requests: list[str] = []
+        page.on(
+            "request",
+            lambda request: requests.append(request.url)
+            if request.url.startswith(f"{base_url}/api/")
+            else None,
+        )
         page.goto(f"{base_url}/tests/chart-interaction.html", wait_until="networkidle")
         chart = page.locator(".interactive-chart")
         points = chart.locator("[tabindex]")
@@ -105,8 +104,6 @@ def verify_chart_interactions(browser: Browser, base_url: str, output: Path) -> 
         output.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output / "chart-interaction.png"))
         assert requests == [], "Chart interactions must not call analysis APIs"
-    finally:
-        context.close()
 
 
 def _axis_text(chart: Locator) -> list[str]:

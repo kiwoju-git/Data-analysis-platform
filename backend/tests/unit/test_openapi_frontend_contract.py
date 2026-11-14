@@ -748,7 +748,9 @@ FRONTEND_ROUTE_CONTRACTS = [
         path="/api/v1/bayesian-studies/{study_id}",
         success_status="200",
         response_schema=None,
-        response_any_of_refs=frozenset({"BayesianStudyResponse", "MixedStudyResponse"}),
+        response_any_of_refs=frozenset(
+            {"BayesianStudyResponse", "MixedStudyResponse", "MixtureStudyResponse"}
+        ),
         parameters=frozenset({("study_id", "path")}),
     ),
     OperationContract(
@@ -765,7 +767,9 @@ FRONTEND_ROUTE_CONTRACTS = [
         path="/api/v1/bayesian-studies/{study_id}/close",
         success_status="200",
         response_schema=None,
-        response_any_of_refs=frozenset({"BayesianStudyCloseResponse", "MixedStudyCloseResponse"}),
+        response_any_of_refs=frozenset(
+            {"BayesianStudyCloseResponse", "MixedStudyCloseResponse", "MixtureStudyCloseResponse"}
+        ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
     ),
@@ -792,7 +796,9 @@ FRONTEND_ROUTE_CONTRACTS = [
         path="/api/v1/bayesian-studies/{study_id}/trials",
         success_status="200",
         response_schema=None,
-        response_any_of_refs=frozenset({"BayesianTrialListResponse", "MixedTrialListResponse"}),
+        response_any_of_refs=frozenset(
+            {"BayesianTrialListResponse", "MixedTrialListResponse", "MixtureTrialListResponse"}
+        ),
         parameters=frozenset({("study_id", "path"), ("offset", "query"), ("limit", "query")}),
     ),
     OperationContract(
@@ -811,7 +817,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianObservationBatchCreateResponse", "MixedObservationBatchResponse"}
+            {
+                "BayesianObservationBatchCreateResponse",
+                "MixedObservationBatchResponse",
+                "MixtureObservationBatchResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path")}),
         request_media_types=frozenset({"application/json"}),
@@ -823,7 +833,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="201",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianReplicateCreateResponse", "MixedReplicateCreateResponse"}
+            {
+                "BayesianReplicateCreateResponse",
+                "MixedReplicateCreateResponse",
+                "MixtureReplicateCreateResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
         request_media_types=frozenset({"application/json"}),
@@ -835,7 +849,11 @@ FRONTEND_ROUTE_CONTRACTS = [
         success_status="200",
         response_schema=None,
         response_any_of_refs=frozenset(
-            {"BayesianTrialTransitionResponse", "MixedTrialTransitionResponse"}
+            {
+                "BayesianTrialTransitionResponse",
+                "MixedTrialTransitionResponse",
+                "MixtureTrialTransitionResponse",
+            }
         ),
         parameters=frozenset({("study_id", "path"), ("trial_id", "path")}),
         request_media_types=frozenset({"application/json"}),

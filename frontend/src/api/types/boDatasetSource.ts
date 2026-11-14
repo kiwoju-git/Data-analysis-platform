@@ -13,7 +13,7 @@ export interface DatasetImportPreflightResponse extends DatasetImportCounts {
   schema_version: 1; source: DatasetImportSource; preflight_sha256: string;
 }
 export interface DatasetImportedInitialDesign extends DatasetImportCounts {
-  policy: "dataset_observations_v1"; import_schema_version: 1;
+  policy: "dataset_observations_v1"; import_schema_version: 1 | 2;
   requested_size: number; generated_size: number; source: DatasetImportSource;
   source_row_indices: number[]; factor_columns: Record<string, string>;
   response_columns: Record<string, string>; missing_policy: "reject" | "complete_case";

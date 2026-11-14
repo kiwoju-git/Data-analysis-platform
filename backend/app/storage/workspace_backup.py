@@ -71,7 +71,7 @@ _EXPORT_KINDS = {
     "managed_source_html_report": "managed-report.html",
 }
 SUPPORTED_BACKUP_METADATA_VERSIONS = frozenset(
-    {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34}
+    {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37}
 )
 
 
@@ -272,6 +272,14 @@ def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimi
                 ("bayesian_planning_selections", "result_json", "result_sha256"),
             ]
         )
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 36:
+        hash_columns.extend(
+            [
+                ("bayesian_saved_views", "save_json", "save_sha256"),
+                ("bayesian_saved_views", "config_json", "config_sha256"),
+                ("bayesian_saved_views", "result_json", "result_sha256"),
+            ]
+        )
     for table, content_column, hash_column in hash_columns:
         if connection.execute(
             f"SELECT 1 FROM {table} WHERE length(CAST({content_column} AS BLOB)) > ? LIMIT 1",
@@ -283,6 +291,33 @@ def _validate_database_assets(connection: sqlite3.Connection, limits: BackupLimi
                 hashlib.sha256(row[0].encode("utf-8")).hexdigest(), row[1]
             ):
                 raise WorkspaceBackupError("workspace_backup_asset_corrupt")
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 35:
+        from app.storage.bayesian_studies import BayesianStorageConflict
+        from app.storage.bo_planning import validate_augmentation_renewal_record
+
+        cursor = connection.execute("SELECT * FROM bayesian_augmentation_renewals")
+        columns = [column[0] for column in cursor.description]
+        try:
+            for row in cursor:
+                validate_augmentation_renewal_record(
+                    connection, dict(zip(columns, row, strict=True))
+                )
+        except BayesianStorageConflict as exc:
+            raise WorkspaceBackupError("workspace_backup_asset_corrupt") from exc
+    if connection.execute("PRAGMA user_version").fetchone()[0] >= 36:
+        from app.storage.bo_views import validate_record
+
+        cursor = connection.execute(
+            "SELECT w.*,v.study_id FROM bayesian_saved_views w "
+            "JOIN bayesian_study_versions v ON v.study_version_id=w.study_version_id"
+        )
+        columns = [column[0] for column in cursor.description]
+        try:
+            for row in cursor:
+                record = dict(zip(columns, row, strict=True))
+                validate_record(connection, record, record["study_id"])
+        except BayesianStorageConflict as exc:
+            raise WorkspaceBackupError("workspace_backup_asset_corrupt") from exc
 
 
 def _validate_managed_reports(connection: sqlite3.Connection, limits: BackupLimits) -> None:

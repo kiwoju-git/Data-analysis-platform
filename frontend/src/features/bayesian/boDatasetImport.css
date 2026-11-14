@@ -59,6 +59,22 @@
   font: inherit;
 }
 
+.bo-dataset-import label.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  min-block-size: 36px;
+}
+
+.bo-dataset-import .checkbox-label input[type="checkbox"] {
+  flex: 0 0 1.1rem;
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+}
+
 .bo-dataset-import .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));

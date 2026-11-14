@@ -105,6 +105,9 @@ def test_initialize_metadata_store_creates_version_table_with_unicode_path(tmp_p
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert user_version == SCHEMA_VERSION
 
@@ -194,6 +197,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_one(tmp_path) ->
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert datasets_table == ("datasets",)
     assert user_version == SCHEMA_VERSION
@@ -295,6 +301,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_two(tmp_path) ->
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert dataset_versions_table == ("dataset_versions",)
     assert dataset_columns_table == ("dataset_columns",)
@@ -428,6 +437,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_three(tmp_path) 
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert table_names == {
         "analysis_runs",
@@ -615,6 +627,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_four(tmp_path) -
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert dataset_artifacts_table == ("dataset_artifacts",)
     assert user_version == SCHEMA_VERSION
@@ -689,6 +704,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_five(tmp_path) -
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert regression_models_table == ("regression_models",)
     assert user_version == SCHEMA_VERSION
@@ -771,6 +789,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_six(tmp_path) ->
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert table_names == {
         "experiment_designs",
@@ -849,6 +870,9 @@ def test_initialize_metadata_store_upgrades_from_schema_version_seven(tmp_path) 
         (32, "bayesian_source_owned_augmentation"),
         (33, "bayesian_numeric_auto_evidence"),
         (34, "bayesian_dataset_import_ownership"),
+        (35, "bayesian_explicit_augmentation_renewal"),
+        (36, "bayesian_saved_diagnostic_views"),
+        (37, "bayesian_mixture_planning_contracts"),
     ]
     assert response_table == ("experiment_run_responses",)
     assert user_version == SCHEMA_VERSION
@@ -1045,6 +1069,8 @@ def test_initialize_metadata_store_upgrades_v10_with_empty_bayesian_foundation(
         "bayesian_planning_selections",
         "bayesian_planning_confirmations",
         "bayesian_dataset_imports",
+        "bayesian_augmentation_renewals",
+        "bayesian_saved_views",
     }
     assert study_count == 0
     assert user_version == SCHEMA_VERSION

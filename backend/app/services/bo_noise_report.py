@@ -15,6 +15,10 @@ def bo_noise_report_section(
         return report_text(locale, en=en, ko=ko)
 
     title = text("Noise-aware Recommendation", "관측 노이즈 기반 추천")
+    if isinstance(attachment, dict) and attachment.get("schema_version") == 13:
+        from app.services.bo_mixture_report import mixture_batch_report_section
+
+        return mixture_batch_report_section(attachment, definition, locale)
     if isinstance(attachment, dict) and attachment.get("result_schema_version") in {10, 12}:
         from app.services.bo_mixed_batch_report import mixed_batch_report_section
 

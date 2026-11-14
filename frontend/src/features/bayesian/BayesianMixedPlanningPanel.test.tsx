@@ -97,4 +97,18 @@ describe("mixed persisted output presentation", () => {
     }
     expect(JSON.stringify(rows)).toBe(before);
   });
+  it("marks constraint violations on the detailed mixed profile too", () => {
+    setCurrentLocale("en"); const { study, model, selection } = mixedPlanningFixture();
+    if (selection.calculation.schema_version !== 2) throw new Error("fixture");
+    const rows = selection.calculation.items.map((row, index) => ({ ...row, constraints_satisfied: index !== 0 }));
+    const before = JSON.stringify(rows);
+    const html = renderToStaticMarkup(<MixedProfileView study={study} profile={{ modelId: model.model_id, modelHash: model.snapshot_sha256, axis: "x", points: rows.map(row => row.actual_coordinates), rows }} />);
+    const markers = [...html.matchAll(/<(circle|polygon)\b[^>]*data-point-id="([^"]+)"[^>]*>/g)].filter(match => match[2] === rows[0].row_id);
+    expect(markers).toHaveLength(study.objective.responses.length + 2);
+    for (const marker of markers) {
+      expect(marker[1]).toBe("polygon");
+      expect(marker[0]).toContain("Outside the stored constraints.");
+    }
+    expect(JSON.stringify(rows)).toBe(before);
+  });
 });

@@ -34,6 +34,9 @@ export interface RuntimeCapabilities {
   bayesian_mixed_factor_planning?: boolean;
   bayesian_auto_strategy_advice?: boolean;
   bayesian_auto_selection_evidence?: boolean;
+  bayesian_saved_diagnostic_views?: boolean;
+  bayesian_augmentation_renewal?: boolean;
+  bayesian_mixture_planning?: boolean;
   bayesian_objective_goal_modes?: boolean;
   gaussian_process_regression?: boolean;
 }
