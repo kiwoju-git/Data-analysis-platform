@@ -11,6 +11,8 @@ published by this task.
 Baseline origin/main: `a9abb4bac0f6104b8fd6ac270edcc80a5bc32050`.
 Implementation baseline: `41143beeb4f1935201717e5ff8e9f18ae266f4fe`.
 Integration contract: API44, metadata37, BO method0.17.0.
+Final implementation source before this documentation snapshot:
+`5deea605ae394d79bf09baa2991fb476194cfc23`.
 Feature source: `1937e72526512241158669d05e5c863dc0d7b29f`, on
 [PR10](https://github.com/kiwoju-git/Data-analysis-platform/pull/10).
 [CI43553019942](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43553019942)
@@ -107,16 +109,17 @@ tests/builds/model jobs are serialized; at most two auxiliary agents are active.
 | Full backend type check |`python -m mypy backend/app` passed for356 source files after resolving the earlier20 typing errors, without skip-import or ignore overrides |
 | Localization boundary |`node scripts/check_frontend_localization.mjs` passed:3,047 source strings and4,727 keys; synthetic Korean user labels remain test data, not translated system strings |
 | Frontend production build |Fresh build passed after UI review fixes; existing large-chunk warning remains |
-| Final frontend regression |181 files /1,565 tests passed in167.98s with one worker. Fresh full lint passed with0 errors/12 existing Fast Refresh warnings; typecheck and production build passed |
+| Final frontend regression |After the checkbox repair,181 files /1,566 tests passed in164.19s with one worker. Fresh full lint passed with0 errors/12 existing Fast Refresh warnings; typecheck and production build passed |
 | Native CI fixture corrections |Storage/lifecycle/Auto contracts35 tests passed in188.51s; exact OpenAPI/E2E/Origin contracts344 passed in18.63s. Production storage checks, Origin checker and numerical tolerances were not relaxed |
-| Native Python3.11 regression |CI43556939389 at `13e2df5`:4,636 passed/32 skipped/159 warnings in820.55s; independent Linux numerical probe passed. Later UI/capture changes require their own final gate |
+| Native Python3.11 regression |CI43559751196 at `5deea60`:4,642 passed/32 skipped/159 warnings in1,264.15s. The separate numerical probe collected diagnostics, not an acceptance pass; its budget outcomes are recorded below |
 | Frontend fixture corrections |Three failures reproduced in old LOO request mocks and legacy deletion-field counts. Current receipt-source/no-auto-request and absent-versus-zero assertions passed9 tests before the full frontend rerun |
 | Import checkbox layout |Full Windows workflows reproduced a real scoped CSS error: the new checkbox inherited text-input sizing, caption gap-66px and containment false. Existing checkbox-label semantics plus scoped sizing fixed both main/component toggles; focused8 tests passed. Built ordinary/mixture journeys then passed at1024/1440 with6 mixture checkboxes,8px gaps, no overflow, native label clicks and unchanged import/cycle assertions |
-| Populated migration/restore |5-test run passed before additional backup/report assertions; final enhanced rerun remains to be recorded |
+| Populated migration/restore |Earlier5-test run passed; final enhanced saved-view/mixture/renewal backup and report cases are included in the successful full Python3.11 run, without platform skip markers |
 | Built mixture cycle |Fresh synthetic run `bo44-built-20261114-122341` passed import8 -> fit -> matrix/save/offline HTML -> candidate review/confirm2 -> observed10 -> next fit/candidates -> exact historical view restore |
 | Built numeric and legacy renewal |Fresh synthetic run `bo44-built-20261114-122607` passed matrix values/metrics, KO/EN 1024/1440, icon geometry, pin/keyboard, stored offline HTML and explicit old-review renewal/confirm/replay with old bytes unchanged and no renewal refit |
 | Archive coverage wiring |Source review found missing new BO journeys in the archive harness. Added mandatory initial/two-restart/server-stopped roundtrip checks; root reran212 pure contract/controlled-runner tests, all passed in2.85s. This is not actual archive execution |
 | Archive-helper built-source probe |Final full initial/restart/server-stopped run `bo44-archive-helper-20261114-133701` passed, including all7 numeric and16 mixture chart captures, exact stored SVG points, source hashes and zero HTTP requests. This is built-source, not installed-archive evidence |
+| Full local Windows E2E |All four existing suites passed sequentially: workflows, context, data, prediction. Evidence is retained under synthetic `bo44-final2-*` diagnostics and isolated TEMP workspaces. The full workflow includes the final checkbox/source implementation, not only the focused BO helpers |
 | Native full CI / archive |Not yet verified in this audit |
 
 Failed built attempts are retained in local synthetic diagnostics. They exposed
@@ -163,7 +166,9 @@ a current-writer call inside an old-schema fixture, a spy missing the new renewa
 keyword, explicit-Origin source checking, the E2E wrapper argument and stage-list
 documentation. Root-cause fixes and fresh verification are required; these are
 not waived as numerical platform differences. Dependency-security and both GP
-resource jobs passed in that run. Windows full check is still pending.
+resource jobs passed in that run. Its Windows backend subsequently completed with
+the same21 failures,4,628 passed/4 skipped/159 warnings in4,782.60s. Those are the
+same corrected contract-fixture failures, not a successful Windows full gate.
 
 CI43554297236 adds the archive harness at commit `b8d39fc`; its Linux3.11/3.12
 runs reproduced the same21 failures, with4,614 passed/32 skipped in913.66s and
@@ -172,7 +177,23 @@ database fixture and exact original JSON bytes rather than calling a current
 writer against an old schema. Exact migration/table/deletion inventories and
 mixture response unions now reflect the implemented contracts. The Auto race
 spy forwards the new optional renewal argument and still requires the source
-conflict and rollback. Full native verification of these corrections is pending.
+conflict and rollback. CI43556939389 then passed the full Linux backend
+(4,636 passed/32 skipped) and frontend (181 files/1,565 tests), but its browser
+suite reproduced the import checkbox defect with a-64px gap. The later scoped
+repair has native verification pending at this pre-merge snapshot; the complete
+local Windows suites passed after that repair.
+
+The final implementation's Python3.11 run is
+[CI43559751196](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43559751196).
+Its separate `probe_linux_numerics.py` output explicitly says
+`diagnostics_collected_not_acceptance`. The legacy100-evaluation fit budget
+completed7 of21 steps and then reported `bayesian_optimization_budget_exhausted`;
+the200-evaluation condition completed all21. An earlier machine/run completed
+both conditions. This is a bounded legacy optimizer diagnostic, not proof of
+JMP parity or of every fitting budget succeeding. No production budget,
+convergence tolerance, historical reference or stored result was modified to
+turn that diagnostic into a pass. The final PR still requires the independent
+Windows/Linux/security/archive/resource and aggregate gates.
 
 A separate read-only review found no blocking issue in these fixture changes
 or the archive roundtrip assertions;17 pure receipt/Origin tests passed in1.37s.

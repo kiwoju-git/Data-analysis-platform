@@ -168,7 +168,10 @@
 - Tasks 1-7: implemented and reviewed, with focused regression evidence in
   `docs/bo_remaining_completion.md`. Final process-axis findings were corrected
   in one consolidated fix wave and scoped re-review passed.
-- Task 8: numeric and mixture built journeys passed; full local check and native
-  CI/integration remain pending. The task checklists above retain the original
+- Task 8: numeric and mixture built journeys, complete local Windows workflows/
+  context/data/prediction suites, and final frontend1,566 tests/lint/typecheck/
+  build passed. Native Python3.11 backend4,642 tests passed; final remaining
+  native/archive/aggregate gates and main integration are tracked by PR10. The
+  task checklists above retain the original
   execution sequence; this ledger and the completion audit record actual status.
 - Acceptance is end-to-end; helper tests or old successful CI runs do not complete these tasks.
