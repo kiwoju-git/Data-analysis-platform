@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, ChartScatter } from "lucide-react";
-import { requestBoLoo, type BoLooView } from "../../api/boLoo";
+import { type BoLooView } from "../../api/boLoo";
+import { evaluateBoView, type BoViewReceipt } from "../../api/boViews";
+import { looFromPayload, validBoViewReceipt } from "./boSavedViews";
+import { BoViewSaveAction } from "./BoViewSaveAction";
 import { triggerBrowserDownload } from "../../api/client";
 import { InteractiveScatterChart } from "../../charts/InteractiveScatterChart";
 import { paddedNumericRange } from "../../charts/chartScale";
@@ -14,16 +17,17 @@ interface Source {
   source_history_revision_id: string; source_is_current: boolean;
   objective: { responses: { response_id: string; name: string; unit: string | null }[] };
 }
-interface Props { studyId: string; model: Source; contextKey: string; mixed?: boolean; disabled?: boolean }
+interface Props { studyId: string; model: Source; contextKey: string; mixed?: boolean; disabled?: boolean; savedView?: BoLooView }
 
 export function BayesianLooPanel(props: Props) {
   const source = `${props.contextKey}:${props.studyId}:${props.mixed === true}:${props.model.model_id}:${props.model.snapshot_sha256}:${props.model.history_sha256}:${props.model.config_sha256}`;
   return <LooSourcePanel key={source} {...props} />;
 }
 
-function LooSourcePanel({ studyId, model, mixed = false, disabled = false }: Props) {
+function LooSourcePanel({ studyId, model, disabled = false, savedView }: Props) {
   const { locale } = useI18n(), text = boLooMessages(locale);
-  const [view, setView] = useState<BoLooView | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(false);
+  const [view, setView] = useState<BoLooView | null>(savedView ?? null), [busy, setBusy] = useState(false), [error, setError] = useState(false);
+  const [receipt, setReceipt] = useState<BoViewReceipt | null>(null);
   const guard = useRef(createLatestRequestGuard()), controller = useRef<AbortController | null>(null);
   useEffect(() => {
     const lane = guard.current;
@@ -32,16 +36,19 @@ function LooSourcePanel({ studyId, model, mixed = false, disabled = false }: Pro
   async function run() {
     const token = guard.current.begin();
     controller.current?.abort(); controller.current = new AbortController();
-    setView(null); setError(false); setBusy(true);
+    setView(null); setReceipt(null); setError(false); setBusy(true);
     try {
-      const result = await requestBoLoo(studyId, model.model_id, model.snapshot_sha256, model.history_sha256, mixed, controller.current.signal);
+      const request = { kind: "conditional_loo" as const, expected_model_sha256: model.snapshot_sha256, expected_history_sha256: model.history_sha256 };
+      const evaluated = await evaluateBoView(studyId, model.model_id, request, controller.current.signal);
       if (!guard.current.isCurrent(token)) return;
+      if (!validBoViewReceipt(evaluated, { studyId, modelId: model.model_id, modelHash: model.snapshot_sha256, historyHash: model.history_sha256, responseIds: model.objective.responses.map(row => row.response_id), factorIds: [] }, request)) throw Error("invalid_loo_source");
+      const result = looFromPayload(evaluated.payload, model.source_is_current);
       if (result.study_id !== studyId || result.model_id !== model.model_id || result.model_sha256 !== model.snapshot_sha256
         || result.history_sha256 !== model.history_sha256 || result.config_sha256 !== model.config_sha256
         || result.source_history_revision_id !== model.source_history_revision_id || result.calculation.model_refit !== false
         || result.calculation.policy !== "fixed_full_fit_parameters_row_loo_v1"
         || result.calculation.responses.map(row => row.response_id).join("|") !== model.objective.responses.map(row => row.response_id).join("|")) throw new Error("invalid_loo_source");
-      setView(result);
+      setView(result); setReceipt(evaluated);
     } catch {
       if (guard.current.isCurrent(token)) setError(true);
     } finally {
@@ -52,11 +59,12 @@ function LooSourcePanel({ studyId, model, mixed = false, disabled = false }: Pro
     <h4>{text.title}</h4><p>{text.meaning}</p><p>{text.repeats}</p><p>{text.routing}</p>
     <p>{model.source_is_current && view?.source_is_current !== false ? text.current : text.historical}</p>
     <div className="bo-planning-actions">
-      <button type="button" className="secondary-button" disabled={disabled || busy} onClick={() => void run()}><ChartScatter size={16} aria-hidden="true" />{text.run}</button>
+      {!savedView && <button type="button" className="secondary-button" disabled={disabled || busy} onClick={() => void run()}><ChartScatter size={16} aria-hidden="true" />{text.run}</button>}
       {busy && <span role="status">{text.busy}</span>}
       {view && <button type="button" className="secondary-button" onClick={() => triggerBrowserDownload(new Blob([JSON.stringify(view, null, 2)], { type: "application/json" }), `bo-loo-${view.model_id}.json`)}><Download size={16} aria-hidden="true" />{text.download}</button>}
     </div>
     {error && <p role="alert" className="notice-box notice-warning">{text.error}</p>}
+    {receipt && <BoViewSaveAction receipt={receipt} />}
     {view && <><p>{text.snapshot}</p><p>{text.formula}</p>
       {view.calculation.responses.map(response => {
         const definition = model.objective.responses.find(item => item.response_id === response.response_id)!;

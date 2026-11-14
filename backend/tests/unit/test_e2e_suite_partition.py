@@ -38,6 +38,7 @@ STAGE_CALLS = {
     "bo_vector_history": "verify_bo_vector_history",
     "bo_dataset_import": "verify_bo_dataset_import",
     "bo_profile_constraints": "verify_profile_constraints",
+    "bo_mixture_completion": "verify_mixture_completion",
     "bo_xy_gpr_navigation": "verify_bo_xy_gpr_navigation",
     "bo_noise_extension": "verify_bo_noise_extension",
     "doe_rsm_completion": "verify_doe_rsm_completion",
@@ -81,6 +82,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "bo_vector_history",
         "bo_dataset_import",
         "bo_profile_constraints",
+        "bo_mixture_completion",
         "bo_xy_gpr_navigation",
         "api_translation",
         "dataset_context",
@@ -123,6 +125,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "bo_xy_gpr_navigation" in driver.suite_stage_ids("context")
     assert "bo_dataset_import" in driver.suite_stage_ids("workflows")
     assert "bo_profile_constraints" in driver.suite_stage_ids("workflows")
+    assert "bo_mixture_completion" in driver.suite_stage_ids("workflows")
     assert "bo_profile_constraints" not in driver.suite_stage_ids("context")
     assert "rsm_context" not in driver.suite_stage_ids("workflows")
     assert "pilot_ingestion" in driver.suite_stage_ids("data")
@@ -279,6 +282,7 @@ def test_runner_builds_only_workflows_in_fresh_owned_directory(
         assert manifest.get("frontend_modes") == {
             "bo_dataset_import": "built",
             "bo_profile_constraints": "built",
+            "bo_mixture_completion": "built",
             "chart_interactions": "dev",
             "result_chart_models": "dev",
             "pilot_groups": "built",
@@ -394,6 +398,7 @@ def test_workflow_dispatch_routes_dev_fixtures_without_moving_built_journeys(
     assert calls == [
         ("bo_dataset_import", "http://built"),
         ("bo_profile_constraints", "http://built"),
+        ("bo_mixture_completion", "http://built"),
         ("chart_interactions", "http://source"),
         ("result_chart_models", "http://source"),
         ("pilot_groups", "http://built"),

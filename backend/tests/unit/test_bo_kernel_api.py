@@ -14,7 +14,7 @@ from app.services.dedicated_report_sources import (
     list_dedicated_report_sources,
     prepare_dedicated_report_source,
 )
-from app.storage.metadata import metadata_db_path
+from app.storage.metadata import SCHEMA_VERSION, metadata_db_path
 
 
 def kernel_request(study, kind, count=1):
@@ -254,7 +254,7 @@ def test_populated_metadata24_migration_preserves_legacy_hashes(tmp_path, monkey
         assert read.status_code == 200, read.json()
         assert read.json() == batch
         with sqlite3.connect(metadata_db_path(restored)) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 34
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
             assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
             for table in tables:
                 assert (

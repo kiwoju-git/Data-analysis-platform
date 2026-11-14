@@ -1,6 +1,6 @@
 from typing import Final
 
-API_CONTRACT_VERSION: Final = 43
+API_CONTRACT_VERSION: Final = 44
 
 RUNTIME_CAPABILITIES: Final[dict[str, bool]] = {
     "asset_management": True,
@@ -34,4 +34,7 @@ RUNTIME_CAPABILITIES: Final[dict[str, bool]] = {
     "bayesian_mixed_factor_planning": True,
     "bayesian_auto_strategy_advice": True,
     "bayesian_auto_selection_evidence": True,
+    "bayesian_saved_diagnostic_views": True,
+    "bayesian_augmentation_renewal": True,
+    "bayesian_mixture_planning": True,
 }

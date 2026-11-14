@@ -1,6 +1,7 @@
 import { apiErrorCode, fetchApi } from "./client";
 import { apiRoutes } from "./routes";
 import type { AnyBayesianStudyResponse } from "./types/boMixed";
+import type { MixtureStudy } from "./boMixture";
 import type {
   BayesianHistoryListResponse,
   BayesianHistoryRevisionResponse,
@@ -209,15 +210,17 @@ export async function fetchBayesianStudies(
 
 export function fetchBayesianStudy(studyId: string): Promise<BayesianStudyResponse>;
 export function fetchBayesianStudy(studyId: string, options: { includeMixed: true }): Promise<AnyBayesianStudyResponse>;
-export async function fetchBayesianStudy(studyId: string, options?: { includeMixed: true }): Promise<AnyBayesianStudyResponse> {
+export function fetchBayesianStudy(studyId: string, options: { includeMixture: true }): Promise<AnyBayesianStudyResponse | MixtureStudy>;
+export async function fetchBayesianStudy(studyId: string, options?: { includeMixed: true } | { includeMixture: true }): Promise<AnyBayesianStudyResponse | MixtureStudy> {
   const response = await fetchApi(apiRoutes.bayesianStudy(studyId), {
     headers: { Accept: "application/json" },
   });
   if (!response.ok) {
     throw new Error(await apiErrorCode(response, "bayesian_study_fetch_failed"));
   }
-  const result = await response.json() as AnyBayesianStudyResponse;
-  if (result.study_schema_version === 7 && !options?.includeMixed) throw new Error("bayesian_mixed_typed_reader_required");
+  const result = await response.json() as AnyBayesianStudyResponse | MixtureStudy;
+  if (result.study_schema_version === 8 && !(options && "includeMixture" in options)) throw new Error("bayesian_mixture_typed_reader_required");
+  if (result.study_schema_version === 7 && !options) throw new Error("bayesian_mixed_typed_reader_required");
   return result;
 }
 

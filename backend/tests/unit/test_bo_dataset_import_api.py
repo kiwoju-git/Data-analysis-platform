@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.main import create_app
-from app.storage.metadata import metadata_db_path
+from app.storage.metadata import SCHEMA_VERSION, metadata_db_path
 from app.storage.workspace_backup import backup_workspace, restore_workspace
 from tests.unit.test_bayesian_multiresponse_lifecycle import study_request
 from tests.unit.test_dataset_version_retention_api import _confirm
@@ -264,7 +264,7 @@ def test_import_snapshot_survives_schema_edit_and_archive_without_rewriting_lega
             )
         assert client.get(f"{ROOT}/{saved['study_id']}").json() == saved
     archive, restored = tmp_path / "snapshot.zip", tmp_path / "restored space"
-    assert backup_workspace(root, archive)["metadata_schema_version"] == 34
+    assert backup_workspace(root, archive)["metadata_schema_version"] == SCHEMA_VERSION
     restore_workspace(archive, restored)
     with sqlite3.connect(metadata_db_path(restored)) as db:
         assert (

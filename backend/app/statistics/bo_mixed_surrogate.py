@@ -13,6 +13,7 @@ from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
     BoFactorDomain,
+    BoPseudocomponentFactorDomain,
     bo_factor_domains_to_payload,
     validate_bo_factor_domains,
 )
@@ -144,6 +145,9 @@ def validate_mixed_coordinates(
                     or np.any(column != np.floor(column))
                 ):
                     raise _invalid("bayesian_category_code_invalid")
+            elif isinstance(domain, BoPseudocomponentFactorDomain):
+                if np.any(column < 0) or np.any(column > domain.encoded_high):
+                    raise _invalid("bayesian_factor_value_not_executable")
             else:
                 if np.any(column < 0) or np.any(column > 1):
                     raise _invalid("bayesian_factor_value_not_executable")

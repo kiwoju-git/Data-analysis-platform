@@ -5,8 +5,8 @@ const record = (value: unknown): value is Record<string, unknown> => value !== n
 const count = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= min && value <= max;
 
-export function validDatasetImportedInitialDesign(value: unknown, factorIds?: readonly string[], responseIds?: readonly string[]): value is DatasetImportedInitialDesign {
-  if (!record(value) || value.policy !== "dataset_observations_v1" || value.import_schema_version !== 1 ||
+export function validDatasetImportedInitialDesign(value: unknown, factorIds?: readonly string[], responseIds?: readonly string[], expectedVersion: 1 | 2 = 1): value is DatasetImportedInitialDesign {
+  if (!record(value) || value.policy !== "dataset_observations_v1" || value.import_schema_version !== expectedVersion ||
     !count(value.n_total) || !count(value.n_filtered) || !count(value.n_missing) || !count(value.n_used, 1, 200) ||
     value.n_total !== value.n_filtered + value.n_missing + value.n_used ||
     value.requested_size !== value.n_used || value.generated_size !== value.n_used ||

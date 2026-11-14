@@ -18,15 +18,16 @@ from playwright.sync_api import Browser, expect, sync_playwright
 from bo_loo import verify_loo
 from bo_auto_strategy import verify_auto_strategy
 from bo_profile_graphs import verify_profile_grid
+from bo_saved_views import verify_saved_matrix
 
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
-def verify_profile_constraints(browser: Browser, base: str, output: Path) -> dict:
-    return verify_persistent_planning(browser, base, output, profile_constraints_only=True)
+def verify_profile_constraints(browser: Browser, base: str, output: Path, *, synthetic_workspace: Path | None = None) -> dict:
+    return verify_persistent_planning(browser, base, output, profile_constraints_only=True, synthetic_workspace=synthetic_workspace)
 
 
-def verify_persistent_planning(browser: Browser, base: str, output: Path, *, auto_evidence_only=False, profile_constraints_only=False) -> dict:
+def verify_persistent_planning(browser: Browser, base: str, output: Path, *, auto_evidence_only=False, profile_constraints_only=False, synthetic_workspace: Path | None = None) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -145,6 +146,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
         model = fitted.value.json()
         if profile_constraints_only:
             profiler = panel.get_by_role("region", name="Saved-model profiler", exact=True)
+            verify_saved_matrix(browser, page, api, model, profiler, "Evaluate all factors", output / "saved-matrix")
             with page.expect_response(api + f"/planning-models/{model['model_id']}/evaluate", timeout=90000) as curve:
                 profiler.get_by_role("button", name="Evaluate conditional curve", exact=True).click()
             assert curve.value.status == 200, curve.value.text()
@@ -160,7 +162,7 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
                         expect(marker).to_have_attribute("aria-label", re.compile("Outside the stored constraints"))
             profiler.get_by_label("Profile quantity", exact=True).select_option("response:yield")
             for metric in ("mean_raw", "latent_standard_deviation_raw", "predictive_standard_deviation_raw"):
-                profiler.get_by_label("Response display", exact=True).select_option(metric)
+                profiler.locator(".bo-planning-fields").get_by_label("Response display", exact=True).select_option(metric)
                 for row in rows:
                     marker = detail.locator(f'[data-point-id="{row["row_id"]}:yield:{metric}"]')
                     expect(marker).to_have_count(1)
@@ -172,6 +174,12 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
             assert not errors, errors
             receipt = {"synthetic": True, "model_sha256": model["snapshot_sha256"],
                 "fit_posts": 1, "profile_grid": grid, "pageerrors": errors}
+            if synthetic_workspace is not None:
+                from bo_legacy_renewal import verify_legacy_renewal
+
+                receipt["legacy_renewal"] = verify_legacy_renewal(page, api, model, output / "legacy-renewal", synthetic_workspace)
+                assert sum(url == api + "/planning-models" for url in writes) == 1
+                assert not errors, errors
             (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
             return receipt
         verify_loo(page, api, model, output)

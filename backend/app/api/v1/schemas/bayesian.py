@@ -476,6 +476,8 @@ class BayesianStudyDeletionCounts(BaseModel):
     candidate_revision_count: int = Field(default=0, ge=0, le=2048)
     planning_selection_count: int = Field(default=0, ge=0, le=32)
     planning_confirmation_count: int = Field(default=0, ge=0, le=32)
+    augmentation_renewal_count: int = Field(default=0, ge=0, le=32)
+    saved_view_count: int = Field(default=0, ge=0, le=32)
     lifecycle_event_count: int = Field(ge=0, le=1)
     metadata_record_count: int = Field(ge=4)
     report_count: int = Field(default=0, ge=0)

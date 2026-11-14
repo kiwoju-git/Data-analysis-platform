@@ -2,6 +2,8 @@ import type { BayesianStudyResponse } from "../../api";
 import type { BayesianStudyDeletionCounts } from "../../api/types/bayesian";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { planningMessages } from "../../i18n/boPlanning";
+import { renewalMessages } from "../../i18n/boRenewal";
+import { boViewMessages } from "../../i18n/boViews";
 import type { useBayesianRetentionState } from "./hooks/useBayesianRetentionState";
 import { BayesianStudyDeletionConfirmation } from "./BayesianTransitionConfirmations";
 
@@ -37,10 +39,11 @@ export function BayesianStudyDeletionPanel({ study, state, disabled, onDeleted }
   );
 }
 
-export function PlanningDeletionCounts({ counts }: { counts: Pick<BayesianStudyDeletionCounts, "planning_model_count" | "candidate_set_count" | "candidate_revision_count" | "planning_selection_count" | "planning_confirmation_count"> }) {
+export function PlanningDeletionCounts({ counts }: { counts: Pick<BayesianStudyDeletionCounts, "planning_model_count" | "candidate_set_count" | "candidate_revision_count" | "planning_selection_count" | "planning_confirmation_count" | "augmentation_renewal_count" | "saved_view_count"> }) {
   const { locale } = useI18n(), text = planningMessages(locale);
   const rows = [[text.deletionModels, counts.planning_model_count], [text.deletionCandidateSets, counts.candidate_set_count],
-    [text.deletionCandidateRevisions, counts.candidate_revision_count], [text.deletionSelections, counts.planning_selection_count], [text.deletionConfirmations, counts.planning_confirmation_count]] as const;
+    [text.deletionCandidateRevisions, counts.candidate_revision_count], [text.deletionSelections, counts.planning_selection_count], [text.deletionConfirmations, counts.planning_confirmation_count],
+    [renewalMessages(locale).deletionCount, counts.augmentation_renewal_count], [boViewMessages(locale).stored, counts.saved_view_count]] as const;
   if (rows.every(([, count]) => count === undefined)) return null;
   return <section aria-label={text.deletionPlanning}><h5>{text.deletionPlanning}</h5><dl className="bo-planning-source">
     {rows.map(([label, count]) => <div key={label}><dt>{label}</dt><dd>{count === undefined ? "-" : count}</dd></div>)}

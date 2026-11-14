@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from app.api.v1.schemas.bo_augmentation import (
     AUGMENTATION_REQUEST,
     AUGMENTATION_RESULT,
+    AugmentationPredictedRow,
     AugmentationRequest,
     AugmentationResult,
     AugmentationSelectionResponse,
@@ -36,6 +37,16 @@ from app.services.bo_planning import (
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.storage import bo_planning as storage
 from app.storage.bayesian_studies import BayesianStorageConflict
+
+
+def augmentation_requires_renewal(calculation: AugmentationResult) -> bool:
+    """Absent-policy EI is a historical receipt, not a portable new commit decision."""
+    return any(
+        isinstance(row, AugmentationPredictedRow)
+        and row.acquisition is not None
+        and "numerical_policy" not in row.acquisition.model_fields_set
+        for row in calculation.selected_rows
+    )
 
 
 def validate_saved_augmentation(
@@ -179,6 +190,9 @@ def get_augmentation_selection(
             ):
                 raise ValueError
         validate_saved_augmentation(study, body, calculation, rows, snapshot)
+        storage.get_augmentation_renewal(
+            settings.workspace_root, str(selection_id), str(study.study_version_id)
+        )
         if isinstance(body, AutoAugmentationSelectionRequest):
             if not isinstance(calculation, AutoAugmentationCalculation):
                 raise ValueError
@@ -232,7 +246,11 @@ def _routing_context(
 
 
 def create_augmentation_selection(
-    settings: Settings, study_id: UUID, body: AugmentationRequest
+    settings: Settings,
+    study_id: UUID,
+    body: AugmentationRequest,
+    *,
+    renewal: dict[str, Any] | None = None,
 ) -> AugmentationSelectionResponse:
     study = get_bayesian_study(settings, study_id)
     if study.objective.goal_type != "desirability":
@@ -250,6 +268,7 @@ def create_augmentation_selection(
                 "config_sha256"
             ] != storage.planning_sha(config):
                 raise _error("bayesian_planning_request_conflict")
+            storage.require_renewal_replay(settings.workspace_root, old["selection_id"], renewal)
             return get_augmentation_selection(settings, study_id, UUID(old["selection_id"]))
         candidate, rows, source, tolerance = _source_candidate(
             settings, study, body.candidate_revision_id
@@ -323,7 +342,9 @@ def create_augmentation_selection(
             "result_sha256": storage.planning_sha(result),
             "created_at": utc_now(),
         }
-        identity = storage.insert_planning_selection(settings.workspace_root, record)
+        identity = storage.insert_planning_selection(
+            settings.workspace_root, record, renewal=renewal
+        )
         return get_augmentation_selection(settings, study_id, UUID(identity))
     except BayesianStorageConflict as exc:
         raise _error(exc.code) from exc

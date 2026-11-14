@@ -9,10 +9,11 @@ from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
 from app.storage.bo_auto_evidence_schema import BO_AUTO_EVIDENCE_MIGRATION_SQL
+from app.storage.bo_mixture_schema import BO_MIXTURE_MIGRATION_SQL
 from app.storage.bo_planning_schema import BO_PLANNING_MIGRATION_SQL
 from app.storage.bo_planning_v2_schema import BO_PLANNING_V2_MIGRATION_SQL
 
-SCHEMA_VERSION: Final = 34
+SCHEMA_VERSION: Final = 37
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -2123,6 +2124,60 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         CREATE INDEX idx_bayesian_import_dataset
             ON bayesian_dataset_imports(dataset_version_id);
         """,
+    ),
+    Migration(
+        version=35,
+        name="bayesian_explicit_augmentation_renewal",
+        sql="""
+        CREATE TABLE bayesian_augmentation_renewals (
+            renewed_selection_id TEXT PRIMARY KEY
+                REFERENCES bayesian_planning_selections(selection_id) ON DELETE RESTRICT,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE RESTRICT,
+            original_selection_id TEXT NOT NULL
+                REFERENCES bayesian_planning_selections(selection_id) ON DELETE RESTRICT,
+            original_config_sha256 TEXT NOT NULL CHECK(length(original_config_sha256)=64),
+            original_result_sha256 TEXT NOT NULL CHECK(length(original_result_sha256)=64),
+            schema_version INTEGER NOT NULL CHECK(schema_version=1),
+            numerical_policy TEXT NOT NULL CHECK(numerical_policy='positive_beta_integral_v2'),
+            created_at TEXT NOT NULL,
+            CHECK(renewed_selection_id<>original_selection_id)
+        );
+        CREATE INDEX idx_bayesian_renewal_owner
+            ON bayesian_augmentation_renewals(study_version_id);
+        """,
+    ),
+    Migration(
+        version=36,
+        name="bayesian_saved_diagnostic_views",
+        sql="""
+        CREATE TABLE bayesian_saved_views (
+            view_id TEXT PRIMARY KEY,
+            study_version_id TEXT NOT NULL
+                REFERENCES bayesian_study_versions(study_version_id) ON DELETE RESTRICT,
+            model_id TEXT NOT NULL
+                REFERENCES bayesian_planning_models(model_id) ON DELETE RESTRICT,
+            schema_version INTEGER NOT NULL CHECK(schema_version=1),
+            request_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('profiler_matrix','conditional_loo')),
+            save_json TEXT NOT NULL,
+            save_sha256 TEXT NOT NULL CHECK(length(save_sha256)=64),
+            config_json TEXT NOT NULL,
+            config_sha256 TEXT NOT NULL CHECK(length(config_sha256)=64),
+            result_json TEXT NOT NULL,
+            result_sha256 TEXT NOT NULL CHECK(length(result_sha256)=64),
+            created_at TEXT NOT NULL,
+            UNIQUE(study_version_id,request_id)
+        );
+        CREATE INDEX idx_bayesian_view_owner ON bayesian_saved_views(study_version_id);
+        CREATE INDEX idx_bayesian_view_model ON bayesian_saved_views(model_id);
+        """,
+    ),
+    Migration(
+        version=37,
+        name="bayesian_mixture_planning_contracts",
+        sql=BO_MIXTURE_MIGRATION_SQL,
+        requires_foreign_keys_off=True,
     ),
 )
 

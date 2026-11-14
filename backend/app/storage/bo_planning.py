@@ -96,8 +96,11 @@ def _capacity(connection: sqlite3.Connection, owner: str, added_bytes: int) -> N
         ("bayesian_planning_models", "snapshot_json"),
         ("bayesian_candidate_revisions", "rows_json"),
         ("bayesian_planning_selections", "result_json"),
+        ("bayesian_saved_views", "result_json"),
     ):
         expression = f"length(CAST(config_json AS BLOB))+length(CAST({payload} AS BLOB))"
+        if table == "bayesian_saved_views":
+            expression += "+length(CAST(save_json AS BLOB))"
         row = connection.execute(
             f"SELECT COALESCE(SUM({expression}),0),"
             f"COALESCE(SUM(CASE WHEN study_version_id=? THEN {expression} ELSE 0 END),0) "
@@ -229,7 +232,7 @@ def insert_candidate_revision(
             if model is None:
                 raise BayesianStorageConflict("bayesian_planning_artifact_invalid")
             source = dict(model)
-        elif record["schema_version"] in {2, 3}:
+        elif record["schema_version"] in {2, 3, 4}:
             source = record
             if model is not None and any(
                 model[key] != record[key]
@@ -299,7 +302,7 @@ def insert_candidate_revision(
             "row_count",
             "created_at",
         )
-        if record["schema_version"] in {2, 3}:
+        if record["schema_version"] in {2, 3, 4}:
             fields += ("source_history_revision_id", "history_sha256", "definition_sha256")
         connection.execute(
             f"INSERT INTO bayesian_candidate_revisions({','.join(fields)}) "
@@ -391,7 +394,9 @@ def find_planning_request(
     return None if not rows else dict(rows[0])
 
 
-def insert_planning_selection(root: Path, record: dict[str, Any]) -> str:
+def insert_planning_selection(
+    root: Path, record: dict[str, Any], *, renewal: dict[str, Any] | None = None
+) -> str:
     _documents(record, (("config_json", "config_sha256"), ("result_json", "result_sha256")))
     with _write(root) as connection:
         old = connection.execute(
@@ -402,8 +407,11 @@ def insert_planning_selection(root: Path, record: dict[str, Any]) -> str:
         if old is not None:
             if old[1] != record["config_sha256"]:
                 raise BayesianStorageConflict("bayesian_planning_request_conflict")
+            _check_renewal_replay(connection, str(old[0]), renewal)
             return str(old[0])
         _require_selection_source(connection, record)
+        if renewal is not None:
+            _require_renewal_source(connection, record, renewal)
         count = connection.execute(
             "SELECT COUNT(*) FROM bayesian_planning_selections WHERE study_version_id=?",
             (record["study_version_id"],),
@@ -433,7 +441,136 @@ def insert_planning_selection(root: Path, record: dict[str, Any]) -> str:
             f"VALUES ({','.join('?' for _ in fields)})",
             tuple(record[key] for key in fields),
         )
+        if renewal is not None:
+            lineage = {
+                **renewal,
+                "renewed_selection_id": record["selection_id"],
+                "study_version_id": record["study_version_id"],
+                "schema_version": 1,
+                "numerical_policy": "positive_beta_integral_v2",
+                "created_at": record["created_at"],
+            }
+            columns = tuple(lineage)
+            connection.execute(
+                f"INSERT INTO bayesian_augmentation_renewals({','.join(columns)}) "
+                f"VALUES ({','.join('?' for _ in columns)})",
+                tuple(lineage[key] for key in columns),
+            )
         return str(record["selection_id"])
+
+
+def _check_renewal_replay(
+    connection: sqlite3.Connection, selection_id: str, renewal: dict[str, Any] | None
+) -> None:
+    row = connection.execute(
+        "SELECT original_selection_id,original_config_sha256,original_result_sha256 "
+        "FROM bayesian_augmentation_renewals WHERE renewed_selection_id=?",
+        (selection_id,),
+    ).fetchone()
+    expected = (
+        None
+        if renewal is None
+        else tuple(
+            renewal[key]
+            for key in ("original_selection_id", "original_config_sha256", "original_result_sha256")
+        )
+    )
+    if (None if row is None else tuple(row)) != expected:
+        raise BayesianStorageConflict("bayesian_planning_request_conflict")
+
+
+def require_renewal_replay(root: Path, selection_id: str, renewal: dict[str, Any] | None) -> None:
+    with sqlite3.connect(metadata_db_path(root)) as connection:
+        _check_renewal_replay(connection, selection_id, renewal)
+
+
+def _require_renewal_source(
+    connection: sqlite3.Connection, record: dict[str, Any], renewal: dict[str, Any]
+) -> None:
+    old = connection.execute(
+        "SELECT s.*,c.batch_id AS confirmed_batch_id FROM bayesian_planning_selections s "
+        "LEFT JOIN bayesian_planning_confirmations c ON c.selection_id=s.selection_id "
+        "WHERE s.selection_id=? AND s.study_version_id=?",
+        (renewal["original_selection_id"], record["study_version_id"]),
+    ).fetchone()
+    if old is None or (
+        old["config_sha256"] != renewal["original_config_sha256"]
+        or old["result_sha256"] != renewal["original_result_sha256"]
+    ):
+        raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
+    _documents(dict(old), (("config_json", "config_sha256"), ("result_json", "result_sha256")))
+    if old["confirmed_batch_id"] is not None:
+        raise BayesianStorageConflict("bayesian_augmentation_already_confirmed")
+    config = json.loads(old["config_json"])
+    config["request_id"] = record["request_id"]
+    if (
+        planning_json(config) != record["config_json"]
+        or old["selection_id"] == record["selection_id"]
+    ):
+        raise BayesianStorageConflict("bayesian_planning_request_conflict")
+
+
+def get_augmentation_renewal(root: Path, selection_id: str, owner: str) -> dict[str, Any] | None:
+    with sqlite3.connect(metadata_db_path(root)) as connection:
+        connection.row_factory = sqlite3.Row
+        row = connection.execute(
+            "SELECT * FROM bayesian_augmentation_renewals "
+            "WHERE renewed_selection_id=? AND study_version_id=?",
+            (selection_id, owner),
+        ).fetchone()
+        if row is not None:
+            validate_augmentation_renewal_record(connection, dict(row))
+    return None if row is None else dict(row)
+
+
+def validate_augmentation_renewal_record(
+    connection: sqlite3.Connection, lineage: dict[str, Any]
+) -> None:
+    fields = "study_version_id,config_json,config_sha256,result_json,result_sha256,request_id"
+    old = connection.execute(
+        f"SELECT {fields} FROM bayesian_planning_selections WHERE selection_id=?",
+        (lineage["original_selection_id"],),
+    ).fetchone()
+    new = connection.execute(
+        f"SELECT {fields} FROM bayesian_planning_selections WHERE selection_id=?",
+        (lineage["renewed_selection_id"],),
+    ).fetchone()
+    if (
+        old is None
+        or new is None
+        or old[0] != lineage["study_version_id"]
+        or new[0] != old[0]
+        or old[2] != lineage["original_config_sha256"]
+        or old[4] != lineage["original_result_sha256"]
+        or lineage["schema_version"] != 1
+        or lineage["numerical_policy"] != "positive_beta_integral_v2"
+        or lineage["renewed_selection_id"] == lineage["original_selection_id"]
+    ):
+        raise BayesianStorageConflict("bayesian_planning_artifact_invalid")
+    try:
+        for row in (old, new):
+            _documents(
+                dict(zip(fields.split(","), row, strict=True)),
+                (("config_json", "config_sha256"), ("result_json", "result_sha256")),
+            )
+        config = json.loads(old[1])
+        config["request_id"] = new[5]
+        if planning_json(config) != new[1]:
+            raise ValueError
+        old_result, new_result = json.loads(old[3]), json.loads(new[3])
+        old_rows, new_rows = old_result["selected_rows"], new_result["selected_rows"]
+        if not any(
+            isinstance(row.get("acquisition"), dict)
+            and "numerical_policy" not in row["acquisition"]
+            for row in old_rows
+        ) or any(
+            isinstance(row.get("acquisition"), dict)
+            and row["acquisition"].get("numerical_policy") != "positive_beta_integral_v2"
+            for row in new_rows
+        ):
+            raise ValueError
+    except (ValueError, KeyError, TypeError, AttributeError) as exc:
+        raise BayesianStorageConflict("bayesian_planning_artifact_invalid") from exc
 
 
 def _require_selection_source(connection: sqlite3.Connection, record: dict[str, Any]) -> None:
@@ -644,6 +781,17 @@ def planning_owner_manifest(connection: sqlite3.Connection, study_id: str) -> di
             "bayesian_planning_selections",
             "selection_id,config_sha256,result_sha256",
         ),
+        (
+            "augmentation_renewal",
+            "bayesian_augmentation_renewals",
+            "renewed_selection_id,original_selection_id,original_config_sha256,"
+            "original_result_sha256,numerical_policy,schema_version",
+        ),
+        (
+            "saved_view",
+            "bayesian_saved_views",
+            "view_id,model_id,save_sha256,config_sha256,result_sha256",
+        ),
     )
     manifest = {}
     counts = {}
@@ -709,6 +857,12 @@ def validate_planning_confirmation(
 
 def delete_planning_owner(connection: sqlite3.Connection, study_version_id: str) -> None:
     """Use only within the existing explicit owner deletion transaction."""
+    connection.execute(
+        "DELETE FROM bayesian_saved_views WHERE study_version_id=?", (study_version_id,)
+    )
+    connection.execute(
+        "DELETE FROM bayesian_augmentation_renewals WHERE study_version_id=?", (study_version_id,)
+    )
     connection.execute(
         "DELETE FROM bayesian_planning_confirmations WHERE selection_id IN "
         "(SELECT selection_id FROM bayesian_planning_selections WHERE study_version_id=?)",

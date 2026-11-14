@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { BayesianLooPanel } from "./BayesianLooPanel";
 import { BayesianProfileGrid, BayesianProfileLevelMap } from "./BayesianProfileGrid";
+import { BayesianProfileMatrix } from "./BayesianProfileMatrix";
+import { useBoDiagnosticView } from "./hooks/useBoDiagnosticView";
+import { matrixFromReceipt } from "./boSavedViews";
+import { BoViewSaveAction } from "./BoViewSaveAction";
 import { categoryDisplayTicks } from "./bayesianProgress";
 import { BayesianAutoStrategyPanel } from "./BayesianAutoStrategyPanel";
 import { ArrowDown, ArrowUp, Check, Redo2, RefreshCw, Undo2 } from "lucide-react";
@@ -26,12 +30,14 @@ interface Props { study: MixedStudyResponse; disabled: boolean; onConfirmed: (id
 const policies: AugmentationPolicy[] = ["greedy_mixed_maximin_v1", "refine_ei_alternating_desirability_response_sd_v2", "confirm_mean_then_competitive_sd_v1"];
 export function BayesianMixedPlanningPanel(props: Props) {
   const state = useMixedPlanning(props), { study, onConfirmingChange } = props, { locale } = useI18n(), text = mixedMessages(locale), common = planningMessages(locale), auto = augmentationMessages(locale);
-  const key = mixedStudyKey(study), locked = props.disabled || state.busy !== null || state.isConfirming;
+  const key = mixedStudyKey(study);
   const [candidateDraft, setCandidateDraft] = useState({ key, name: "", count: "60", seed: "42", tolerance: ".000001", ordinal: false, content: "", header: true });
   const [preview, setPreview] = useState<{ source: string; content: string; header: boolean; points: MixedActualPoint[] } | null>(null), [inputError, setInputError] = useState(false);
   const candidate = candidateDraft.key === key ? candidateDraft : { key, name: "", count: "60", seed: "42", tolerance: ".000001", ordinal: false, content: "", header: true };
   const [profileDraft, setProfileDraft] = useState({ key, holds: mixedDefaultPoint(study), axis: study.factors[0].factor_id });
   const profileInput = profileDraft.key === key ? profileDraft : { key, holds: mixedDefaultPoint(study), axis: study.factors[0].factor_id };
+  const matrix = useBoDiagnosticView(`${key}:${state.model?.model_id}:${state.model?.snapshot_sha256}:${JSON.stringify({ profileInput, candidate, fit: state.fitDraft, draft: state.draft })}`);
+  const locked = props.disabled || state.busy !== null || state.isConfirming || matrix.pending;
   const point = parseMixedPoint(profileInput.holds, study.factors), profilePoints = point ? mixedProfilePoints(study, point, profileInput.axis) : null;
   const tolerance = strictBoNumber(candidate.tolerance), count = planningInteger(candidate.count, 1, 10000), seed = planningInteger(candidate.seed, 0, 2147483647);
   const validCandidates = count !== null && seed !== null && tolerance !== null && tolerance >= 1e-12 && tolerance <= .1 && candidate.name.trim().length > 0 && candidate.name.trim().length <= 120;
@@ -49,6 +55,11 @@ export function BayesianMixedPlanningPanel(props: Props) {
     state.createCandidates(candidate.name, { kind: "explicit_rows", points: preview.points }, tolerance, candidate.ordinal);
   }
   const selectedModel = state.model;
+  function evaluateMatrix() {
+    if (!selectedModel || !point) return;
+    void matrix.run({ studyId: study.study_id, modelId: selectedModel.model_id, modelHash: selectedModel.snapshot_sha256, historyHash: selectedModel.history_sha256, responseIds: selectedModel.objective.responses.map(row => row.response_id), factorIds: study.factors.map(row => row.factor_id) },
+      { kind: "profiler_matrix", expected_model_sha256: selectedModel.snapshot_sha256, expected_history_sha256: selectedModel.history_sha256, holds: point, points_per_axis: 21, time_budget_ms: 120000 });
+  }
   return <section className="bo-planning" aria-label={text.planning}>
     <h3>{text.planning}</h3><p>{common.meaning}</p>
     <button type="button" className="secondary-button" disabled={locked || state.loading} onClick={() => void state.refresh()}><RefreshCw size={16} aria-hidden="true" />{common.refresh}</button>
@@ -115,7 +126,8 @@ export function BayesianMixedPlanningPanel(props: Props) {
       <legend>{text.hold}</legend><div className="bo-planning-controls">{study.factors.map(factor => <label key={factor.factor_id}>{factor.name}{factor.unit ? ` (${factor.unit})` : ""}{isMixedCategory(factor) ? <select value={profileInput.holds[factor.factor_id]} onChange={event => editHold(factor.factor_id, event.currentTarget.value)}>{factor.levels.map(level => <option key={level} value={level}>{level}</option>)}</select> : <input type="text" value={profileInput.holds[factor.factor_id]} onChange={event => editHold(factor.factor_id, event.currentTarget.value)} />}</label>)}</div>
       <label>{common.axis}<select aria-label={common.axis} value={profileInput.axis} onChange={event => { const axis = event.currentTarget.value; if (state.invalidate(false)) setProfileDraft({ ...profileInput, axis }); }}>{study.factors.map(factor => <option key={factor.factor_id} value={factor.factor_id}>{factor.name}</option>)}</select></label>
       <div className="bo-planning-actions"><button type="button" disabled={!point} onClick={() => { if (point) void state.evaluate([point], null); }}>{common.point}</button><button type="button" disabled={!profilePoints} onClick={() => { if (profilePoints) void state.evaluate(profilePoints, profileInput.axis); }}>{isMixedCategory(study.factors.find(factor => factor.factor_id === profileInput.axis)!) ? text.levelProfile : common.curve}</button></div>{!profilePoints && <p>{common.profileInvalid}</p>}
-    </fieldset>{state.profile && <><MixedProfileView profile={state.profile} study={study} />{state.profile.points.length === 1 && state.page && <button type="button" disabled={locked || study.status !== "active"} onClick={() => state.createCandidates(state.page!.revision.name, { kind: "append_rows", points: state.profile!.points }, state.page!.revision.duplicate_tolerance, state.page!.revision.ordinal_rank_distance, true)}>{common.append}</button>}</>}</section>}
+      <button type="button" disabled={!point} onClick={evaluateMatrix}>{common.evaluateMatrix}</button>
+    </fieldset><p>{common.matrixBudget}</p>{matrix.busy && <p role="status">{common.busy}</p>}{matrix.error && <p role="alert">{common.matrixFailed}</p>}{matrix.receipt && <><BayesianProfileMatrix view={matrixFromReceipt(matrix.receipt)} /><BoViewSaveAction receipt={matrix.receipt} /></>}{state.profile && <><MixedProfileView profile={state.profile} study={study} />{state.profile.points.length === 1 && state.page && <button type="button" disabled={locked || study.status !== "active"} onClick={() => state.createCandidates(state.page!.revision.name, { kind: "append_rows", points: state.profile!.points }, state.page!.revision.duplicate_tolerance, state.page!.revision.ordinal_rank_distance, true)}>{common.append}</button>}</>}</section>}
   </section>;
 }
 

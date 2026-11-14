@@ -559,3 +559,28 @@ documented scope; a live custom curve is not claimed to be in an unrelated saved
 report. The mixed selector now distinguishes a legitimate response ID named
 `desirability` from the composite quantity. See the completion audit for separate
 unit/browser/CI status rather than treating this feature description as evidence.
+
+## 16. Whole-Factor Views And One Mixture Group (API44)
+
+The API44 extension supersedes the implementation gaps in sections14-15 within
+this scope: all-factor response/desirability Profiler with separate latent and
+new-observation SD; immutable saved matrix/conditional-LOO views and managed
+offline HTML; explicit legacy recommendation renewal; and one bounded continuous
+mixture group with lower/upper pseudocomponent coding and optional process factors.
+The matrix uses the existing interactive charts and explicit source/hold snapshots.
+Mixture component curves co-vary other components to preserve closure, not
+independent component sweeps. Fixed components have an explicit unavailable view.
+
+Mixture lifecycle supports observed X/Y import, saved numeric or categorical
+surrogates, feasible candidate tables, manual/base-posterior review, greedy
+maximin selection, atomic pending trials, separate actual observations and the
+next cycle. Mixture-specific EI/ETI/MaxPro, multiple mixture groups and automatic
+amount normalization are not included. Ordinary BO policies remain available
+under their existing contracts; they are not silently reinterpreted for mixtures.
+
+Historical absent-policy EI values remain readable as stored. A new unconfirmed
+decision requires an explicit new review linked to the old hashes; this is not
+a rewrite or an automatic confirmation. Native JMP fitted-output parity remains
+owner-run, and undocumented JMP Auto/tail rules are not claimed implemented.
+See [the current verification audit](bo_remaining_completion.md) and
+[mixture contract](bo_mixture_backend_contract.md) for tested scope and limitations.

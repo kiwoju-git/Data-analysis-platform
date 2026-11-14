@@ -34,6 +34,7 @@ from app.services.bo_augmentation import (
     _routing_context,
     _source_candidate,
     _verify_binding,
+    augmentation_requires_renewal,
     get_augmentation_selection,
     validate_augmentation_for_commit,
     validate_saved_augmentation,
@@ -82,6 +83,8 @@ def confirm_augmentation_selection(
     if selected.confirmed_batch_id is not None:
         return get_augmentation_batch(settings, study_id, selected.confirmed_batch_id)
     try:
+        if augmentation_requires_renewal(selected.calculation):
+            raise _error("bayesian_augmentation_renewal_required")
         return _confirm_uncommitted_augmentation(settings, study_id, selection_id, selected)
     except ApiError:
         # Another confirmation may commit after our unconfirmed snapshot read.

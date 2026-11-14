@@ -164,6 +164,14 @@ def saved_augmentation(tmp_path, monkeypatch):
 
     monkeypatch.setattr(service, "get_bayesian_study", lambda *args: state.study)
     monkeypatch.setattr(storage, "get_planning_selection", read_record)
+
+    def no_renewal(root, selection_id, study_version):
+        assert root == state.settings.workspace_root
+        assert selection_id == str(state.selection_id)
+        assert study_version == str(state.study.study_version_id)
+        return None  # This historical fixture has no renewal sidecar or real database.
+
+    monkeypatch.setattr(storage, "get_augmentation_renewal", no_renewal)
     monkeypatch.setattr(
         service,
         "_source_candidate",

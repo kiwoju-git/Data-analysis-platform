@@ -93,6 +93,34 @@ class BoNumericFactorDomain:
 
 
 @dataclass(frozen=True)
+class BoPseudocomponentFactorDomain(BoNumericFactorDomain):
+    """Already-coded affine coordinate, not an independently normalized factor."""
+
+    encoded_high: float
+    transform_sha256: str
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if (
+            self.domain != DoeFactorDomain(0.0, 1.0)
+            or _number(self.encoded_high) < 0
+            or type(self.transform_sha256) is not str
+            or len(self.transform_sha256) != 64
+            or any(c not in "0123456789abcdef" for c in self.transform_sha256)
+        ):
+            raise _invalid("bayesian_pseudocomponent_domain_invalid")
+
+    def encode(self, value: Any) -> float:
+        number = _number(value)
+        if not 0 <= number <= self.encoded_high:
+            raise _invalid("bayesian_factor_value_not_executable")
+        return number
+
+    def decode(self, encoded: Any) -> float:
+        return self.encode(encoded)
+
+
+@dataclass(frozen=True)
 class BoCategoricalFactorDomain:
     factor_id: str
     kind: Literal["nominal", "ordinal"]
@@ -205,7 +233,16 @@ def bo_factor_domains_to_payload(factors: Sequence[BoFactorDomain]) -> dict[str,
     validate_bo_factor_domains(factors)
     items: list[dict[str, Any]] = []
     for factor in factors:
-        if isinstance(factor, BoNumericFactorDomain):
+        if isinstance(factor, BoPseudocomponentFactorDomain):
+            items.append(
+                {
+                    "factor_id": factor.factor_id,
+                    "kind": "mixture_pseudocomponent",
+                    "encoded_high": factor.encoded_high,
+                    "transform_sha256": factor.transform_sha256,
+                }
+            )
+        elif isinstance(factor, BoNumericFactorDomain):
             items.append(
                 {
                     "factor_id": factor.factor_id,
@@ -225,9 +262,12 @@ def bo_factor_domains_to_payload(factors: Sequence[BoFactorDomain]) -> dict[str,
                     "correlation_policy": factor.correlation_policy,
                 }
             )
+    mixture = any(isinstance(f, BoPseudocomponentFactorDomain) for f in factors)
     return {
-        "schema_version": 1,
-        "encoding_policy": "numeric_normalized_category_index_v1",
+        "schema_version": 2 if mixture else 1,
+        "encoding_policy": "mixture_pseudocomponents_process_v1"
+        if mixture
+        else "numeric_normalized_category_index_v1",
         "factors": items,
     }
 
@@ -237,8 +277,11 @@ def bo_factor_domains_from_payload(payload: Any) -> tuple[BoFactorDomain, ...]:
         not isinstance(payload, dict)
         or set(payload) != {"schema_version", "encoding_policy", "factors"}
         or type(payload["schema_version"]) is not int
-        or payload["schema_version"] != 1
-        or payload["encoding_policy"] != "numeric_normalized_category_index_v1"
+        or (payload["schema_version"], payload["encoding_policy"])
+        not in {
+            (1, "numeric_normalized_category_index_v1"),
+            (2, "mixture_pseudocomponents_process_v1"),
+        }
         or not isinstance(payload["factors"], list)
         or not 1 <= len(payload["factors"]) <= MAX_BO_FACTORS
     ):
@@ -249,7 +292,23 @@ def bo_factor_domains_from_payload(payload: Any) -> tuple[BoFactorDomain, ...]:
             raise _invalid("bayesian_factor_domain_payload_invalid")
         if not isinstance(item.get("kind"), str):
             raise _invalid("bayesian_factor_domain_payload_invalid")
-        if item["kind"] in {"nominal", "ordinal"}:
+        if item["kind"] == "mixture_pseudocomponent":
+            if payload["schema_version"] != 2 or set(item) != {
+                "factor_id",
+                "kind",
+                "encoded_high",
+                "transform_sha256",
+            }:
+                raise _invalid("bayesian_factor_domain_payload_invalid")
+            factors.append(
+                BoPseudocomponentFactorDomain(
+                    item["factor_id"],
+                    DoeFactorDomain(0.0, 1.0),
+                    item["encoded_high"],
+                    item["transform_sha256"],
+                )
+            )
+        elif item["kind"] in {"nominal", "ordinal"}:
             if set(item) != {"factor_id", "kind", "levels", "correlation_policy"} or not isinstance(
                 item["levels"], list
             ):
@@ -279,4 +338,6 @@ def bo_factor_domains_from_payload(payload: Any) -> tuple[BoFactorDomain, ...]:
             )
     result = tuple(factors)
     validate_bo_factor_domains(result)
+    if bo_factor_domains_to_payload(result) != payload:
+        raise _invalid("bayesian_factor_domain_payload_invalid")
     return result

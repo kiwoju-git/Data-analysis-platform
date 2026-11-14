@@ -13,6 +13,8 @@ import {
 } from "../../../api";
 import { createLatestRequestGuard } from "../../../latestRequest";
 import type { MixedStudyResponse } from "../../../api/types/boMixed";
+import type { MixtureStudy } from "../../../api/boMixture";
+import { validMixtureStudy } from "../boMixtureDraft";
 import { validMixedStudy } from "../boMixedDraft";
 import { bayesianRequestId } from "../bayesianRequestId";
 import { vectorStudySourceKey } from "../bayesianVectorDraft";
@@ -25,6 +27,7 @@ import {
 export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
   const [study, setStudy] = useState<BayesianStudyResponse | null>(null);
   const [mixedStudy, setMixedStudy] = useState<MixedStudyResponse | null>(null);
+  const [mixtureStudy, setMixtureStudy] = useState<MixtureStudy | null>(null);
   const [observations, setObservations] = useState<Record<string, string>>({});
   const [pendingTransition, setPendingTransition] =
     useState<PendingTrialTransition | null>(null);
@@ -64,16 +67,20 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setError(null);
     setStudy(null);
     setMixedStudy(null);
+    setMixtureStudy(null);
     if (selectedStudyId === null) {
       setIsRestoring(false);
       return;
     }
     const request = restoreGuard.begin();
     setIsRestoring(true);
-    void fetchBayesianStudy(selectedStudyId, { includeMixed: true })
+    void fetchBayesianStudy(selectedStudyId, { includeMixture: true })
       .then((restored) => {
         if (!restoreGuard.isCurrent(request)) return;
-        if (restored.study_schema_version === 7) {
+        if (restored.study_schema_version === 8) {
+          if (!validMixtureStudy(restored, selectedStudyId)) throw new Error("bayesian_mixture_source_mismatch");
+          setMixtureStudy(restored); setMixedStudy(null); setStudy(null);
+        } else if (restored.study_schema_version === 7) {
           if (!validMixedStudy(restored, selectedStudyId)) throw new Error("bayesian_mixed_source_mismatch");
           setMixedStudy(restored); setStudy(null);
         } else { setStudy(restored); setMixedStudy(null); }
@@ -94,8 +101,13 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
     setIsRestoring(true);
     setError(null);
     try {
-      const restored = await fetchBayesianStudy(studyId, { includeMixed: true });
+      const restored = await fetchBayesianStudy(studyId, { includeMixture: true });
       if (!restoreGuard.isCurrent(request)) return null;
+      setMixtureStudy(null);
+      if (restored.study_schema_version === 8) {
+        if (!validMixtureStudy(restored, studyId)) throw new Error("bayesian_mixture_source_mismatch");
+        setMixtureStudy(restored); setMixedStudy(null); setStudy(null); return null;
+      }
       if (restored.study_schema_version === 7) {
         if (!validMixedStudy(restored, studyId)) throw new Error("bayesian_mixed_source_mismatch");
         setMixedStudy(restored); setStudy(null); return null;
@@ -314,6 +326,7 @@ export function useBayesianStudyLifecycleState(selectedStudyId: string | null) {
   }
 
   return {
+    mixtureStudy,
     mixedStudy,
     acceptMixedCommit: (updated: MixedStudyResponse, expectedHistory: string) => {
       const current = currentSource.current;

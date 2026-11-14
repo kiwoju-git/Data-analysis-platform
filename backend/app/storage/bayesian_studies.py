@@ -201,6 +201,8 @@ class BayesianStudyDeletionGraphRecord:
     candidate_revision_count: int = 0
     planning_selection_count: int = 0
     planning_confirmation_count: int = 0
+    augmentation_renewal_count: int = 0
+    saved_view_count: int = 0
     planning_manifest_sha256: str = ""
 
 
@@ -753,7 +755,9 @@ def insert_bayesian_recommendation_batch_bundle(
                         raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
                 connection.commit()
                 return
-        if (batch.result_schema_version in {8, 9, 10, 11, 12}) != (planning_selection is not None):
+        if (batch.result_schema_version in {8, 9, 10, 11, 12, 13}) != (
+            planning_selection is not None
+        ):
             raise BayesianStorageConflict("bayesian_planning_selection_mismatch")
         if planning_selection is not None:
             from app.storage.bo_planning import validate_planning_confirmation
@@ -1504,9 +1508,9 @@ def _validated_observation_columns(
         "WHERE study_version_id=?;",
         (history.study_version_id,),
     ).fetchone()
-    if owner is None or _row_int(owner[0]) not in {1, 2, 3, 4, 5, 6, 7}:
+    if owner is None or _row_int(owner[0]) not in {1, 2, 3, 4, 5, 6, 7, 8}:
         raise BayesianStorageConflict("bayesian_observation_mode_invalid")
-    vector = _row_int(owner[0]) in {5, 6, 7}
+    vector = _row_int(owner[0]) in {5, 6, 7, 8}
     if history.schema_version != (2 if vector else 1):
         raise BayesianStorageConflict("bayesian_observation_mode_invalid")
     ids = [trial_id for trial_id, _ in observations]
@@ -1523,7 +1527,7 @@ def _validated_observation_columns(
                 and objective.get("curve_policy")
                 in (
                     {"derringer_suich_linear_v1", "per_response_target_gaussian_or_ds_v1"}
-                    if _row_int(owner[0]) == 7
+                    if _row_int(owner[0]) in {7, 8}
                     else {"per_response_target_gaussian_or_ds_v1"}
                     if _row_int(owner[0]) == 6
                     else {"derringer_suich_linear_v1"}

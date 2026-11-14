@@ -72,3 +72,15 @@ export interface AugmentationBatchResponse extends Omit<PlanningBatchResponse,
   model: PlanningModelDetail | null;
 }
 export type { CandidatePage };
+
+export interface AugmentationRenewalRequest {
+  request_id: string; expected_config_sha256: string; expected_result_sha256: string;
+}
+export interface AugmentationRenewalLineage {
+  schema_version: 1; study_version_id: string; renewed_selection_id: string;
+  original_selection_id: string; original_config_sha256: string; original_result_sha256: string;
+  numerical_policy: "positive_beta_integral_v2"; created_at: string;
+}
+export interface AugmentationRenewalResponse {
+  selection: AugmentationSelectionResponse; lineage: AugmentationRenewalLineage;
+}

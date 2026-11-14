@@ -1,6 +1,9 @@
 import type { AppLocale } from "./types";
 
 const en = {
+  profileMatrix: "Whole-factor profiler matrix", evaluateMatrix: "Evaluate all factors", appliedHolds: "Applied hold settings",
+  matrixBudget: "Matrix limits: 10 factors, 1,000 points, 100 points per sequential request, 120 seconds total; each request at most 60 seconds.",
+  matrixFailed: "The complete matrix could not be verified. No partial matrix was applied. Review the settings and evaluate again.",
   profileGrid: "All responses at the evaluated factor",
   constraintStatus: "Constraint status", constraintsSatisfied: "Within the stored constraints.",
   profileConstraintMeaning: "Diamond markers are predictions outside the stored constraints, not eligible experiment candidates. No predicted values have been removed or changed.",
@@ -30,6 +33,9 @@ const en = {
   profiler: "Saved-model profiler", axis: "Profile factor", point: "Evaluate complete point", curve: "Evaluate conditional curve", holds: "Actual factor settings / fixed holds", profileMeaning: "Conditional predictions use the displayed fixed holds and the exact saved model. These are not observed responses or marginal averages.", mean: "Predicted mean", latent: "Latent SD", predictive: "New-measurement predictive SD", response: "Response", profileInvalid: "Enter complete executable settings. A discrete profile is limited to 100 levels; no levels are silently skipped.", append: "Append evaluated point as new candidate revision", eligibilityOld: "Eligibility differs from the current trial list; the prediction still belongs to its saved model.", none: "Not evaluated", noSelection: "Select candidates to review.",
 };
 const ko: typeof en = {
+  profileMatrix: "전체 요인 Profiler 행렬", evaluateMatrix: "전체 요인 예측", appliedHolds: "적용된 고정 설정",
+  matrixBudget: "행렬 한도: 요인 10개, 총 1,000점, 순차 요청당 100점, 총 120초, 요청당 최대 60초.",
+  matrixFailed: "전체 행렬을 검증하지 못했습니다. 일부 결과는 적용하지 않았습니다. 설정을 확인하고 다시 예측하세요.",
   profileGrid: "평가한 요인에서의 전체 반응",
   constraintStatus: "제약 상태", constraintsSatisfied: "저장된 제약 조건 안입니다.",
   profileConstraintMeaning: "마름모는 저장된 제약 밖의 예측점이며 실행 후보가 아닙니다. 예측값을 삭제하거나 변경하지 않았습니다.",

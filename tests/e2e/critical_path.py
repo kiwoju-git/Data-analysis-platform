@@ -58,6 +58,7 @@ from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from bo_progress import verify_bo_progress
 from bo_dataset_import import verify_bo_dataset_import
+from bo_mixture_completion import verify_mixture_completion
 from bo_persistent_planning import verify_profile_constraints
 from bo_xy_gpr_navigation import verify_bo_xy_gpr_navigation
 from gpr_navigation import verify_gpr_navigation
@@ -239,12 +240,12 @@ SUITE_STAGES = {
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
-        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import", "bo_profile_constraints",
+        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import", "bo_profile_constraints", "bo_mixture_completion",
         "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_profile_constraints", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_profile_constraints", "bo_mixture_completion", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
@@ -415,6 +416,7 @@ def main() -> int:
         wait_for_url(
             frontend_base_url, "frontend dev server", managed_processes, diagnostics
         )
+        (workspace_root / ".datalab-e2e-owned").write_text(str((workspace_root / "workspace").resolve()), encoding="utf-8")
         run_browser_flow(
             frontend_base_url,
             diagnostics,
@@ -432,6 +434,7 @@ def main() -> int:
             args.analysis_completion_only,
             suite=args.suite,
             built_workflow_base_url=backend_base_url if args.suite == "workflows" else None,
+            synthetic_workspace=workspace_root / "workspace",
         )
         print("E2E critical path passed")
         return 0
@@ -741,6 +744,7 @@ def run_browser_flow(
     *,
     suite: str = "full",
     built_workflow_base_url: str | None = None,
+    synthetic_workspace: Path | None = None,
 ) -> None:
     stages = suite_stage_ids(suite)
     source_frontend_base_url = frontend_base_url
@@ -825,7 +829,10 @@ def run_browser_flow(
                     verify_bo_dataset_import(browser, frontend_base_url, diagnostics.root / "bo-dataset-import", isolated_workspace=True)
                 if "bo_profile_constraints" in stages:
                     diagnostics.step("verify constrained saved-model profiler values and status")
-                    verify_profile_constraints(browser, frontend_base_url, diagnostics.root / "bo-profile-constraints")
+                    verify_profile_constraints(browser, frontend_base_url, diagnostics.root / "bo-profile-constraints", synthetic_workspace=synthetic_workspace)
+                if "bo_mixture_completion" in stages:
+                    diagnostics.step("verify measured mixture import, saved profiler and next batch")
+                    verify_mixture_completion(browser, frontend_base_url, diagnostics.root / "bo-mixture-completion")
                 if "bo_xy_gpr_navigation" in stages:
                     diagnostics.step("verify canonical GPR navigation with selected dataset")
                     verify_bo_xy_gpr_navigation(browser, frontend_base_url, diagnostics.root / "bo-gpr-navigation", isolated_workspace=True)

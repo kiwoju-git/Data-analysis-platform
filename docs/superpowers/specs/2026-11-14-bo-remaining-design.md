@@ -1,6 +1,7 @@
-# BO Remaining Functional Work: Design For Review
+# BO Remaining Functional Work: Approved Design
 
-Status: proposed domain choices; not an implementation-completion report.
+Status: approved by the user on 2026-11-14; implementation and scoped review complete;
+full verification/integration status is recorded in `docs/bo_remaining_completion.md`.
 Baseline: `a9abb4bac0f6104b8fd6ac270edcc80a5bc32050`, API43 / metadata34.
 
 ## Intent And Scope
@@ -27,9 +28,9 @@ No Linux Release publication in this work. Existing native/archive checks remain
    closure-preserving sampling, pseudocomponent encoding and conditional curves;
    it is not a correct substitute.
 
-The first approach is the only proposed architecture. The size of the mixture
-domain (one versus multiple groups) is pending the user's asynchronous answer.
-The defaults below are engineering proposals, not claimed prior user approval.
+The user approved the first approach and all four deliverables. The first
+mixture release uses the single-group scope specified below. Exact native JMP
+numerical parity remains a separate user-owned comparison, not an acceptance claim.
 
 ## Deliverable 1: Complete Profiler Matrix
 

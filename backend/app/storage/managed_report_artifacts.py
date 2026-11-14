@@ -220,6 +220,27 @@ def _validate_source(connection: sqlite3.Connection, source: ManagedSource) -> N
     attachment = source.attachment
     if attachment.kind == "none":
         return
+    if attachment.kind == "view":
+        row = connection.execute(
+            "SELECT v.model_id,v.config_sha256,v.result_sha256,m.snapshot_sha256,m.config_sha256 "
+            "FROM bayesian_saved_views v JOIN bayesian_planning_models m ON m.model_id=v.model_id "
+            "AND m.study_version_id=v.study_version_id "
+            "WHERE v.view_id=? AND v.study_version_id=? AND m.source_history_revision_id=?",
+            (
+                str(attachment.view_id),
+                str(source.study_version_id),
+                str(source.history_revision_id),
+            ),
+        ).fetchone()
+        if row is None or tuple(row) != (
+            str(attachment.model_id),
+            attachment.request_sha256,
+            attachment.view_sha256,
+            attachment.model_sha256,
+            attachment.model_config_sha256,
+        ):
+            raise _error("managed_report_source_conflict")
+        return
     table, id_column, attachment_id = (
         ("bayesian_recommendations", "recommendation_id", str(attachment.recommendation_id))
         if attachment.kind == "recommendation"
@@ -228,7 +249,7 @@ def _validate_source(connection: sqlite3.Connection, source: ManagedSource) -> N
     payload_column = "result_payload_sha256" if attachment.kind == "recommendation" else "NULL"
     row = connection.execute(
         f"SELECT result_sha256, {payload_column}, result_json, "
-        f"source_observation_history_sha256, method_id FROM {table} "
+        f"source_observation_history_sha256, method_id, result_schema_version FROM {table} "
         f"WHERE {id_column}=? AND study_version_id=? AND source_history_revision_id=? "
         "AND length(CAST(result_json AS BLOB)) <= ?",
         (
@@ -244,7 +265,7 @@ def _validate_source(connection: sqlite3.Connection, source: ManagedSource) -> N
             payload_sha = (
                 row[1]
                 if attachment.kind == "recommendation"
-                else json.loads(row[2]).get("result_sha256")
+                else (row[0] if row[5] == 13 else json.loads(row[2]).get("result_sha256"))
             )
         except (ValueError, AttributeError, TypeError) as exc:
             raise _error("managed_report_source_conflict") from exc

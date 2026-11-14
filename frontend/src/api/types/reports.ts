@@ -37,7 +37,8 @@ export interface BayesianHistoryReportSource {
   definition_sha256: string; history_revision_id: string; expected_source_sha256: string;
   attachment: { kind: "none" }
     | { kind: "recommendation"; recommendation_id: string; result_json_sha256: string; result_payload_sha256: string }
-    | { kind: "batch"; batch_id: string; result_json_sha256: string; result_payload_sha256: string };
+    | { kind: "batch"; batch_id: string; result_json_sha256: string; result_payload_sha256: string }
+    | { kind: "view"; view_id: string; model_id: string; model_sha256: string; model_config_sha256: string; request_sha256: string; view_sha256: string };
 }
 export type ReportSourceRef = AnalysisRunReportSource | RegressionPredictionReportSource | DoeAnalysisReportSource | DoeOptimizerReportSource | LhsDesignReportSource | BayesianHistoryReportSource;
 export interface ReportSourceDescriptor {

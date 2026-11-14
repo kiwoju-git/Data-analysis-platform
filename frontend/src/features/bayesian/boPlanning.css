@@ -50,3 +50,11 @@
 .bo-planning-order button { display: inline-flex; align-items: center; justify-content: center; inline-size: 2.5rem; block-size: 2.5rem; flex: 0 0 2.5rem; }
 @container (max-width: 700px) { .bo-planning-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container (max-width: 440px) { .bo-planning-controls { grid-template-columns: minmax(0, 1fr); } }
+.bo-profile-matrix { min-width: 0; }
+.bo-profile-matrix-controls { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin-block: .65rem; }
+.bo-profile-matrix-controls > label { display: grid; gap: .35rem; flex: 1 1 16rem; max-inline-size: 24rem; min-inline-size: 0; }
+.bo-profile-matrix-pagination { display: flex; align-items: center; gap: .5rem; }
+.bo-profile-matrix-pagination > span { min-inline-size: 5rem; text-align: center; font-variant-numeric: tabular-nums; }
+.bo-profile-matrix-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.bo-profile-matrix code { overflow-wrap: anywhere; }
+@media (max-width: 760px) { .bo-profile-matrix-row { grid-template-columns: minmax(0, 1fr); } }

@@ -71,6 +71,19 @@ from app.api.v1.schemas.bo_mixed_studies import (
     MixedTrialListResponse,
     MixedTrialTransitionResponse,
 )
+from app.api.v1.schemas.bo_mixture import MixtureStudyResponse
+from app.api.v1.schemas.bo_mixture_dataset_import import (
+    MixtureDatasetImportCreateRequest,
+    MixtureDatasetImportPreflightRequest,
+    MixtureDatasetImportPreflightResponse,
+)
+from app.api.v1.schemas.bo_mixture_lifecycle import (
+    MixtureObservationBatchResponse,
+    MixtureReplicateCreateResponse,
+    MixtureStudyCloseResponse,
+    MixtureTrialListResponse,
+    MixtureTrialTransitionResponse,
+)
 from app.services.bayesian_desirability_recommendations import (
     confirm_desirability_review,
     create_desirability_review,
@@ -111,21 +124,24 @@ from app.services.bo_dataset_import import create_dataset_import, preflight_data
 router = APIRouter(prefix="/bayesian-studies", tags=["bayesian-studies"])
 
 
-@router.post("/import-preflight", response_model=DatasetImportPreflightResponse)
+@router.post(
+    "/import-preflight",
+    response_model=DatasetImportPreflightResponse | MixtureDatasetImportPreflightResponse,
+)
 def dataset_import_preflight_route(
-    request: Request, body: DatasetImportPreflightRequest
-) -> DatasetImportPreflightResponse:
+    request: Request, body: DatasetImportPreflightRequest | MixtureDatasetImportPreflightRequest
+) -> DatasetImportPreflightResponse | MixtureDatasetImportPreflightResponse:
     return preflight_dataset_import(request.app.state.settings, body)
 
 
 @router.post(
     "/from-dataset",
-    response_model=BayesianStudyResponse | MixedStudyResponse,
+    response_model=BayesianStudyResponse | MixedStudyResponse | MixtureStudyResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def dataset_import_create_route(
-    request: Request, body: DatasetImportCreateRequest
-) -> BayesianStudyResponse | MixedStudyResponse:
+    request: Request, body: DatasetImportCreateRequest | MixtureDatasetImportCreateRequest
+) -> BayesianStudyResponse | MixedStudyResponse | MixtureStudyResponse:
     return create_dataset_import(request.app.state.settings, body)
 
 
@@ -218,7 +234,9 @@ def confirm_bayesian_review_route(
 
 @router.post(
     "/{study_id}/trials/{trial_id}/replicates",
-    response_model=BayesianReplicateCreateResponse | MixedReplicateCreateResponse,
+    response_model=BayesianReplicateCreateResponse
+    | MixedReplicateCreateResponse
+    | MixtureReplicateCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_bayesian_replicates_route(
@@ -226,7 +244,9 @@ def create_bayesian_replicates_route(
     study_id: UUID,
     trial_id: UUID,
     body: BayesianReplicateCreateRequest,
-) -> BayesianReplicateCreateResponse | MixedReplicateCreateResponse:
+) -> (
+    BayesianReplicateCreateResponse | MixedReplicateCreateResponse | MixtureReplicateCreateResponse
+):
     return create_bayesian_replicates(request.app.state.settings, study_id, trial_id, body)
 
 
@@ -270,10 +290,12 @@ def export_bayesian_initial_design_route(request: Request, study_id: UUID) -> Re
     )
 
 
-@router.get("/{study_id}", response_model=BayesianStudyResponse | MixedStudyResponse)
+@router.get(
+    "/{study_id}", response_model=BayesianStudyResponse | MixedStudyResponse | MixtureStudyResponse
+)
 def get_bayesian_study_route(
     request: Request, study_id: UUID
-) -> BayesianStudyResponse | MixedStudyResponse:
+) -> BayesianStudyResponse | MixedStudyResponse | MixtureStudyResponse:
     from app.services.bo_mixed_studies import get_any_bayesian_study
 
     return get_any_bayesian_study(request.app.state.settings, study_id)
@@ -300,23 +322,27 @@ def delete_bayesian_study_route(
 
 
 @router.post(
-    "/{study_id}/close", response_model=BayesianStudyCloseResponse | MixedStudyCloseResponse
+    "/{study_id}/close",
+    response_model=BayesianStudyCloseResponse | MixedStudyCloseResponse | MixtureStudyCloseResponse,
 )
 def close_bayesian_study_route(
     request: Request,
     study_id: UUID,
     body: BayesianStudyCloseRequest,
-) -> BayesianStudyCloseResponse | MixedStudyCloseResponse:
+) -> BayesianStudyCloseResponse | MixedStudyCloseResponse | MixtureStudyCloseResponse:
     return close_bayesian_study(request.app.state.settings, study_id, body)
 
 
-@router.get("/{study_id}/trials", response_model=BayesianTrialListResponse | MixedTrialListResponse)
+@router.get(
+    "/{study_id}/trials",
+    response_model=BayesianTrialListResponse | MixedTrialListResponse | MixtureTrialListResponse,
+)
 def list_bayesian_trials_route(
     request: Request,
     study_id: UUID,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
-) -> BayesianTrialListResponse | MixedTrialListResponse:
+) -> BayesianTrialListResponse | MixedTrialListResponse | MixtureTrialListResponse:
     return list_bayesian_trials(
         request.app.state.settings,
         study_id,
@@ -340,13 +366,19 @@ def complete_bayesian_trial_route(
 
 @router.put(
     "/{study_id}/observations/batch",
-    response_model=BayesianObservationBatchCreateResponse | MixedObservationBatchResponse,
+    response_model=BayesianObservationBatchCreateResponse
+    | MixedObservationBatchResponse
+    | MixtureObservationBatchResponse,
 )
 def complete_bayesian_observations_batch_route(
     request: Request,
     study_id: UUID,
     body: BayesianObservationBatchCreateRequest,
-) -> BayesianObservationBatchCreateResponse | MixedObservationBatchResponse:
+) -> (
+    BayesianObservationBatchCreateResponse
+    | MixedObservationBatchResponse
+    | MixtureObservationBatchResponse
+):
     return complete_bayesian_observations_batch(
         request.app.state.settings,
         study_id,
@@ -356,14 +388,18 @@ def complete_bayesian_observations_batch_route(
 
 @router.post(
     "/{study_id}/trials/{trial_id}/abandon",
-    response_model=BayesianTrialTransitionResponse | MixedTrialTransitionResponse,
+    response_model=BayesianTrialTransitionResponse
+    | MixedTrialTransitionResponse
+    | MixtureTrialTransitionResponse,
 )
 def abandon_bayesian_trial_route(
     request: Request,
     study_id: UUID,
     trial_id: UUID,
     body: BayesianTrialAbandonRequest | None = None,
-) -> BayesianTrialTransitionResponse | MixedTrialTransitionResponse:
+) -> (
+    BayesianTrialTransitionResponse | MixedTrialTransitionResponse | MixtureTrialTransitionResponse
+):
     return abandon_bayesian_trial(request.app.state.settings, study_id, trial_id, body)
 
 

@@ -2,6 +2,7 @@ import { apiRequestError, fetchApi, getApiBaseUrl } from "./client";
 import type { AugmentationBatchResponse, AugmentationSelectionRequest, AugmentationSelectionResponse, CandidatePage, CandidateRevisionCreateRequestV2 } from "./types/boAugmentation";
 import type { PlanningConfirmRequest } from "./types/boPlanning";
 import type { ReportSourceDescriptor } from "./types/reports";
+import type { AugmentationRenewalLineage, AugmentationRenewalRequest, AugmentationRenewalResponse } from "./types/boAugmentation";
 
 const route = (study: string, path: string) => `${getApiBaseUrl()}/api/v1/bayesian-studies/${encodeURIComponent(study)}/${path}`;
 async function request<T>(url: string, body?: unknown): Promise<T> {
@@ -16,3 +17,5 @@ export const fetchAugmentation = (study: string, id: string) => request<Augmenta
 export const confirmAugmentation = (study: string, id: string, body: PlanningConfirmRequest) => request<AugmentationBatchResponse>(route(study, `augmentations/${encodeURIComponent(id)}/confirm`), body);
 export const fetchAugmentationBatch = (study: string, id: string) => request<AugmentationBatchResponse>(route(study, `augmentation-batches/${encodeURIComponent(id)}`));
 export const fetchAugmentationReportSource = (study: string, id: string) => request<ReportSourceDescriptor>(route(study, `augmentation-batches/${encodeURIComponent(id)}/report-source`));
+export const renewAugmentation = (study: string, id: string, body: AugmentationRenewalRequest) => request<AugmentationRenewalResponse>(route(study, `augmentations/${encodeURIComponent(id)}/renew`), body);
+export const fetchAugmentationRenewal = (study: string, id: string) => request<AugmentationRenewalLineage | null>(route(study, `augmentations/${encodeURIComponent(id)}/renewal`));

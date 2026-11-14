@@ -168,13 +168,13 @@ def legacy32(tmp_path, monkeypatch):
 
 def test_upgrade32_to33_preserves_all_old_payloads_hashes_and_relations(legacy32):
     root, path, (version, _, history), before, migrations = legacy32
-    assert metadata.initialize_metadata_store(root).schema_version == 34
+    assert metadata.initialize_metadata_store(root).schema_version == metadata.SCHEMA_VERSION
     with sqlite3.connect(path) as db:
         db.execute("PRAGMA foreign_keys=ON")
         upgraded = _rows(db)
         assert {table: upgraded[table] for table in before} == before
         assert upgraded["bayesian_dataset_imports"] == []
-        assert db.execute("PRAGMA user_version").fetchone() == (34,)
+        assert db.execute("PRAGMA user_version").fetchone() == (metadata.SCHEMA_VERSION,)
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
         assert (

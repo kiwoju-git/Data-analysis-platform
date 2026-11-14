@@ -3,9 +3,9 @@ import { useI18n } from "../../i18n/LocaleProvider";
 import { datasetSourceMessages } from "../../i18n/boDatasetSource";
 import { validDatasetImportedInitialDesign } from "./boDatasetSource";
 
-export function BayesianDatasetSourceSummary({ receipt }: { receipt: DatasetImportedInitialDesign }) {
+export function BayesianDatasetSourceSummary({ receipt, expectedVersion = 1 }: { receipt: DatasetImportedInitialDesign; expectedVersion?: 1 | 2 }) {
   const { locale } = useI18n(), text = datasetSourceMessages(locale);
-  if (!validDatasetImportedInitialDesign(receipt)) return <p role="alert" className="warning-box">{text.invalid}</p>;
+  if (!validDatasetImportedInitialDesign(receipt, undefined, undefined, expectedVersion)) return <p role="alert" className="warning-box">{text.invalid}</p>;
   return <section aria-label={text.title}>
     <h5>{text.title}</h5>
     <dl className="bo-planning-source">

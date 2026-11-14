@@ -19,6 +19,7 @@ export function isReportSourceRef(value: unknown): value is ReportSourceRef {
     case "bayesian_history_revision": {
       if (!fields(value, ["study_id", "study_version_id", "history_revision_id"], ["definition_sha256", "expected_source_sha256"]) || !object(value.attachment)) return false;
       const attachment = value.attachment;
+      if (attachment.kind === "view") return fields(attachment, ["view_id", "model_id"], ["model_sha256", "model_config_sha256", "request_sha256", "view_sha256"]);
       return attachment.kind === "none" || (attachment.kind === "recommendation" && fields(attachment, ["recommendation_id"], ["result_json_sha256", "result_payload_sha256"])) || (attachment.kind === "batch" && fields(attachment, ["batch_id"], ["result_json_sha256", "result_payload_sha256"]));
     }
     case "regression_prediction": {

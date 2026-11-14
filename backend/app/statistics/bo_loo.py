@@ -86,11 +86,21 @@ def planning_loo(snapshot: dict[str, Any], *, mixed: bool = False) -> dict[str, 
     """Only validated saved model state and its exact historical observations are read."""
     restored: Any
     views: Any
-    if mixed:
+    if snapshot.get("policy") == "source_locked_mixture_bo_planning_model_v1":
+        from app.statistics.bo_mixture_planning import restore_mixture_planning_model
+
+        restored = restore_mixture_planning_model(snapshot)
+        encoded = [
+            restored.design.canonical(row["actual_coordinates"])[1] for row in restored.observations
+        ]
+        raw_x = {response.response_id: encoded for response in restored.objective.responses}
+        mixed = snapshot["inner_model_kind"] == "mixed"
+    elif mixed:
         from app.statistics.bo_mixed_planning import _training_views, restore_mixed_planning_model
 
         restored = restore_mixed_planning_model(snapshot)
         views, _ = _training_views(restored.request)
+        raw_x = {key: view.raw_x for key, view in views.items()}
     else:
         from app.statistics.bo_candidate_points import candidate_factors
         from app.statistics.bo_desirability_core import _observation_views
@@ -99,6 +109,7 @@ def planning_loo(snapshot: dict[str, Any], *, mixed: bool = False) -> dict[str, 
         restored = restore_planning_model(snapshot)
         raw = restored.request.q1_request().worker_payload()
         views = _observation_views(raw, restored.goals, candidate_factors(raw["factors"]))
+        raw_x = {key: view.raw_x for key, view in views.items()}
     rows = snapshot["calculation_request"]["observations"]
     definitions = snapshot["calculation_request"]["objective"]["responses"]
     return {
@@ -120,7 +131,7 @@ def planning_loo(snapshot: dict[str, Any], *, mixed: bool = False) -> dict[str, 
                 "response_id": definition["response_id"],
                 **conditional_row_loo(
                     restored.models[definition["response_id"]],
-                    views[definition["response_id"]].raw_x,
+                    raw_x[definition["response_id"]],
                     [row["response_values"][definition["response_id"]] for row in rows],
                     [row["trial_id"] for row in rows],
                 ),

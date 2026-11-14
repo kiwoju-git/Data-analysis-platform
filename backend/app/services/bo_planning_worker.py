@@ -51,11 +51,56 @@ PLANNING_ERRORS = frozenset(
         "bayesian_mixed_snapshot_invalid",
         "bayesian_loo_diagnostic_invalid",
         "bayesian_auto_evidence_mismatch",
+        "bayesian_mixture_planning_input_invalid",
+        "bayesian_mixture_planning_snapshot_invalid",
+        "mixture_design_proven_infeasible",
+        "mixture_design_feasibility_budget_exhausted",
+        "mixture_design_feasibility_numeric_failure",
+        "mixture_design_sampling_budget_exhausted",
     }
 )
 
 
 def _calculate(operation: str, payload: dict[str, Any]) -> Any:
+    if operation.startswith("mixture_"):
+        from app.statistics.bo_mixture_design import BoMixtureDesign
+        from app.statistics.bo_mixture_planning import (
+            calculate_mixture_candidates,
+            calculate_mixture_selection,
+            evaluate_mixture_planning_points,
+            fit_mixture_planning_model,
+        )
+
+        try:
+            if operation == "mixture_initial":
+                initial_deadline = time.perf_counter() + 60
+
+                def check_initial_budget() -> None:
+                    if time.perf_counter() >= initial_deadline:
+                        raise BayesianOptimizationError(
+                            "bayesian_optimization_time_budget_exhausted"
+                        )
+
+                return BoMixtureDesign.from_payload(payload["design_domain"]).sample(
+                    seed=payload["seed"],
+                    count=payload["count"],
+                    max_attempts=payload["max_attempts"],
+                    check_budget=check_initial_budget,
+                )
+            if operation == "mixture_fit":
+                return fit_mixture_planning_model(payload)
+            if operation == "mixture_evaluate":
+                return evaluate_mixture_planning_points(**payload)
+            if operation == "mixture_candidates":
+                return calculate_mixture_candidates(payload)
+            if operation == "mixture_selection":
+                return calculate_mixture_selection(payload)
+        except ValueError as exc:
+            code = str(exc)
+            raise BayesianOptimizationError(
+                code if code in PLANNING_ERRORS else "bayesian_mixture_planning_input_invalid"
+            ) from None
+        raise BayesianOptimizationError("bayesian_mixture_planning_input_invalid")
     if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
         from app.services.bo_auto_evidence import build_auto_evidence
 
@@ -179,7 +224,18 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
             result = _calculate(operation, payload)
             # Numerical revalidation shares admission, thread limit and the
             # original hard-timeout process, rather than starting a parent fit.
-            if operation == "loo":
+            if operation.startswith("mixture_"):
+                from app.statistics.bo_mixture_planning import restore_mixture_planning_model
+
+                if operation == "mixture_fit":
+                    if result["calculation_request"] != payload:
+                        raise BayesianOptimizationError(
+                            "bayesian_mixture_planning_snapshot_invalid"
+                        )
+                    restore_mixture_planning_model(result)
+                elif result != _calculate(operation, payload):
+                    raise BayesianOptimizationError("bayesian_planning_result_invalid")
+            elif operation == "loo":
                 from app.api.v1.schemas.bo_loo import LooCalculation
 
                 result = LooCalculation.model_validate(result).model_dump(mode="json")
@@ -334,6 +390,11 @@ def run_planning_operation(
         "mixed_candidates",
         "mixed_selection",
         "mixed_augmentation",
+        "mixture_initial",
+        "mixture_fit",
+        "mixture_evaluate",
+        "mixture_candidates",
+        "mixture_selection",
     } or (type(time_budget_ms) is not int or not 1000 <= time_budget_ms <= 60_000):
         raise BayesianOptimizationError("bayesian_planning_input_invalid")
     if not execution._ADMISSION.acquire(blocking=False):

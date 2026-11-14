@@ -288,6 +288,8 @@ export interface BayesianStudyDeletionCounts {
   candidate_revision_count?: number;
   planning_selection_count?: number;
   planning_confirmation_count?: number;
+  augmentation_renewal_count?: number;
+  saved_view_count?: number;
   file_count: number;
   file_bytes: number;
 }

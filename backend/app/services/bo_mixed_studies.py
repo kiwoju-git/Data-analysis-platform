@@ -7,10 +7,14 @@ import io
 import json
 import math
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter, ValidationError
+
+if TYPE_CHECKING:
+    from app.api.v1.schemas.bo_mixture import MixtureStudyResponse
+    from app.services.bo_mixture_studies import MixtureValidatedStudy
 
 from app.analyses.registry import METHOD_VERSIONS
 from app.api.v1.schemas.bayesian import (
@@ -693,13 +697,23 @@ def get_mixed_study(settings: Settings, study_id: UUID) -> MixedStudyResponse:
 
 def get_any_bayesian_study(
     settings: Settings, study_id: UUID
-) -> BayesianStudyResponse | MixedStudyResponse:
+) -> BayesianStudyResponse | MixedStudyResponse | MixtureStudyResponse:
+    from app.services.bo_mixture_studies import (
+        is_mixture_study,
+        load_validated_mixture_study,
+        mixture_study_response,
+    )
+
+    if is_mixture_study(settings, str(study_id)):
+        return mixture_study_response(load_validated_mixture_study(settings, str(study_id)))
     if is_mixed_study(settings, str(study_id)):
         return get_mixed_study(settings, study_id)
     return legacy.get_bayesian_study(settings, study_id)
 
 
-def mixed_study_summary(bundle: MixedValidatedStudy) -> BayesianStudySummaryResponse:
+def mixed_study_summary(
+    bundle: MixedValidatedStudy | MixtureValidatedStudy,
+) -> BayesianStudySummaryResponse:
     counts = legacy._trial_counts(bundle.trials)
     return BayesianStudySummaryResponse(
         study_id=UUID(bundle.study.study_id),
