@@ -12,10 +12,12 @@ Baseline origin/main: `a9abb4bac0f6104b8fd6ac270edcc80a5bc32050`.
 Implementation baseline: `41143beeb4f1935201717e5ff8e9f18ae266f4fe`.
 Integration contract: API44, metadata37, BO method0.17.0.
 Feature source: `1937e72526512241158669d05e5c863dc0d7b29f`, on
-[draft PR10](https://github.com/kiwoju-git/Data-analysis-platform/pull/10).
+[PR10](https://github.com/kiwoju-git/Data-analysis-platform/pull/10).
 [CI43553019942](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43553019942)
-is the first native gate run for that feature commit. Final integration and gate
-outcomes are pending, not verified; main has not been updated.
+is the first native gate run for that feature commit. This document records
+pre-merge evidence as each check finishes; the PR's required checks are the
+authoritative final integration gate. A previous-head success does not prove a
+later head or its archive. No Release is published by this workflow.
 
 | Deliverable | Implementation | Verification still required |
 |---|---|---|
@@ -107,7 +109,9 @@ tests/builds/model jobs are serialized; at most two auxiliary agents are active.
 | Frontend production build |Fresh build passed after UI review fixes; existing large-chunk warning remains |
 | Final frontend regression |181 files /1,565 tests passed in167.98s with one worker. Fresh full lint passed with0 errors/12 existing Fast Refresh warnings; typecheck and production build passed |
 | Native CI fixture corrections |Storage/lifecycle/Auto contracts35 tests passed in188.51s; exact OpenAPI/E2E/Origin contracts344 passed in18.63s. Production storage checks, Origin checker and numerical tolerances were not relaxed |
+| Native Python3.11 regression |CI43556939389 at `13e2df5`:4,636 passed/32 skipped/159 warnings in820.55s; independent Linux numerical probe passed. Later UI/capture changes require their own final gate |
 | Frontend fixture corrections |Three failures reproduced in old LOO request mocks and legacy deletion-field counts. Current receipt-source/no-auto-request and absent-versus-zero assertions passed9 tests before the full frontend rerun |
+| Import checkbox layout |Full Windows workflows reproduced a real scoped CSS error: the new checkbox inherited text-input sizing, caption gap-66px and containment false. Existing checkbox-label semantics plus scoped sizing fixed both main/component toggles; focused8 tests passed. Built ordinary/mixture journeys then passed at1024/1440 with6 mixture checkboxes,8px gaps, no overflow, native label clicks and unchanged import/cycle assertions |
 | Populated migration/restore |5-test run passed before additional backup/report assertions; final enhanced rerun remains to be recorded |
 | Built mixture cycle |Fresh synthetic run `bo44-built-20261114-122341` passed import8 -> fit -> matrix/save/offline HTML -> candidate review/confirm2 -> observed10 -> next fit/candidates -> exact historical view restore |
 | Built numeric and legacy renewal |Fresh synthetic run `bo44-built-20261114-122607` passed matrix values/metrics, KO/EN 1024/1440, icon geometry, pin/keyboard, stored offline HTML and explicit old-review renewal/confirm/replay with old bytes unchanged and no renewal refit |
@@ -185,6 +189,15 @@ original source/hash/point/network/server-stopped assertions remain mandatory.
 The missing bounded helper failed its new regression first;20 pure contract and
 geometry cases then passed in0.56s. The full built-source journey subsequently
 passed. This does not replace final native or installed-archive verification.
+
+The final local Windows workflows run also caught the mixture import checkbox
+layout defect described above. The repair changes no numeric/BO request policy.
+The E2E geometry check now tests stacked fields and inline checkbox controls by
+their respective semantics instead of demanding a below-caption checkbox. It
+requires compact finite bounds, containment, label association, keyboard
+eligibility, click target size and separation from the following select. Full
+Windows suites remain a separate gate; passing the repaired import stage alone
+does not mean the entire suite passed.
 
 The review caught real boundary failures, not alleged JMP disagreements. A
 representable transformed coordinate slightly above1 is preserved in the new

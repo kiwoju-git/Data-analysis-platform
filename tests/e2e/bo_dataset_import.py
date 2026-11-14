@@ -14,6 +14,63 @@ from app_readiness import diagnosed_page, wait_for_bayesian_ready
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
+def verify_import_layout(form, *, expected_checkboxes):
+    """Keep stacked fields and inline native checkboxes independently usable."""
+    layout = form.evaluate("""root => {
+        const rows = [...root.querySelectorAll('label')].flatMap(label => {
+            const control = label.querySelector('input,select,textarea');
+            const text = [...label.childNodes].find(node =>
+                node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+            if (!control || !text || !control.getClientRects().length) return [];
+            const range = document.createRange();
+            range.selectNodeContents(text);
+            const caption = range.getBoundingClientRect();
+            const input = control.getBoundingClientRect();
+            const box = label.getBoundingClientRect();
+            const inside = rect => rect.left >= box.left - 1 && rect.right <= box.right + 1
+                && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1;
+            const finite = [caption, input, box].every(rect =>
+                [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
+                && rect.width > 0 && rect.height > 0);
+            if (control.type === 'checkbox') {
+                const next = label.nextElementSibling;
+                return [{kind: 'checkbox', finite,
+                    width: input.width, height: input.height,
+                    targetWidth: box.width, targetHeight: box.height,
+                    gap: caption.left - input.right,
+                    centerOffset: Math.abs((input.top + input.bottom - caption.top - caption.bottom) / 2),
+                    contained: inside(input) && inside(caption),
+                    associated: label.control === control && [...control.labels].includes(label),
+                    keyboard: control.disabled || control.tabIndex >= 0,
+                    nextClear: !next || !next.matches('input,select,textarea')
+                        || next.getBoundingClientRect().top >= box.bottom - 1}];
+            }
+            return [{kind: 'field', finite, gap: input.top - caption.bottom,
+                contained: inside(input) && inside(caption)}];
+        });
+        return {rows, overflow: document.documentElement.scrollWidth > innerWidth + 1};
+    }""")
+    checkboxes = [row for row in layout["rows"] if row["kind"] == "checkbox"]
+    fields = [row for row in layout["rows"] if row["kind"] == "field"]
+    assert len(checkboxes) == expected_checkboxes, layout
+    assert fields and not layout["overflow"], layout
+    assert all(row["finite"] and row["contained"] for row in layout["rows"]), layout
+    assert all(row["gap"] >= 5 for row in fields), layout
+    assert all(
+        12 <= row["width"] <= 24
+        and 12 <= row["height"] <= 24
+        and row["targetWidth"] >= 24
+        and row["targetHeight"] >= 36
+        and 6 <= row["gap"] <= 16
+        and row["centerOffset"] <= 1
+        and row["associated"]
+        and row["keyboard"]
+        and row["nextClear"]
+        for row in checkboxes
+    ), layout
+    return layout
+
+
 def seed(page, base, csv_bytes=None):
     response = page.request.post(
         base + "/api/v1/datasets",
@@ -268,27 +325,8 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
             expect(form.get_by_label("Response 2 upper", exact=True)).to_have_value(
                 "10"
             )
-            layout = form.evaluate("""root => {
-                const rows = [...root.querySelectorAll('label')].flatMap(label => {
-                    const control = label.querySelector('input,select,textarea');
-                    const text = [...label.childNodes].find(node =>
-                        node.nodeType === Node.TEXT_NODE && node.textContent.trim());
-                    if (!control || !text || !control.getClientRects().length) return [];
-                    const range = document.createRange();
-                    range.selectNodeContents(text);
-                    const caption = range.getBoundingClientRect();
-                    const input = control.getBoundingClientRect();
-                    const box = label.getBoundingClientRect();
-                    return [{gap: input.top - caption.bottom,
-                        contained: input.left >= box.left - 1 && input.right <= box.right + 1}];
-                });
-                return {rows, overflow: document.documentElement.scrollWidth > innerWidth + 1};
-            }""")
+            layout = verify_import_layout(form, expected_checkboxes=1)
             assert len(layout["rows"]) >= 8, layout
-            assert not layout["overflow"], layout
-            assert all(
-                row["gap"] >= 5 and row["contained"] for row in layout["rows"]
-            ), layout
             layout_checks.append({"width": width, **layout})
         assert writes == [], writes
         page.screenshot(path=str(output / "import-form.png"), full_page=True)

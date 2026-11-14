@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from app_readiness import diagnosed_page, wait_for_bayesian_ready
-from bo_dataset_import import seed
+from bo_dataset_import import seed, verify_import_layout
 from bo_saved_views import verify_saved_matrix
 from playwright.sync_api import expect, sync_playwright
 
@@ -50,7 +50,9 @@ def verify_mixture_completion(browser, base: str, output: Path):
         form.get_by_label("Import study name", exact=True).fill(
             "Synthetic measured mixture"
         )
-        form.get_by_role("checkbox", name="Mixture study", exact=True).check()
+        mixture_toggle = form.get_by_role("checkbox", name="Mixture study", exact=True)
+        mixture_toggle.locator("..").click()
+        expect(mixture_toggle).to_be_checked()
         for _ in range(3):
             form.get_by_role("button", name="Add predictor", exact=True).click()
         form.get_by_label("Pseudocomponent coding", exact=True).select_option("lower")
@@ -61,9 +63,11 @@ def verify_mixture_completion(browser, base: str, output: Path):
         for index, bounds in enumerate(
             (("0.1", "0.8"), ("0.1", "0.8"), ("0.1", "0.1"))
         ):
-            form.get_by_role("checkbox", name="Mixture components", exact=True).nth(
-                index
-            ).check()
+            component = form.get_by_role(
+                "checkbox", name="Mixture components", exact=True
+            ).nth(index)
+            component.locator("..").click()
+            expect(component).to_be_checked()
             form.get_by_label(f"X {index + 1} low", exact=True).fill(bounds[0])
             form.get_by_label(f"X {index + 1} high", exact=True).fill(bounds[1])
         form.get_by_label("X 4 type", exact=True).select_option("discrete_numeric")
@@ -77,6 +81,16 @@ def verify_mixture_completion(browser, base: str, output: Path):
         )
         form.get_by_label("Response 1 lower", exact=True).fill("0")
         form.get_by_label("Response 1 target", exact=True).fill("30")
+        layout_checks = []
+        for width in (1024, 1440):
+            page.set_viewport_size({"width": width, "height": 900})
+            layout_checks.append(
+                {
+                    "width": width,
+                    **verify_import_layout(form, expected_checkboxes=6),
+                }
+            )
+        page.screenshot(path=output / "mixture-import-form.png", full_page=True)
         with page.expect_response("**/bayesian-studies/import-preflight") as reviewed:
             form.get_by_role("button", name="Preflight import", exact=True).click()
         assert reviewed.value.status == 200, reviewed.value.text()
@@ -94,7 +108,8 @@ def verify_mixture_completion(browser, base: str, output: Path):
         api = base + "/api/v1/bayesian-studies/" + study["study_id"]
         workspace = page.get_by_role("region", name="Mixture study", exact=True)
         with page.expect_response(
-            lambda r: r.url == api + "/mixture-planning-models" and r.request.method == "POST",
+            lambda r: r.url == api + "/mixture-planning-models"
+            and r.request.method == "POST",
             timeout=90000,
         ) as fitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
@@ -143,7 +158,9 @@ def verify_mixture_completion(browser, base: str, output: Path):
                 "button", name="Confirm reviewed trials", exact=True
             ).click()
         assert confirmed.value.status == 201, confirmed.value.text()
-        expect(page).to_have_url(re.compile("mixture_planning_batch_id=" + selection["selection_id"]))
+        expect(page).to_have_url(
+            re.compile("mixture_planning_batch_id=" + selection["selection_id"])
+        )
         assert urlsplit(page.url).path == ROUTE
         assert parse_qs(urlsplit(page.url).query) == {
             "dataset_version_id": [version["version_id"]],
@@ -164,7 +181,8 @@ def verify_mixture_completion(browser, base: str, output: Path):
         assert observed.value.status == 200, observed.value.text()
         assert observed.value.json()["study"]["completed_trial_count"] == 10
         with page.expect_response(
-            lambda r: r.url == api + "/mixture-planning-models" and r.request.method == "POST",
+            lambda r: r.url == api + "/mixture-planning-models"
+            and r.request.method == "POST",
             timeout=90000,
         ) as refitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
@@ -195,6 +213,7 @@ def verify_mixture_completion(browser, base: str, output: Path):
         receipt = {
             "synthetic": True,
             "import_schema": 2,
+            "import_layout_checks": layout_checks,
             "completed_before": 8,
             "completed_after": 10,
             "source_model_sha256": model["snapshot_sha256"],
@@ -202,7 +221,9 @@ def verify_mixture_completion(browser, base: str, output: Path):
             "saved_view_sha256": saved["view_sha256"],
             "candidate_count": len(next_candidates.value.json()["items"]),
             "saved_matrix": json.loads(
-                (output / "saved-matrix/saved-profiler-receipt.json").read_text(encoding="utf-8")
+                (output / "saved-matrix/saved-profiler-receipt.json").read_text(
+                    encoding="utf-8"
+                )
             ),
         }
         (output / "receipt.json").write_text(
