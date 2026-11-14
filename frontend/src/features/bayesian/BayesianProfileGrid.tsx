@@ -10,6 +10,7 @@ interface ProfileRow {
   actual_coordinates: Record<string, string | number>;
   response_predictions: { response_id: string; mean_raw: number }[];
   desirability_moments: { mean: number };
+  constraints_satisfied: boolean;
 }
 interface Props {
   sourceKey: string;
@@ -28,14 +29,18 @@ export function BayesianProfileGrid({ sourceKey, axis, responses, rows }: Props)
   ];
   return <section aria-label={text.profileGrid}>
     <h5>{text.profileGrid}</h5>
+    {rows.some(row => !row.constraints_satisfied) && <p className="notice-box notice-warning">{text.profileConstraintMeaning}</p>}
     <div className="bo-profile-grid">{quantities.map(quantity => {
       const points = rows.map((row, index) => {
         const coordinate = row.actual_coordinates[axis.factor_id], coordinateLabel = typeof coordinate === "string" ? coordinate : exact(coordinate);
         const value = quantity.response ? row.response_predictions.find(prediction => prediction.response_id === quantity.response.response_id)?.mean_raw ?? NaN : row.desirability_moments.mean;
         const label = quantity.response ? text.mean : text.expected;
+        const constraint = row.constraints_satisfied ? text.constraintsSatisfied : text.constraintFailure;
         return { id: row.row_id, x: axis.category ? index : Number(coordinate), y: value, title: coordinateLabel,
-          ariaLabel: `${axis.name}: ${coordinateLabel}, ${quantity.name}: ${exact(value)}${quantity.unit ? ` ${quantity.unit}` : ""}`,
-          className: "bo-planning-profile-mean", details: [{ label: axis.name, value: coordinateLabel }, { label: `${quantity.name}: ${label}`, value: `${exact(value)}${quantity.unit ? ` ${quantity.unit}` : ""}` }] };
+          ariaLabel: `${axis.name}: ${coordinateLabel}, ${quantity.name}: ${exact(value)}${quantity.unit ? ` ${quantity.unit}` : ""}, ${text.constraintStatus}: ${constraint}`,
+          marker: row.constraints_satisfied ? "circle" as const : "diamond" as const,
+          warning: !row.constraints_satisfied,
+          className: "bo-planning-profile-mean", details: [{ label: axis.name, value: coordinateLabel }, { label: `${quantity.name}: ${label}`, value: `${exact(value)}${quantity.unit ? ` ${quantity.unit}` : ""}` }, { label: text.constraintStatus, value: constraint }] };
       });
       return <div className="bo-profile-grid-item" key={quantity.key} data-profile-kind={quantity.response ? "response" : "composite"} data-response-id={quantity.response?.response_id}>
         <h6>{quantity.name}{quantity.unit ? ` (${quantity.unit})` : ""}</h6>

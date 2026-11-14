@@ -64,4 +64,18 @@ describe("planning panel initial display boundary", () => {
     expect(html).toContain("1e-8"); expect(html).not.toContain("<details");
     expect(JSON.stringify(model)).toBe(before);
   });
+  it("marks constraint violations on the detailed composite chart without altering values", () => {
+    setCurrentLocale("en"); const { study, batch } = planningBatchFixture();
+    const items = batch.calculation.items.map((row, index) => ({ ...row, constraints_satisfied: index !== 0, prediction_source: "completed_observations_base_posterior" as const }));
+    const response: PlanningEvaluationResponse = { schema_version: 1, model_id: batch.source.model_id, model_sha256: batch.source.model_sha256, request_sha256: "e".repeat(64), items,
+      source_is_current: true, eligibility_source_trial_count: 4, eligibility_coordinates_sha256: "d".repeat(64), eligibility_is_current: true, model_refit: false };
+    const before = JSON.stringify(response), profile = { axis: "x", points: items.map(row => row.actual_coordinates), response };
+    const html = renderToStaticMarkup(<PlanningProfileChart profile={profile} study={study} sourceKey="constraint-fixture" />);
+    for (const suffix of ["mean", "sd"]) {
+      const marker = [...html.matchAll(/<(circle|polygon)\b[^>]*data-point-id="([^"]+)"[^>]*>/g)].find(match => match[2] === `${items[0].row_id}:${suffix}`);
+      expect(marker?.[1]).toBe("polygon");
+      expect(marker?.[0]).toContain("Outside the stored constraints.");
+    }
+    expect(JSON.stringify(response)).toBe(before);
+  });
 });

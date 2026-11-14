@@ -175,18 +175,22 @@ export function PlanningProfileChart({ profile, study, sourceKey }: { profile: N
   const factor = study.factors.find(f => f.factor_id === profile.axis);
   if (!factor) return null;
   const metricLabels = { mean_raw: text.mean, latent_standard_deviation_raw: text.latent, predictive_standard_deviation_raw: text.predictive };
-  const points: InteractiveScatterPoint[] = selected ? planningResponseProfilePoints(profile.response, factor.factor_id, selected.response_id, metric).map(row => ({
+  const constraints = new Map(profile.response.items.map(row => [row.row_id, row.constraints_satisfied]));
+  const constraintLabel = (satisfied: boolean) => satisfied ? text.constraintsSatisfied : text.constraintFailure;
+  const points: InteractiveScatterPoint[] = selected ? planningResponseProfilePoints(profile.response, factor.factor_id, selected.response_id, metric).map(row => {
+    const satisfied = constraints.get(row.rowId) === true, constraint = constraintLabel(satisfied);
+    return {
     id: `${row.rowId}:${selected.response_id}:${metric}`, seriesId: "response", x: row.x, y: row.value,
-    marker: "circle", markerRadius: 3, className: "bo-planning-profile-mean", title: metricLabels[metric],
-    ariaLabel: `${factor.name}: ${exact(row.x)}, ${selected.name}: ${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}`,
-    details: [{ label: factor.name, value: exact(row.x) }, { label: `${selected.name}: ${metricLabels[metric]}`, value: `${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}` }],
-  })) : profile.response.items.flatMap(row => (["mean", "sd"] as const).map((kind, i) => {
+    marker: satisfied ? "circle" : "diamond", warning: !satisfied, markerRadius: 3, className: "bo-planning-profile-mean", title: metricLabels[metric],
+    ariaLabel: `${factor.name}: ${exact(row.x)}, ${selected.name}: ${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}, ${text.constraintStatus}: ${constraint}`,
+    details: [{ label: factor.name, value: exact(row.x) }, { label: `${selected.name}: ${metricLabels[metric]}`, value: `${exact(row.value)}${selected.unit ? ` ${selected.unit}` : ""}` }, { label: text.constraintStatus, value: constraint }],
+  }; }) : profile.response.items.flatMap(row => (["mean", "sd"] as const).map((kind, i) => {
     const value = kind === "mean" ? row.desirability_moments.mean : Math.sqrt(row.desirability_moments.variance);
-    const label = kind === "mean" ? text.expected : text.sd;
+    const label = kind === "mean" ? text.expected : text.sd, constraint = constraintLabel(row.constraints_satisfied);
     return { id: `${row.row_id}:${kind}`, seriesId: kind, x: row.actual_coordinates[factor.factor_id], y: value,
-      marker: i === 0 ? "circle" : "square", markerRadius: 3, className: `bo-planning-profile-${kind}`,
-      title: label, ariaLabel: `${factor.name}: ${exact(row.actual_coordinates[factor.factor_id])}, ${label}: ${exact(value)}`,
-      details: [{ label: factor.name, value: exact(row.actual_coordinates[factor.factor_id]) }, { label, value: exact(value) }], };
+      marker: !row.constraints_satisfied ? "diamond" : i === 0 ? "circle" : "square", warning: !row.constraints_satisfied, markerRadius: 3, className: `bo-planning-profile-${kind}`,
+      title: label, ariaLabel: `${factor.name}: ${exact(row.actual_coordinates[factor.factor_id])}, ${label}: ${exact(value)}, ${text.constraintStatus}: ${constraint}`,
+      details: [{ label: factor.name, value: exact(row.actual_coordinates[factor.factor_id]) }, { label, value: exact(value) }, { label: text.constraintStatus, value: constraint }], };
   }));
   const series = selected ? [{ id: "response", label: metricLabels[metric], className: "bo-planning-profile-mean", connect: "line" as const, pointIds: points.map(point => point.id) }]
     : (["mean", "sd"] as const).map(kind => ({ id: kind, label: kind === "mean" ? text.expected : text.sd, className: `bo-planning-profile-${kind}`, connect: "line" as const, pointIds: points.filter(p => p.seriesId === kind).map(p => p.id) }));

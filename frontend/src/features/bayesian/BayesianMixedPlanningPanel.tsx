@@ -161,8 +161,10 @@ export function MixedProfileView({ profile, study }: { profile: MixedProfile; st
   const factor = study.factors.find(item => item.factor_id === profile.axis), response = study.objective.responses.find(item => `response:${item.response_id}` === quantity), category = factor ? isMixedCategory(factor) : false;
   const points = profile.rows.map((row, index) => { const prediction = row.response_predictions.find(item => item.response_id === response?.response_id); const y = quantity === "desirability" ? row.desirability_moments.mean : metric === "latent" ? prediction?.latent_standard_deviation_raw : metric === "predictive" ? prediction?.predictive_standard_deviation_raw : prediction?.mean_raw;
     const label = factor ? mixedValue(row.actual_coordinates[factor.factor_id]) : String(index + 1), value = y ?? NaN;
-    return { id: row.row_id, x: factor && !category ? Number(row.actual_coordinates[factor.factor_id]) : index, y: value, ariaLabel: `${label}: ${exact(value)}`, title: label,
-      className: "interactive-data-point", details: [{ label: factor?.name ?? text.rank, value: label }, { label: quantity === "desirability" ? text.expected : metric === "latent" ? text.latent : metric === "predictive" ? text.predictive : text.mean, value: exact(value) }] };
+    const constraint = row.constraints_satisfied ? text.constraintsSatisfied : text.constraintFailure;
+    return { id: row.row_id, x: factor && !category ? Number(row.actual_coordinates[factor.factor_id]) : index, y: value, ariaLabel: `${label}: ${exact(value)}, ${text.constraintStatus}: ${constraint}`, title: label,
+      marker: row.constraints_satisfied ? "circle" as const : "diamond" as const, warning: !row.constraints_satisfied,
+      className: "interactive-data-point", details: [{ label: factor?.name ?? text.rank, value: label }, { label: quantity === "desirability" ? text.expected : metric === "latent" ? text.latent : metric === "predictive" ? text.predictive : text.mean, value: exact(value) }, { label: text.constraintStatus, value: constraint }] };
   });
   const categoryTicks = category ? points.map(point => ({ value: point.x, label: point.title })) : undefined;
   return <section><p>{text.modelHash}: <code>{profile.modelHash}</code></p><dl className="bo-planning-source">{study.factors.filter(item => item.factor_id !== profile.axis).map(item => <div key={item.factor_id}><dt>{item.name}{item.unit ? ` (${item.unit})` : ""}</dt><dd>{mixedValue(profile.points[0][item.factor_id])}</dd></div>)}</dl>

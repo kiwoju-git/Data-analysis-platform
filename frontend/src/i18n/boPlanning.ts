@@ -2,6 +2,8 @@ import type { AppLocale } from "./types";
 
 const en = {
   profileGrid: "All responses at the evaluated factor",
+  constraintStatus: "Constraint status", constraintsSatisfied: "Within the stored constraints.",
+  profileConstraintMeaning: "Diamond markers are predictions outside the stored constraints, not eligible experiment candidates. No predicted values have been removed or changed.",
   profileLevels: "Full evaluated category labels (# follows evaluated order)",
   profileQuantity: "Profile quantity", desirability: "Desirability", profileMetric: "Response display",
   deletionPlanning: "Saved planning records included in deletion", deletionModels: "Saved fitted models", deletionCandidateSets: "Candidate tables", deletionCandidateRevisions: "Candidate revisions", deletionSelections: "Saved manual and automatic selections", deletionConfirmations: "Batch confirmation records",
@@ -29,6 +31,8 @@ const en = {
 };
 const ko: typeof en = {
   profileGrid: "평가한 요인에서의 전체 반응",
+  constraintStatus: "제약 상태", constraintsSatisfied: "저장된 제약 조건 안입니다.",
+  profileConstraintMeaning: "마름모는 저장된 제약 밖의 예측점이며 실행 후보가 아닙니다. 예측값을 삭제하거나 변경하지 않았습니다.",
   profileLevels: "평가한 범주의 전체 이름 (#은 평가 순서)",
   profileQuantity: "Profile 대상", desirability: "Desirability", profileMetric: "반응 표시값",
   deletionPlanning: "함께 삭제되는 저장 계획 기록", deletionModels: "저장 적합 모형", deletionCandidateSets: "후보표", deletionCandidateRevisions: "후보 revision", deletionSelections: "저장 수동·자동 선택", deletionConfirmations: "배치 확정 기록",
