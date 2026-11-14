@@ -17,6 +17,7 @@ from app.api.v1.schemas.bayesian_desirability_recommendations import (
 from app.api.v1.schemas.bo_augmentation import (
     AUGMENTATION_RESULT,
     AugmentationRequest,
+    AugmentationSelectionResponse,
     AutoAugmentationCalculation,
     AutoAugmentationSelectionRequest,
 )
@@ -26,6 +27,7 @@ from app.api.v1.schemas.bo_augmentation_batch import (
 )
 from app.api.v1.schemas.bo_planning import CandidateRow, PlanningConfirmRequest
 from app.core.config import Settings
+from app.core.errors import ApiError
 from app.services.analysis_run_execution import APP_VERSION, runtime_build_provenance, utc_now
 from app.services.bayesian_noise_recommendations import _error, _json, _sha
 from app.services.bo_augmentation import (
@@ -71,8 +73,6 @@ def _config(
 def confirm_augmentation_selection(
     settings: Settings, study_id: UUID, selection_id: UUID, body: PlanningConfirmRequest
 ) -> AugmentationBatchResponse:
-    from app.services.bayesian_studies import get_bayesian_study
-
     selected = get_augmentation_selection(settings, study_id, selection_id)
     if (
         selected.config_sha256 != body.expected_config_sha256
@@ -81,6 +81,40 @@ def confirm_augmentation_selection(
         raise _error("bayesian_planning_selection_mismatch")
     if selected.confirmed_batch_id is not None:
         return get_augmentation_batch(settings, study_id, selected.confirmed_batch_id)
+    try:
+        return _confirm_uncommitted_augmentation(settings, study_id, selection_id, selected)
+    except ApiError:
+        # Another confirmation may commit after our unconfirmed snapshot read.
+        replay = _confirmed_augmentation(settings, study_id, selection_id, body)
+        if replay is not None:
+            return replay
+        raise
+
+
+def _confirmed_augmentation(
+    settings: Settings, study_id: UUID, selection_id: UUID, body: PlanningConfirmRequest
+) -> AugmentationBatchResponse | None:
+    selected = get_augmentation_selection(settings, study_id, selection_id)
+    if (
+        selected.config_sha256 != body.expected_config_sha256
+        or selected.result_sha256 != body.expected_result_sha256
+    ):
+        raise _error("bayesian_planning_selection_mismatch")
+    if selected.confirmed_batch_id is None:
+        return None
+    if selected.confirmed_batch_id != selection_id:
+        raise _error("bayesian_planning_selection_mismatch")
+    return get_augmentation_batch(settings, study_id, selected.confirmed_batch_id)
+
+
+def _confirm_uncommitted_augmentation(
+    settings: Settings,
+    study_id: UUID,
+    selection_id: UUID,
+    selected: AugmentationSelectionResponse,
+) -> AugmentationBatchResponse:
+    from app.services.bayesian_studies import get_bayesian_study
+
     study = get_bayesian_study(settings, study_id)
     if not isinstance(study.objective, BayesianDesirabilityObjective):
         raise _error("bayesian_augmentation_model_policy_mismatch")
