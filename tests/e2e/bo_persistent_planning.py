@@ -173,7 +173,8 @@ def verify_persistent_planning(browser: Browser, base: str, output: Path, *, aut
             assert sum(url == api + "/planning-models" for url in writes) == 1
             assert not errors, errors
             receipt = {"synthetic": True, "model_sha256": model["snapshot_sha256"],
-                "fit_posts": 1, "profile_grid": grid, "pageerrors": errors}
+                "fit_posts": 1, "profile_grid": grid, "pageerrors": errors,
+                "saved_matrix": json.loads((output / "saved-matrix/saved-profiler-receipt.json").read_text(encoding="utf-8"))}
             if synthetic_workspace is not None:
                 from bo_legacy_renewal import verify_legacy_renewal
 

@@ -111,7 +111,7 @@ def verify_network_guards(base: str) -> list[str]:
     return [name for name, *_ in checks]
 
 
-def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
+def verify_application(base: str, output: Path, legacy_seed: dict, synthetic_workspace: Path) -> dict:
     from linux_release_journey import payload_digest, run_initial, run_pilot_initial
 
     result = run_initial(base, output, request)
@@ -204,6 +204,11 @@ def verify_application(base: str, output: Path, legacy_seed: dict) -> dict:
             result["bo_context_receipt"] = verify_bo_noise_context(
                 browser, base, output / "bo-context"
             )
+            from bo_remaining_release import run_initial as run_bo_remaining_initial
+
+            result["bo_remaining_receipt"] = run_bo_remaining_initial(
+                browser, base, output / "bo-remaining", synthetic_workspace
+            )
             result["gp_extension_receipt"] = verify_gp_validation_extension(
                 browser, base, output / "gp-extension", isolated_workspace=True
             )
@@ -277,6 +282,7 @@ def main() -> None:
     parser.add_argument("--url")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--legacy-seed-receipt", type=Path)
+    parser.add_argument("--synthetic-workspace", type=Path)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--resume-evidence", type=Path)
     modes.add_argument("--offline-reports", type=Path)
@@ -288,10 +294,10 @@ def main() -> None:
     if (
         not args.offline_reports
         and not args.resume_evidence
-        and args.legacy_seed_receipt is None
+        and (args.legacy_seed_receipt is None or args.synthetic_workspace is None)
     ):
         parser.error(
-            "--legacy-seed-receipt is required for the initial archive journey"
+            "--legacy-seed-receipt and --synthetic-workspace are required for the initial archive journey"
         )
     args.output.mkdir(parents=True, exist_ok=True)
     if args.offline_reports:
@@ -302,6 +308,11 @@ def main() -> None:
         # The orchestrator must stop the actual server, not just disable browser networking.
         require_server_stopped(evidence["access_origin"])
         result = run_offline(args.output, evidence)
+        from bo_remaining_release import run_offline as run_bo_remaining_offline
+
+        result["bo_remaining_receipt"] = run_bo_remaining_offline(
+            args.output / "bo-remaining", evidence
+        )
         result["original_server_unreachable"] = True
         name = "offline-smoke.json"
     elif args.resume_evidence:
@@ -310,13 +321,18 @@ def main() -> None:
         evidence = json.loads(args.resume_evidence.read_text(encoding="utf-8"))
         assert evidence["schema_version"] == 2 and evidence["status"] == "succeeded"
         result = run_resume(args.url, args.output, evidence, request)
+        from bo_remaining_release import run_resume as run_bo_remaining_resume
+
+        result["bo_remaining_receipt"] = run_bo_remaining_resume(
+            args.url, args.output / "bo-remaining", evidence
+        )
         name = "resume-smoke.json"
     else:
         try:
             legacy_seed = json.loads(
                 args.legacy_seed_receipt.read_text(encoding="utf-8")
             )
-            result = verify_application(args.url, args.output, legacy_seed)
+            result = verify_application(args.url, args.output, legacy_seed, args.synthetic_workspace)
         except Exception:
             journal = args.output / "journey-evidence.json"
             if journal.exists():

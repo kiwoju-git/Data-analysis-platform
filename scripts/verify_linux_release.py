@@ -51,6 +51,24 @@ def extension_contract():
     return module
 
 
+@lru_cache(maxsize=1)
+def bo_remaining_contract():
+    path = Path(__file__).resolve().parents[1] / "tests/e2e/bo_remaining_release.py"
+    spec = importlib.util.spec_from_file_location("bo_remaining_release_contract", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def require_bo_remaining_roundtrip(smoke: dict, restarts: list[dict], offline: dict) -> dict:
+    return bo_remaining_contract().require_roundtrip(
+        smoke.get("bo_remaining_receipt"),
+        [restart.get("bo_remaining_receipt") for restart in restarts],
+        offline.get("bo_remaining_receipt"),
+    )
+
+
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -1528,7 +1546,7 @@ def main() -> int:
             PIP_NO_INDEX="1",
             PIP_DISABLE_PIP_VERSION_CHECK="1",
         )
-        workspace = temp / "external workspace 검증"
+        workspace = temp / "external workspace 검증" / "workspace"
         smoke = None
         installations = []
         contour_dependencies = []
@@ -1598,6 +1616,9 @@ def main() -> int:
                 legacy_seed = seed_pilot_legacy_records(
                     repo, root, workspace, output, env
                 )
+                (workspace.parent / ".datalab-e2e-owned").write_text(
+                    str(workspace.resolve(strict=True)), encoding="utf-8"
+                )
                 # The test provisioner must not mutate installed application bytes.
                 if bootstrap_identity(root, env, "verify-installed") != installed:
                     raise ValueError("Legacy setup changed the installed application")
@@ -1643,6 +1664,8 @@ def main() -> int:
                                 base,
                                 "--legacy-seed-receipt",
                                 str(output / "pilot-legacy-seed.json"),
+                                "--synthetic-workspace",
+                                str(workspace),
                             )
                         else:
                             restarts.append(
@@ -1691,6 +1714,7 @@ def main() -> int:
             smoke.get("result_metric_layout_receipt"),
         )
         bo_gp_checks = extension_contract().require_roundtrip(smoke, restarts, offline)
+        bo_remaining_checks = require_bo_remaining_roundtrip(smoke, restarts, offline)
         report = {
             "schema_version": 2,
             "status": "passed",
@@ -1727,6 +1751,7 @@ def main() -> int:
             "gage_six_panel_checks": gage_checks,
             "ui_presentation_checks": ui_checks,
             "bo_gp_checks": bo_gp_checks,
+            "bo_remaining_checks": bo_remaining_checks,
             "pilot_legacy_provisioning": legacy_seed,
         }
         (output / "validation-report.json").write_text(

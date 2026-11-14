@@ -1,5 +1,21 @@
 # Offline Workspace Backup And Restore
 
+## Current BO Contract
+
+API44 supports backup format1 for metadata20 through37. Metadata35 preserves
+explicit BO recommendation-renewal lineage,36 adds immutable diagnostic views
+and their managed reports, and37 extends the constrained mixture study/import/
+model/selection contracts. The backup checks stored JSON digests and ownership;
+it does not fit a surrogate, recompute acquisition values or rewrite historical
+documents. See [the BO completion audit](bo_remaining_completion.md) for the
+tests actually run and their platform limits.
+
+A code revert does not downgrade metadata35-37. Restore a verified pre-upgrade
+backup into a new empty destination when using older code. Keep the current
+workspace, including observations and saved views created after the upgrade.
+
+## Earlier Contract Changes
+
 API26 adds metadata24 backup/restore support. The entire replicate request and
 trial-parent graph is retained; request JSON hashes are checked as well as the
 SQLite/FK/schema inventory. Schema20..23 archives remain readable without
@@ -24,7 +40,7 @@ There is no web endpoint accepting arbitrary filesystem paths and no network
 transfer. The backup is not encrypted or signed: protect it like the source data.
 SHA-256 detects corruption, not a malicious party who can replace the archive.
 
-Backup format 1 supports the exact metadata schema 20, 21 and 22 inventories. It does not
+Backup format1 supports the exact metadata20 through37 inventories. It does not
 migrate the source or restored database, execute an analysis, fit a model, or
 rebuild an export. Older/newer or structurally different databases are refused;
 use the compatible application/tool version rather than modifying metadata to

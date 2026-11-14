@@ -141,6 +141,8 @@ def verify_saved_matrix(browser, page, api, model, host, button, output: Path):
                 "n_axes": len(payload["axes"]),
                 "export_sha256": artifact["sha256"],
                 "mutating_requests": writes,
+                "saved": saved,
+                "report": {"descriptor": artifact, "path": str(html.resolve())},
             },
             indent=2,
         ),

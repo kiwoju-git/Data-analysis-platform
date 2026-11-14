@@ -11,7 +11,11 @@ published by this task.
 Baseline origin/main: `a9abb4bac0f6104b8fd6ac270edcc80a5bc32050`.
 Implementation baseline: `41143beeb4f1935201717e5ff8e9f18ae266f4fe`.
 Integration contract: API44, metadata37, BO method0.17.0.
-Final source SHA and CI outcomes are pending, not verified.
+Feature source: `1937e72526512241158669d05e5c863dc0d7b29f`, on
+[draft PR10](https://github.com/kiwoju-git/Data-analysis-platform/pull/10).
+[CI43553019942](https://github.com/kiwoju-git/Data-analysis-platform/actions/runs/43553019942)
+is the first native gate run for that feature commit. Final integration and gate
+outcomes are pending, not verified; main has not been updated.
 
 | Deliverable | Implementation | Verification still required |
 |---|---|---|
@@ -104,6 +108,7 @@ tests/builds/model jobs are serialized; at most two auxiliary agents are active.
 | Populated migration/restore |5-test run passed before additional backup/report assertions; final enhanced rerun remains to be recorded |
 | Built mixture cycle |Fresh synthetic run `bo44-built-20261114-122341` passed import8 -> fit -> matrix/save/offline HTML -> candidate review/confirm2 -> observed10 -> next fit/candidates -> exact historical view restore |
 | Built numeric and legacy renewal |Fresh synthetic run `bo44-built-20261114-122607` passed matrix values/metrics, KO/EN 1024/1440, icon geometry, pin/keyboard, stored offline HTML and explicit old-review renewal/confirm/replay with old bytes unchanged and no renewal refit |
+| Archive coverage wiring |Source review found missing new BO journeys in the archive harness. Added mandatory initial/two-restart/server-stopped roundtrip checks; root reran212 pure contract/controlled-runner tests, all passed in2.85s. This is not actual archive execution |
 | Native full CI / archive |Not yet verified in this audit |
 
 Failed built attempts are retained in local synthetic diagnostics. They exposed
@@ -114,6 +119,16 @@ compared typed API JSON to stored raw bytes despite the existing response-only
 `response_uncertainty: null` projection. The corrected fixture still verifies
 actual stored hashes and uses an exact original-byte CAS for its historical seed.
 No production hash validation was relaxed to make these tests pass.
+
+A subsequent source-only archive review found that the new BO journeys were
+wired to source/built-UI E2E but not the completed archive harness. That is a
+coverage gap, not a reproduced product failure. The same helpers are now
+connected to archive initial/restart/second-install verification, with a
+mandatory source/hash/phase validator. Actual archive execution remains pending.
+The task-local
+saved-report tests above opened HTML with browser networking disabled while the
+server remained running. They must not be described as server-stopped checks;
+the archive harness separately stops the original server before reopening HTML.
 
 Final whole-branch review found two additional mixture process-profile boundary
 issues: a conditionally fixed continuous interval generated duplicate points,

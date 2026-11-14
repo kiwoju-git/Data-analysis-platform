@@ -201,6 +201,9 @@ def verify_mixture_completion(browser, base: str, output: Path):
             "next_model_sha256": refitted.value.json()["snapshot_sha256"],
             "saved_view_sha256": saved["view_sha256"],
             "candidate_count": len(next_candidates.value.json()["items"]),
+            "saved_matrix": json.loads(
+                (output / "saved-matrix/saved-profiler-receipt.json").read_text(encoding="utf-8")
+            ),
         }
         (output / "receipt.json").write_text(
             json.dumps(receipt, indent=2), encoding="utf-8"
