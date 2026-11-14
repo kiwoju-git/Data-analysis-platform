@@ -225,6 +225,38 @@ representable transformed coordinate slightly above1 is preserved in the new
 affine domain, not clipped or accepted by weakening historical readers. Decimal
 Profiler endpoints are generated without changing user-entered amounts.
 
+### Final Native Readiness Finding
+
+CI43559751196 at implementation commit `5deea60` passed every required gate,
+including all four Windows E2E suites, installed archive and `release-ready`.
+The later documentation-only head `a475354` in CI43563002774 passed Windows
+backend4,670 tests/4 skips, frontend1,566 tests, Linux/Python3.11, security,
+resource and archive gates, but Windows workflows failed at the existing Gage
+zoom cold start. This is not waived because an earlier identical implementation
+passed. The other three Windows browser suites passed.
+
+The actual child trace from job132372482816 (merge-test source `e663fca`)
+records the first shell assertion from295403.932 to310421.259ms. The runtime
+request started306456.973ms and completed HTTP200 at311987.926ms:11.053s after
+assertion start plus5.531s for the request. Failure diagnostics then observed
+`runtime=compatible`, route `analysis`, and no page/console/request failure
+events. The shell only mounts after both lazy App loading and compatibility,
+so its first15s assertion incorrectly combined those distinct readiness stages.
+The trace does not establish the cause of the underlying Windows scheduling
+delay; it must not be described as a server/TLS fault or BO calculation defect.
+
+The test helper now checks actual root mount, App runtime-marker mount,
+compatible runtime, shell, locale and route in order. Each startup stage remains
+bounded at15s by default; the allowed aggregate startup time increases through
+explicit stage separation, not a blanket timeout increase. Missing, pending or
+blocked stages still fail. There is no retry, network-idle bypass, forced-ready
+marker or production change. Eight virtual-clock regressions failed before the
+fix;128 readiness/diagnostics/suite-partition tests then passed in5.10s. An
+isolated Chromium DOM probe independently reproduced the old timeout and passed
+the staged helper using the same11.053s/16.584s transition times. That probe is
+not full-app evidence. Scoped independent review found no blocking issue.
+Fresh full native/browser/archive gates are required after this helper change.
+
 ## Reproduction And Rollback
 
 Use an isolated synthetic workspace and the existing PowerShell entry points:
