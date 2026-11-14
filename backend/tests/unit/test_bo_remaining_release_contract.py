@@ -30,6 +30,51 @@ def _contract():
     return module
 
 
+@pytest.mark.parametrize(
+    "override",
+    [None, {"width": 0}, {"height": 721}, {"x": -2}, {"y": 150}, {"width": float("nan")}],
+)
+def test_report_capture_is_bounded_and_includes_every_chart(tmp_path, override):
+    captures = []
+
+    class Chart:
+        def scroll_into_view_if_needed(self):
+            pass
+
+        def bounding_box(self):
+            return {"x": 24, "y": 0, "width": 1200, "height": 576} | (override or {})
+
+        def screenshot(self, *, path):
+            captures.append(path.name)
+
+    class Page:
+        viewport_size = {"width": 1280, "height": 720}
+
+        def evaluate(self, expression):
+            assert expression == "window.scrollTo(0, 0)"
+
+        def screenshot(self, *, path, full_page):
+            assert full_page is False
+            captures.append(path.name)
+
+        def locator(self, selector):
+            assert selector == "svg"
+            return self
+
+        def all(self):
+            return [Chart() for _ in range(7)]
+
+    if override is not None:
+        with pytest.raises(AssertionError):
+            _contract().capture_report_charts(Page(), tmp_path, "numeric")
+        assert captures == ["numeric-server-stopped.png"]
+        return
+    assert _contract().capture_report_charts(Page(), tmp_path, "numeric") == 7
+    assert captures == ["numeric-server-stopped.png"] + [
+        f"numeric-server-stopped-chart-{index}.png" for index in range(1, 8)
+    ]
+
+
 def _view(kind: str) -> dict:
     source = {
         "study_id": "study-" + kind,

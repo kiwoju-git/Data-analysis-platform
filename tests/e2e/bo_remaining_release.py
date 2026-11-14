@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 from pathlib import Path
@@ -289,6 +290,26 @@ def run_resume(base: str, output: Path, original: dict) -> dict:
     }
 
 
+def capture_report_charts(page, output: Path, kind: str) -> int:
+    """Bound each bitmap without omitting graphs or changing report layout."""
+    viewport = page.viewport_size
+    assert viewport is not None
+    page.evaluate("window.scrollTo(0, 0)")
+    page.screenshot(path=output / f"{kind}-server-stopped.png", full_page=False)
+    charts = page.locator("svg").all()
+    assert charts
+    for index, chart in enumerate(charts, start=1):
+        chart.scroll_into_view_if_needed()
+        box = chart.bounding_box()
+        assert box is not None and all(math.isfinite(value) for value in box.values())
+        assert 0 < box["width"] <= viewport["width"]
+        assert 0 < box["height"] <= viewport["height"]
+        assert -1 <= box["x"] and box["x"] + box["width"] <= viewport["width"] + 1
+        assert -1 <= box["y"] and box["y"] + box["height"] <= viewport["height"] + 1
+        chart.screenshot(path=output / f"{kind}-server-stopped-chart-{index}.png")
+    return len(charts)
+
+
 def run_offline(output: Path, original: dict) -> dict:
     from app_readiness import diagnosed_page
     from linux_release import require_server_stopped
@@ -355,8 +376,10 @@ def run_offline(output: Path, original: dict) -> dict:
                         expect(svg).to_be_visible()
                     if kind == "mixture":
                         expect(body).to_contain_text("co-vary")
-                    page.screenshot(
-                        path=output / f"{kind}-server-stopped.png", full_page=True
+                    assert capture_report_charts(page, output, kind) == sum(
+                        3 * len(axis["points"][0]["response_predictions"]) + 1
+                        for axis in axes
+                        if axis["points"]
                     )
                 assert not requests and not errors, (requests, errors)
         finally:

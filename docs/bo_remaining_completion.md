@@ -112,7 +112,7 @@ tests/builds/model jobs are serialized; at most two auxiliary agents are active.
 | Built mixture cycle |Fresh synthetic run `bo44-built-20261114-122341` passed import8 -> fit -> matrix/save/offline HTML -> candidate review/confirm2 -> observed10 -> next fit/candidates -> exact historical view restore |
 | Built numeric and legacy renewal |Fresh synthetic run `bo44-built-20261114-122607` passed matrix values/metrics, KO/EN 1024/1440, icon geometry, pin/keyboard, stored offline HTML and explicit old-review renewal/confirm/replay with old bytes unchanged and no renewal refit |
 | Archive coverage wiring |Source review found missing new BO journeys in the archive harness. Added mandatory initial/two-restart/server-stopped roundtrip checks; root reran212 pure contract/controlled-runner tests, all passed in2.85s. This is not actual archive execution |
-| Archive-helper built-source probe |Fresh numeric/mixture initial journeys and exact restart checks passed. The final full-page capture raised a Chromium protocol error after exact SVG/source assertions. An unchanged offline-helper rerun passed for both reports with the server stopped and browser networking disabled; no retry was added to the harness. This remains built-source, not installed-archive evidence |
+| Archive-helper built-source probe |Final full initial/restart/server-stopped run `bo44-archive-helper-20261114-133701` passed, including all7 numeric and16 mixture chart captures, exact stored SVG points, source hashes and zero HTTP requests. This is built-source, not installed-archive evidence |
 | Native full CI / archive |Not yet verified in this audit |
 
 Failed built attempts are retained in local synthetic diagnostics. They exposed
@@ -172,10 +172,19 @@ conflict and rollback. Full native verification of these corrections is pending.
 
 A separate read-only review found no blocking issue in these fixture changes
 or the archive roundtrip assertions;17 pure receipt/Origin tests passed in1.37s.
-The local capture failure remains in synthetic diagnostics. A minimal probe
+Two full-flow capture failures remain in synthetic diagnostics. A minimal probe
 measured a finite1,280 by7,591-pixel report and captured both full-page and
-viewport images successfully; it did not reproduce the Chromium error. No
-production renderer change or timeout increase is justified by that evidence.
+viewport images successfully; the isolated offline helper also passed. The
+Chromium protocol failure was reproducible only after the full local journey;
+its underlying cause is not established. There was no product-renderer change,
+timeout increase, swallowed exception or automatic retry. Evidence capture now
+uses the report header plus every SVG, rejecting zero/nonfinite/overflowing or
+clipped chart geometry and checking the count against the stored payload. This
+bounds each bitmap, but no longer supplies one whole-document bitmap. All
+original source/hash/point/network/server-stopped assertions remain mandatory.
+The missing bounded helper failed its new regression first;20 pure contract and
+geometry cases then passed in0.56s. The full built-source journey subsequently
+passed. This does not replace final native or installed-archive verification.
 
 The review caught real boundary failures, not alleged JMP disagreements. A
 representable transformed coordinate slightly above1 is preserved in the new
