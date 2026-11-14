@@ -272,6 +272,8 @@ def test_closed_abandoned_study_deletes_its_exact_metadata_graph(tmp_path) -> No
         "candidate_revision_count": 0,
         "planning_selection_count": 0,
         "planning_confirmation_count": 0,
+        "augmentation_renewal_count": 0,
+        "saved_view_count": 0,
         "lifecycle_event_count": 1,
         "metadata_record_count": 7,
         "report_count": 0,

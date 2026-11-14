@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from playwright.sync_api import expect
@@ -29,14 +30,15 @@ def verify_legacy_renewal(page, api: str, model: dict, output: Path, workspace: 
         "expected_trial_count": study["trial_count"], "model_id": model["model_id"],
         "expected_model_sha256": model["snapshot_sha256"],
         "duplicate_tolerance": model["fit"]["search"]["duplicate_tolerance"]}
-    headers = {"Origin": api.split("/api/")[0]}
-    candidate = page.request.post(api + "/candidate-revisions", headers=headers, data={
+    origin = urlsplit(api)
+    base = f"{origin.scheme}://{origin.netloc}"
+    candidate = page.request.post(api + "/candidate-revisions", headers={"Origin": base}, data={
         **source, "request_id": str(uuid4()), "candidate_set_id": str(uuid4()),
         "name": "Synthetic legacy renewal", "expected_head_revision_id": None,
         "source": {"kind": "explicit_rows", "points": [{"x": x} for x in (0.25, 1.25, 2.25, 3.25, 4.25, 5.25)]}})
     assert candidate.status == 201, candidate.text()
     revision = candidate.json()["revision"]
-    selected = page.request.post(api + "/augmentations", headers=headers, data={
+    selected = page.request.post(api + "/augmentations", headers={"Origin": base}, data={
         **source, "request_id": str(uuid4()), "candidate_revision_id": revision["revision_id"],
         "expected_rows_sha256": revision["rows_sha256"], "policy": "refine_ei_then_desirability_sd_v1",
         "batch_size": 2, "total_trial_budget": 20})
@@ -119,7 +121,7 @@ def verify_legacy_renewal(page, api: str, model: dict, output: Path, workspace: 
     batch = response.value.json()
     expect(page.get_by_text(batch["batch_id"], exact=True).first).to_be_visible()
     page.screenshot(path=output / "confirmed-batch.png", full_page=True)
-    replay = page.request.post(confirm_url, headers=headers, data={"expected_config_sha256": renewed["config_sha256"], "expected_result_sha256": renewed["result_sha256"]})
+    replay = page.request.post(confirm_url, headers={"Origin": base}, data={"expected_config_sha256": renewed["config_sha256"], "expected_result_sha256": renewed["result_sha256"]})
     assert replay.status == 201 and replay.json() == batch
     assert page.request.get(api).json()["trial_count"] == study["trial_count"] + 2
     restored_old = page.request.get(endpoint).json()

@@ -1,5 +1,25 @@
 # Browser E2E Coverage
 
+## BO Profiler, Renewal And Mixture (API44)
+
+The existing `bo_profile_constraints` stage also checks the whole-factor matrix,
+explicit saved views and managed HTML. In an explicitly owned synthetic
+workspace it seeds one historical absent-policy selection using guarded bytes,
+then opens, renews, reviews and separately confirms it through the UI. The seed
+does not authorize rewriting user artifacts or weakening runtime readers.
+The helper forwards the owned workspace separately from its display output;
+without that argument, it does not perform the historical database seed.
+
+The `bo_mixture_completion` stage follows it in `workflows` and the full ordered
+suite: measured mixture import, saved model and complete matrix, report download,
+candidate review, atomic confirmation, actual observations, next fit/candidates
+and historical saved-view restore. The Windows `workflows` partition uses the
+built source UI; the Linux full source suite remains source-served. The separate
+archive runner now reuses these journeys against the installed application and
+requires exact-source restarts and original-server-stopped saved HTML. Registration
+is not execution evidence; current outcomes are in
+[the completion audit](bo_remaining_completion.md).
+
 ## Measured X/Y Import And GPR Navigation (API43)
 
 The `workflows` partition includes `bo_dataset_import`: a synthetic measured
@@ -909,6 +929,7 @@ browser critical path.
   same-request replay after a lost response, delayed failure protection and reload)
 - `verify measured X/Y import and next multiresponse recommendation`
 - `verify constrained saved-model profiler values and status`
+- `verify measured mixture import, saved profiler and next batch`
 - `verify canonical GPR navigation with selected dataset`
 - `verify API translation boundary with synthetic inputs` (full flow)
 - `verify dataset source context under delayed responses` (full flow)

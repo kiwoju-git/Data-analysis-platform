@@ -105,10 +105,14 @@ tests/builds/model jobs are serialized; at most two auxiliary agents are active.
 | Full backend type check |`python -m mypy backend/app` passed for356 source files after resolving the earlier20 typing errors, without skip-import or ignore overrides |
 | Localization boundary |`node scripts/check_frontend_localization.mjs` passed:3,047 source strings and4,727 keys; synthetic Korean user labels remain test data, not translated system strings |
 | Frontend production build |Fresh build passed after UI review fixes; existing large-chunk warning remains |
+| Final frontend regression |181 files /1,565 tests passed in167.98s with one worker. Fresh full lint passed with0 errors/12 existing Fast Refresh warnings; typecheck and production build passed |
+| Native CI fixture corrections |Storage/lifecycle/Auto contracts35 tests passed in188.51s; exact OpenAPI/E2E/Origin contracts344 passed in18.63s. Production storage checks, Origin checker and numerical tolerances were not relaxed |
+| Frontend fixture corrections |Three failures reproduced in old LOO request mocks and legacy deletion-field counts. Current receipt-source/no-auto-request and absent-versus-zero assertions passed9 tests before the full frontend rerun |
 | Populated migration/restore |5-test run passed before additional backup/report assertions; final enhanced rerun remains to be recorded |
 | Built mixture cycle |Fresh synthetic run `bo44-built-20261114-122341` passed import8 -> fit -> matrix/save/offline HTML -> candidate review/confirm2 -> observed10 -> next fit/candidates -> exact historical view restore |
 | Built numeric and legacy renewal |Fresh synthetic run `bo44-built-20261114-122607` passed matrix values/metrics, KO/EN 1024/1440, icon geometry, pin/keyboard, stored offline HTML and explicit old-review renewal/confirm/replay with old bytes unchanged and no renewal refit |
 | Archive coverage wiring |Source review found missing new BO journeys in the archive harness. Added mandatory initial/two-restart/server-stopped roundtrip checks; root reran212 pure contract/controlled-runner tests, all passed in2.85s. This is not actual archive execution |
+| Archive-helper built-source probe |Fresh numeric/mixture initial journeys and exact restart checks passed. The final full-page capture raised a Chromium protocol error after exact SVG/source assertions. An unchanged offline-helper rerun passed for both reports with the server stopped and browser networking disabled; no retry was added to the harness. This remains built-source, not installed-archive evidence |
 | Native full CI / archive |Not yet verified in this audit |
 
 Failed built attempts are retained in local synthetic diagnostics. They exposed
@@ -141,10 +145,37 @@ when every feasible level is displayed, not all originally declared levels.
 These defects were not classified as JMP parity differences or waived because
 the main browser journey passed.
 
-The first full check stopped on two overlong SQL literals in new tests. Those
-were wrapped without changing their queries; full backend Ruff and format checks
-then passed (653 files). Full check attempt2 is running, with4,653 backend tests
-collected. No full-suite or CI pass is claimed until its process completes.
+The first local full check stopped on two overlong SQL literals in new tests.
+Those were wrapped without changing their queries; full backend Ruff and format
+checks then passed (653 files). Attempt2 collected4,653 backend tests and passed
+the static/type-check prefix. It was deliberately interrupted at the early API
+suite after the native Linux runs completed with concrete failures; its parent
+and pytest child exited. It is not a full local pass, and its log is retained.
+
+CI43553019942 on the feature commit failed21 backend tests on both Linux targets:
+Python3.11 recorded4,600 passed/32 skipped in844.41s; Python3.12 recorded the same
+counts in858.27s. Failures cover old exact migration/deletion/schema expectations,
+a current-writer call inside an old-schema fixture, a spy missing the new renewal
+keyword, explicit-Origin source checking, the E2E wrapper argument and stage-list
+documentation. Root-cause fixes and fresh verification are required; these are
+not waived as numerical platform differences. Dependency-security and both GP
+resource jobs passed in that run. Windows full check is still pending.
+
+CI43554297236 adds the archive harness at commit `b8d39fc`; its Linux3.11/3.12
+runs reproduced the same21 failures, with4,614 passed/32 skipped in913.66s and
+1,078.65s respectively. The corrective test changes preserve an actual schema31
+database fixture and exact original JSON bytes rather than calling a current
+writer against an old schema. Exact migration/table/deletion inventories and
+mixture response unions now reflect the implemented contracts. The Auto race
+spy forwards the new optional renewal argument and still requires the source
+conflict and rollback. Full native verification of these corrections is pending.
+
+A separate read-only review found no blocking issue in these fixture changes
+or the archive roundtrip assertions;17 pure receipt/Origin tests passed in1.37s.
+The local capture failure remains in synthetic diagnostics. A minimal probe
+measured a finite1,280 by7,591-pixel report and captured both full-page and
+viewport images successfully; it did not reproduce the Chromium error. No
+production renderer change or timeout increase is justified by that evidence.
 
 The review caught real boundary failures, not alleged JMP disagreements. A
 representable transformed coordinate slightly above1 is preserved in the new

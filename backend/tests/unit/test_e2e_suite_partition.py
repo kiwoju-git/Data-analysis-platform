@@ -584,7 +584,10 @@ def test_context_keeps_regular_and_auto_evidence_without_duplicate_profile_fit()
         assert len(calls) == 2, name
 
 
-def test_profile_stage_selects_existing_constrained_only_journey(driver, monkeypatch, tmp_path):
+@pytest.mark.parametrize("owned_workspace", [False, True])
+def test_profile_stage_selects_existing_constrained_only_journey(
+    driver, monkeypatch, tmp_path, owned_workspace
+):
     planning = importlib.import_module("bo_persistent_planning")
     calls = []
     browser = object()
@@ -594,11 +597,19 @@ def test_profile_stage_selects_existing_constrained_only_journey(driver, monkeyp
         return {"synthetic": True, "fit_posts": 1}
 
     monkeypatch.setattr(planning, "verify_persistent_planning", verify)
-    assert planning.verify_profile_constraints(browser, "http://built", tmp_path) == {
+    workspace = tmp_path / "workspace" if owned_workspace else None
+    assert planning.verify_profile_constraints(
+        browser, "http://built", tmp_path, synthetic_workspace=workspace
+    ) == {
         "synthetic": True,
         "fit_posts": 1,
     }
-    assert calls == [((browser, "http://built", tmp_path), {"profile_constraints_only": True})]
+    assert calls == [
+        (
+            (browser, "http://built", tmp_path),
+            {"profile_constraints_only": True, "synthetic_workspace": workspace},
+        )
+    ]
 
 
 def test_windows_ci_isolated_matrix_aggregate_and_linux_full_contract():

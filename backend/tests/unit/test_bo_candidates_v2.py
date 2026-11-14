@@ -10,8 +10,9 @@ from app.core.config import Settings
 from app.main import create_app
 from app.storage import bo_planning, metadata
 from tests.unit.test_bayesian_multiresponse_lifecycle import observations, url
+from tests.unit.test_bayesian_vector_storage import _study
 from tests.unit.test_bo_desirability_review_api import completed
-from tests.unit.test_bo_planning_storage import _candidate, _model
+from tests.unit.test_bo_planning_storage import _candidate
 
 
 def request(study):
@@ -87,13 +88,80 @@ def test_migration31_to32_preserves_old_candidate_bytes_and_owner_links(tmp_path
             metadata, "MIGRATIONS", tuple(m for m in metadata.MIGRATIONS if m.version <= 31)
         )
         metadata.initialize_metadata_store(tmp_path)
-        model, _ = _model(tmp_path)
+        version, _, history = _study(tmp_path)
+        model = {
+            "model_id": "model-a",
+            "study_version_id": version.study_version_id,
+            "source_history_revision_id": history.history_revision_id,
+            "definition_sha256": version.definition_sha256,
+            "history_sha256": history.observation_history_sha256,
+            "schema_version": 1,
+            "request_id": "fit-a",
+            "config_json": bo_planning.planning_json({"synthetic": "a"}),
+            "config_sha256": bo_planning.planning_sha({"synthetic": "a"}),
+            "snapshot_json": bo_planning.planning_json({"numeric_state": [0.0, 1.0]}),
+            "snapshot_sha256": bo_planning.planning_sha({"numeric_state": [0.0, 1.0]}),
+            "created_at": "2026-11-10T00:00:00Z",
+        }
         candidate = _candidate(model)
-        bo_planning.insert_candidate_revision(
-            tmp_path, candidate, name="Synthetic", expected_head=None
-        )
+        # Seed the actual schema-31 layout, not a current writer whose capacity
+        # contract requires later tables. These are synthetic storage receipts.
+        with sqlite3.connect(metadata.metadata_db_path(tmp_path)) as db:
+            db.execute("PRAGMA foreign_keys=ON")
+            assert db.execute("PRAGMA user_version").fetchone() == (31,)
+            assert (
+                db.execute(
+                    "SELECT name FROM sqlite_master WHERE name IN "
+                    "('bayesian_saved_views','bayesian_augmentation_renewals','bayesian_dataset_imports')"
+                ).fetchall()
+                == []
+            )
+            fields = tuple(model)
+            db.execute(
+                f"INSERT INTO bayesian_planning_models ({','.join(fields)}) "
+                f"VALUES ({','.join('?' for _ in fields)})",
+                tuple(model[field] for field in fields),
+            )
+            db.execute(
+                "INSERT INTO bayesian_candidate_sets "
+                "(candidate_set_id,study_version_id,name,created_at) VALUES (?,?,?,?)",
+                (
+                    candidate["candidate_set_id"],
+                    model["study_version_id"],
+                    "Synthetic",
+                    model["created_at"],
+                ),
+            )
+            fields = tuple(candidate)
+            db.execute(
+                f"INSERT INTO bayesian_candidate_revisions ({','.join(fields)}) "
+                f"VALUES ({','.join('?' for _ in fields)})",
+                tuple(candidate[field] for field in fields),
+            )
+            db.execute(
+                "INSERT INTO bayesian_candidate_heads (candidate_set_id,revision_id) VALUES (?,?)",
+                (candidate["candidate_set_id"], candidate["revision_id"]),
+            )
+            assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         before = bo_planning.get_candidate_revision(
             tmp_path, candidate["revision_id"], model["study_version_id"]
+        )
+        assert before == candidate
+    with monkeypatch.context() as intermediate:
+        intermediate.setattr(metadata, "SCHEMA_VERSION", 32)
+        intermediate.setattr(
+            metadata, "MIGRATIONS", tuple(m for m in metadata.MIGRATIONS if m.version <= 32)
+        )
+        assert metadata.initialize_metadata_store(tmp_path).schema_version == 32
+        assert (
+            bo_planning.get_candidate_revision(
+                tmp_path, candidate["revision_id"], model["study_version_id"]
+            )
+            == before
+        )
+        assert (
+            bo_planning.get_planning_model(tmp_path, model["model_id"], model["study_version_id"])
+            == model
         )
     metadata.initialize_metadata_store(tmp_path)
     assert (
@@ -108,6 +176,21 @@ def test_migration31_to32_preserves_old_candidate_bytes_and_owner_links(tmp_path
         assert db.execute(
             "SELECT config_json,rows_json FROM bayesian_candidate_revisions"
         ).fetchone() == (candidate["config_json"], candidate["rows_json"])
+        assert db.execute(
+            "SELECT candidate_set_id,revision_id FROM bayesian_candidate_heads"
+        ).fetchone() == (candidate["candidate_set_id"], candidate["revision_id"])
+        assert db.execute(
+            "SELECT candidate_set_id,study_version_id,name,created_at FROM bayesian_candidate_sets"
+        ).fetchone() == (
+            candidate["candidate_set_id"],
+            model["study_version_id"],
+            "Synthetic",
+            model["created_at"],
+        )
+    assert (
+        bo_planning.get_planning_model(tmp_path, model["model_id"], model["study_version_id"])
+        == model
+    )
 
 
 def test_model_free_augmentation_is_stored_without_fit_or_pending_trials(tmp_path, monkeypatch):
