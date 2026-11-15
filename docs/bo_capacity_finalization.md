@@ -116,6 +116,29 @@ was refreshed and showed the mounted application, sidebar and API-ready state.
 The preview serves an external build directory, independent of later build cleanup.
 Backup, preservation receipts and user-specific paths remain local, outside Git.
 
+## Native Mixture Failure Investigation
+
+Run `43720248024` (`1bf2f75`) passed Python3.11:4718 tests,34 skips. Linux3.12
+also passed all4718 backend tests and1613 frontend tests, then failed the real
+mixture E2E's first model creation with `bayesian_mixture_planning_input_invalid`.
+The failed request had six responses, three deterministic starts,1000 total
+optimizer evaluations and the unchanged60-second limit. Its trace and first
+failure remain retained; Windows built success is not substituted for this failure.
+
+Independent review confirmed error masking: `BayesianOptimizationError` inherits
+`ValueError`, and the mixture dispatcher rewrote typed budget/numerical exceptions
+as input errors. Four computation-free tests reproduced this before the fix.
+Typed errors now reach the existing outer public-code allowlist unchanged;
+unknown exceptions remain redacted. Transport/worker regression:51 passed,
+one existing POSIX-only test skipped on Windows. This does not yet identify the
+underlying native fitting failure. A synthetic default-settings probe records
+that cause and preceding model evaluation counts without changing budgets or
+claiming its diagnostic output is acceptance evidence.
+The exact captured factor/response IDs give the same Windows result as sequential
+IDs: six completed fits used129/129/212/212/129/129 evaluations,940 of1000 total,
+in19.52s including probe setup. This supports investigating the shared budget;
+it does not prove the Linux failure was budget exhaustion.
+
 ## Verification Ledger
 
 - Fresh full-check attempts retained: missing worktree Ruff launcher corrected
@@ -125,6 +148,9 @@ Backup, preservation receipts and user-specific paths remain local, outside Git.
   The4748-test local backend run was stopped early to free memory for serial UI
   verification; no full local backend pass is claimed. Native full checks remain
   mandatory, not replaced by that partial run.
+- Fresh local frontend checks passed:3047 source strings/4727 translation keys,
+  lint with0 errors and12 existing warnings, typecheck,184 test files/1613 tests.
+  Tests used one worker and no file parallelism on the8GiB host.
 - Built UI numeric/mixed six-response journeys and field validation passed on
   Chromium149, KO/EN,1024/1440. Initial240-row import through241st observation,
   exact restore/offline report and501-row atomic rejection passed. A fresh run also

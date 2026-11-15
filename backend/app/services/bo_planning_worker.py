@@ -96,6 +96,10 @@ def _calculate(operation: str, payload: dict[str, Any]) -> Any:
                 return calculate_mixture_candidates(payload)
             if operation == "mixture_selection":
                 return calculate_mixture_selection(payload)
+        except BayesianOptimizationError:
+            # The outer transport applies the public-code allowlist. Do not turn
+            # typed budget or numerical failures into misleading input errors.
+            raise
         except ValueError as exc:
             code = str(exc)
             raise BayesianOptimizationError(

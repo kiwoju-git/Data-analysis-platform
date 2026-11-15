@@ -603,6 +603,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $python -m pip check
           exit $LASTEXITCODE
+      - name: Diagnose the unchanged six-response mixture fit budget
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          New-Item -ItemType Directory -Force .tmp/gp-resources | Out-Null
+          & $python scripts/probe_bo_mixture_fit.py | Tee-Object -FilePath .tmp/gp-resources/mixture-fit-diagnostic.json
+          exit $LASTEXITCODE
       - name: Measure synthetic fit CV restoration and prediction
         shell: pwsh
         run: |
