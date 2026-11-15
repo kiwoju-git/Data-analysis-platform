@@ -52,8 +52,13 @@ Earlier task logs are history, not evidence of this final commit.
 ## Progress
 
 - Setup: baseline fetched; existing isolation confirmed; localAPI45 observed.
-- Local apply: API46/metadata38 applied and browser refreshed; final39 update pending.
-- Resource/browser coverage: numeric/mixed500x6 measured; browser execution pending.
+- Local apply: final API46/metadata39 applied and browser refreshed; all43 business
+  tables and4 stored assets verified unchanged, pre-migration SQLite backup retained.
+- Resource/browser coverage: numeric/mixed500x6 measured with bounded settings and
+  explicit warnings; built numeric/mixed/mixture six-response workflows passed.
+  Exactly500-row import/reopen and501-row atomic rejection passed.
 - Full checks/review: independent review identified SQL capacity bug; RED/GREEN
-  actual insert, migration preservation and rollback tests added. Full checks pending.
+  actual insert, migration preservation and rollback tests added. Worker delayed-exit
+  failure reproduced independently and fixed without extending the original deadline.
+  Native full checks remain in progress; earlier stale-contract failures are recorded.
 - Main integration: pending.

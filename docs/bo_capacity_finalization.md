@@ -97,7 +97,10 @@ The parent now uses short joins within its **original deadline**, continues chec
 cancel, and still requires exit0. It does not accept bytes from a crashed worker
 or extend computation budgets. Post-result cancellation, timeout, nonzero exit,
 cleanup and existing planning-worker tests passed44 cases, with one existing
-Windows-inapplicable POSIX-frame test skipped. The full mixture UI rerun is pending.
+Windows-inapplicable POSIX-frame test skipped. A fresh built six-response mixture
+workflow then passed import, fit, candidates, all-factor profiler, saved/offline
+HTML, two actual six-value observations, refit and historical-view restoration.
+This successful rerun does not retrospectively prove the first failure's cause.
 
 ## Local Preview
 
@@ -105,7 +108,13 @@ The API46/metadata38 preview was applied and the existing localhost8620 tab was
 refreshed. A Windows `File.Replace` null-backup argument initially interrupted
 the replacement; the guarded helper was corrected and resumed after checking
 the exact prior index/backup and an unoccupied port. No study was rewritten.
-The final metadata39 matching build and final refresh are pending.
+The final API46/metadata39 build was subsequently applied. A standalone SQLite
+backup was created through SQLite's backup API before the restart. Verification
+confirmed unchanged contents of all43 business tables and checksums of all4
+existing stored assets. Only migration metadata changed. The existing Edge tab
+was refreshed and showed the mounted application, sidebar and API-ready state.
+The preview serves an external build directory, independent of later build cleanup.
+Backup, preservation receipts and user-specific paths remain local, outside Git.
 
 ## Verification Ledger
 
@@ -118,10 +127,23 @@ The final metadata39 matching build and final refresh are pending.
   mandatory, not replaced by that partial run.
 - Built UI numeric/mixed six-response journeys and field validation passed on
   Chromium149, KO/EN,1024/1440. Initial240-row import through241st observation,
-  exact restore/offline report and501-row atomic rejection passed. Explicit500-row
-  import/reopen and mixture rerun remain pending.
+  exact restore/offline report and501-row atomic rejection passed. A fresh run also
+  imported and reopened exactly500 rows through the actual built UI. Receipt:
+  `500_imported_and_restored=true`, `501_rejected_atomically=true`, no page errors.
+  The500-row synthetic CSV SHA-256 is
+  `0f43db1ea00cb8aedac58d9541b9e6ec7204384f088ab56700b0947974424dbe`.
+  The fresh six-response mixture rerun passed as described above. These built
+  source workflows are not yet proof of an installed Linux archive.
+- A further fresh mixture run passed after batching per-cell DOM reads in the
+  saved-profiler test. Every point ID, original X/Y value and metric remains
+  asserted; unexpected/duplicate markers are rejected. An independent read-only
+  reviewer found no blocking verification loss or new readiness race. The receipt
+  records six responses,8 then10 completed trials,32 new candidates, changed
+  next-model identity and preserved historical view identity. No product renderer
+  or calculation changed in this test optimization.
 - Native Windows/Linux/Python3.11/security/release-ready/archive: pending.
-- Feature commit `1a23587` pushed; [PR11](https://github.com/kiwoju-git/Data-analysis-platform/pull/11)
+- Feature commit `1a23587` and worker/CI follow-up `1bf2f75` pushed;
+  [PR11](https://github.com/kiwoju-git/Data-analysis-platform/pull/11)
   targets main. Main merge is blocked until all required gates pass.
 
 Earlier results in `bo_500_capacity.md` and `bo_six_responses.md` are historical
