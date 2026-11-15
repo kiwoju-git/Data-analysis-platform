@@ -235,7 +235,7 @@ def runner_boundaries(driver, monkeypatch):
 
 
 @pytest.mark.parametrize("suite", ["full", "workflows", "context", "data", "prediction"])
-def test_runner_builds_only_workflows_in_fresh_owned_directory(
+def test_runner_builds_workflows_and_data_in_fresh_owned_directory(
     driver, monkeypatch, tmp_path, runner_boundaries, suite
 ):
     diagnostics = tmp_path / "evidence"
@@ -260,11 +260,11 @@ def test_runner_builds_only_workflows_in_fresh_owned_directory(
     )
     assert driver.main() == 0
     builds = [event for event in runner_boundaries if event[0] == "build"]
-    assert len(builds) == (1 if suite == "workflows" else 0)
+    assert len(builds) == (1 if suite in {"workflows", "data"} else 0)
     backend = next(event for event in runner_boundaries if event[0] == "start")
     flow = next(event for event in runner_boundaries if event[0] == "flow")
     assert flow[1][0] == "http://127.0.0.1:15199"
-    if suite == "workflows":
+    if suite in {"workflows", "data"}:
         assert runner_boundaries[0][0] == "build"
         command = builds[0][1]
         assert command[:7] == [
@@ -283,7 +283,7 @@ def test_runner_builds_only_workflows_in_fresh_owned_directory(
         assert backend[2]["env"]["DATALAB_FRONTEND_DIST"] == str(output)
         assert flow[2]["built_workflow_base_url"] == "http://127.0.0.1:18011"
         manifest = json.loads((diagnostics / "suite-manifest.json").read_text(encoding="utf-8"))
-        assert manifest.get("frontend_modes") == {
+        expected_modes = {
             "bo_dataset_import": "built",
             "bo_capacity": "built",
             "bo_profile_constraints": "built",
@@ -301,6 +301,13 @@ def test_runner_builds_only_workflows_in_fresh_owned_directory(
             "localization_shell": "built",
             "legacy_workflow": "dev",
         }
+        if suite == "data":
+            expected_modes = {
+                "dataset_context": "built",
+                "schema_concurrency": "built",
+                "pilot_ingestion": "built",
+            }
+        assert manifest.get("frontend_modes") == expected_modes
     else:
         assert "DATALAB_FRONTEND_DIST" not in backend[2]["env"]
         assert flow[2].get("built_workflow_base_url") is None
@@ -338,8 +345,9 @@ def test_workflow_build_resolves_relative_output_for_npm_script_directory(
 
 
 @pytest.mark.parametrize("failure", ["command_failed", "missing_output"])
+@pytest.mark.parametrize("suite", ["workflows", "data"])
 def test_workflow_build_failure_stops_before_servers_and_browser(
-    driver, monkeypatch, tmp_path, runner_boundaries, failure
+    driver, monkeypatch, tmp_path, runner_boundaries, failure, suite
 ):
     def fail(command, **_kwargs):
         if failure == "command_failed":
@@ -350,10 +358,37 @@ def test_workflow_build_failure_stops_before_servers_and_browser(
     monkeypatch.setattr(
         driver.sys,
         "argv",
-        ["critical_path.py", "--suite", "workflows", "--workspace-root", str(tmp_path)],
+        ["critical_path.py", "--suite", suite, "--workspace-root", str(tmp_path)],
     )
     assert driver.main() == 1
     assert not runner_boundaries
+
+
+def test_data_dispatch_uses_built_origin_for_every_unchanged_stage(driver, monkeypatch, tmp_path):
+    calls = []
+    closed = []
+    browser = SimpleNamespace(close=lambda: closed.append(True))
+
+    @contextmanager
+    def playwright():
+        yield SimpleNamespace(chromium=SimpleNamespace(launch=lambda **_kwargs: browser))
+
+    monkeypatch.setattr(driver, "sync_playwright", playwright)
+    for stage in driver.suite_stage_ids("data"):
+
+        def invoke(*args, _stage=stage, **_kwargs):
+            calls.append((_stage, args[1]))
+
+        monkeypatch.setattr(driver, STAGE_CALLS[stage], invoke)
+    driver.run_browser_flow(
+        "http://source",
+        SimpleNamespace(root=tmp_path, step=lambda _label: None),
+        "http://built",
+        suite="data",
+        built_workflow_base_url="http://built",
+    )
+    assert calls == [(stage, "http://built") for stage in driver.suite_stage_ids("data")]
+    assert closed == [True]
 
 
 def test_workflow_dispatch_routes_dev_fixtures_without_moving_built_journeys(

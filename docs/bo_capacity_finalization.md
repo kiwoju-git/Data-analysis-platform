@@ -207,6 +207,29 @@ The complete local startup/partition/shard/readiness group then passed230 tests
 in159.17s; Ruff/format passed. Independent review accepted the narrow environment
 fix. Native Windows confirmation is still required.
 
+Run `43731601370` confirmed both native Windows backend shards and the Windows
+static/frontend gate, plus Linux3.12/Python3.11 (4765 passed/34 skipped each),
+frontend1614 tests, Linux full browser E2E and offline archive validation. Its
+Windows `data` browser partition failed before `file-cancel-ko` mounted: the
+actual child recorded `/src/main.tsx` `ERR_NO_BUFFER_SPACE`, no JS exception,
+and an empty root. Five completed child contexts each loaded190 source modules.
+The host-only TCP snapshot (272 total,222 TIME_WAIT) does not establish browser
+socket leakage or OS exhaustion. Inspection found the contexts close in finally.
+
+The existing fresh built-UI runner boundary now also applies to `data`.
+Its three stages use only real UI/API paths, not source-only fixture pages.
+Every dataset race, schema two-editor assertion and ingestion check is retained;
+default/full and focused source-mode coverage remains. No retry or deadline was
+added. Runner build/failure tests first reproduced3 failures, then the combined
+partition/shard/readiness group passed199 tests. This is a bounded test-serving
+mitigation, not a claim to have fixed an underlying development socket defect.
+The fresh local Windows built-data suite passed all three stages with its own
+workspace and ports: all16 dataset contexts, the two-editor schema scenarios,
+and pilot CSV ingestion. Evidence is retained outside Git under the synthetic
+`DataLab-built-data-20261116` temporary directory. A read-only reviewer confirmed
+unchanged fixture assertions, cleanup and source-only coverage. Native rerun is
+still required after this test-serving change.
+
 ## Verification Ledger
 
 - Fresh full-check attempts retained: missing worktree Ruff launcher corrected

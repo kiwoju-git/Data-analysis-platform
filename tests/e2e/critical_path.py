@@ -255,6 +255,7 @@ FULL_STAGE_ORDER = (
 WORKFLOW_DEV_STAGES = frozenset({
     "chart_interactions", "result_chart_models", "desktop_resize", "legacy_workflow",
 })
+BUILT_APPLICATION_SUITES = frozenset({"workflows", "data"})
 
 
 def suite_stage_ids(suite: str) -> tuple[str, ...]:
@@ -309,7 +310,7 @@ def main() -> int:
             json.dumps({
                 "schema_version": 1, "suite": args.suite, "stages": suite_stage_ids(args.suite),
                 "frontend_modes": {
-                    stage: "built" if args.suite == "workflows" and stage not in WORKFLOW_DEV_STAGES else "dev"
+                    stage: "built" if args.suite in BUILT_APPLICATION_SUITES and stage not in WORKFLOW_DEV_STAGES else "dev"
                     for stage in suite_stage_ids(args.suite)
                 },
             }, indent=2),
@@ -346,7 +347,7 @@ def main() -> int:
         frontend_log = frontend_log_path.open("wb")
         log_handles.extend([backend_log, frontend_log])
 
-        if args.suite == "workflows":
+        if args.suite in BUILT_APPLICATION_SUITES:
             diagnostics.step("build isolated workflow frontend")
             frontend_dist = (workspace_root / "frontend-dist").resolve()
             with (log_root / "frontend-build.log").open("wb") as build_log:
@@ -434,7 +435,7 @@ def main() -> int:
             args.report_center_context_only,
             args.analysis_completion_only,
             suite=args.suite,
-            built_workflow_base_url=backend_base_url if args.suite == "workflows" else None,
+            built_workflow_base_url=backend_base_url if args.suite in BUILT_APPLICATION_SUITES else None,
             synthetic_workspace=workspace_root / "workspace",
         )
         print("E2E critical path passed")

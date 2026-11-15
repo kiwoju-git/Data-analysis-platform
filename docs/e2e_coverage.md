@@ -99,7 +99,7 @@ exclusive. Actual dispatch and coverage-union tests guard the partition contract
 The failed-child recorder captures bounded Windows TCP state aggregates only on
 failure; these host-wide counts are not proof of browser socket exhaustion.
 
-The unfocused `workflows` partition builds the current frontend into its fresh,
+The unfocused `workflows` and `data` partitions build the current frontend into a fresh,
 owned temporary run directory before starting servers. A failed build or missing
 `index.html` fails the run; existing `frontend/dist` output is never reused.
 Its real application stages use the existing loopback API's built-UI serving
@@ -109,7 +109,9 @@ remain on Vite; these `/tests/*.html` entry points import source components and
 are not release assets. The legacy journey also uses Vite: startup and lazy-panel
 fault injection deliberately
 intercept `/src/App.tsx` and `RegressionAnalysisPanels.ts*`, and their source-based
-assertions are unchanged. Other partitions, `full`, and focused flags remain
+assertions are unchanged. All three data stages (dataset context, schema
+concurrency and pilot ingestion) use the built application; their API delays,
+real writes and assertions are unchanged. Other partitions, `full`, and focused flags remain
 source-served. The manifest's `frontend_modes` records this stage-by-stage split;
 `logs/frontend-build.log` records the build. No stage, retry, timeout or readiness
 condition is removed or relaxed by this routing change. A passing built workflow
