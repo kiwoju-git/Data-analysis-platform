@@ -130,14 +130,60 @@ Independent review confirmed error masking: `BayesianOptimizationError` inherits
 as input errors. Four computation-free tests reproduced this before the fix.
 Typed errors now reach the existing outer public-code allowlist unchanged;
 unknown exceptions remain redacted. Transport/worker regression:51 passed,
-one existing POSIX-only test skipped on Windows. This does not yet identify the
-underlying native fitting failure. A synthetic default-settings probe records
-that cause and preceding model evaluation counts without changing budgets or
-claiming its diagnostic output is acceptance evidence.
+one existing POSIX-only test skipped on Windows. A synthetic default-settings
+probe records the native cause and preceding model evaluation counts without
+changing budgets or claiming its diagnostic output is acceptance evidence.
 The exact captured factor/response IDs give the same Windows result as sequential
 IDs: six completed fits used129/129/212/212/129/129 evaluations,940 of1000 total,
-in19.52s including probe setup. This supports investigating the shared budget;
-it does not prove the Linux failure was budget exhaustion.
+in19.52s including probe setup. In run `43724178882`, Linux3.12 reproduced
+`bayesian_optimization_budget_exhausted` in3.55s. Four completed responses used
+168/168/262/262 evaluations (860 total), then the next fit exhausted the shared
+1000-evaluation budget. The retained E2E trace and probe have identical design,
+objective, fit options, coordinates and responses. This distinguishes the native
+budget failure from incorrect input, a60-second timeout or a fixture mismatch.
+The diagnostic job exits successfully for allowlisted failures by design; it is
+not a passing mixture workflow and does not replace the strict native E2E gate.
+
+The mixture UI now exposes the already supported1-3 deterministic starts in
+collapsed advanced fit settings. Default3, total1000 evaluations and60 seconds
+remain unchanged. The saved model displays its own applied count, not the current
+draft. Typed budget/time failures have specific local recovery instructions.
+Two draft/control tests failed before this change, then all12 focused tests passed.
+The E2E keeps the first default attempt: either a complete model or the exact
+budget failure with unchanged study and no partial model is required. It then
+explicitly selects1 through the UI and requires successful fit, stored settings,
+profiler/report, candidates, observations and refit. Other errors still fail.
+The fresh Windows built journey passed: default fit201, explicit1-start fit,
+six responses,8 then10 completed observations, saved/offline profiler,32 next
+candidates and historical view retention. An earlier test attempt manipulated
+advanced settings before the refreshed history reached the UI and timed out on
+a collapsed input. The test now waits for the exact new history hash before
+interacting; product source ownership was not relaxed.
+
+## Windows Check Partition
+
+Run `43717196485` reached its unchanged90-minute deadline while still advancing
+through72% of pytest. It was not observed to hang. Two earlier assertion failures
+in that run are among the stale expectations already corrected in `1bf2f75`;
+the timeout's teardown exceptions are not treated as separate product defects.
+Integration/API tests live inside `backend/tests/unit`, so splitting directories
+would not balance the work. Two native Windows jobs now collect the full suite
+and assign sorted test files round-robin. No test or assertion is removed.
+Each emits its complete/selected node IDs. The existing `windows` gate requires
+both jobs to succeed and verifies identical full collections, exact partitions,
+disjoint selected sets and complete union before static/frontend checks. The
+four Windows E2E suites and `release-ready` dependencies remain unchanged.
+Local `scripts/check.ps1` still runs everything by default. Its explicit CI-only
+`-SkipBackendTests` path is used only after those native shard and coverage gates.
+Focused shard/readiness tests passed98 cases. Two independent real collection
+runs covered4798 tests exactly once (2318/2480), and the standalone validator
+passed. The first local collection attempt used the root editable installation
+instead of the isolated worktree and correctly failed an import; explicit
+worktree `PYTHONPATH` fixed the environment without changing production code.
+This collection check proves coverage, not that all4798 tests passed locally.
+An independent final read-only review found no blocking gate issue: failure,
+cancellation and skipped shards cannot pass the Windows aggregate; collection
+receipts are not treated as execution success. Native completion remains required.
 
 ## Verification Ledger
 

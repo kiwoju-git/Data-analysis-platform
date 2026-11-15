@@ -21,6 +21,10 @@ describe("mixture lifecycle display boundaries", () => {
     const replicate = html.match(/<details\b[^>]*>\s*<summary>Add replicate<\/summary>/);
     expect(replicate).not.toBeNull();
     expect(replicate?.[0]).not.toContain("open=");
+    const advanced = html.match(/<details\b[^>]*>\s*<summary>Advanced fit settings<\/summary>/);
+    expect(advanced).not.toBeNull();
+    expect(advanced?.[0]).not.toContain("open=");
+    expect(html).toContain("Deterministic optimizer starts");
   });
   it("uses a valid actual point for holds, with no independent-low fallback", () => {
     setCurrentLocale("en");

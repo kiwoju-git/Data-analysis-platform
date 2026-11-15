@@ -119,8 +119,42 @@ def verify_mixture_completion(browser, base: str, output: Path, *, response_coun
             timeout=90000,
         ) as fitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
-        assert fitted.value.status == 201, fitted.value.text()
-        model = fitted.value.json()
+        default_fit_status = fitted.value.status
+        default_fit = fitted.value.json()
+        assert fitted.value.request.post_data_json["fit"]["fit_policy"]["deterministic_start_count"] == 3
+        if default_fit_status == 409:
+            # Native optimizer paths can consume different counts. Exhaustion is
+            # an explicit atomic failure, never a partial model or input error.
+            assert default_fit["error"]["code"] == "bayesian_optimization_budget_exhausted", default_fit
+            expect(workspace.get_by_role("alert")).to_contain_text("shared optimizer evaluation budget")
+            assert page.request.get(api + "/mixture-planning-models").json()["items"] == []
+            assert page.request.get(api).json() == study
+        else:
+            assert default_fit_status == 201, fitted.value.text()
+            assert len(default_fit["response_models"]) == response_count
+            assert default_fit["fit"]["fit_policy"]["deterministic_start_count"] == 3
+        advanced = workspace.locator("details").filter(has=page.get_by_text("Advanced fit settings", exact=True))
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        starts = workspace.get_by_label("Deterministic optimizer starts", exact=True)
+        expect(starts).to_have_value("3")
+        starts.fill("1.5")
+        expect(starts).to_have_attribute("aria-invalid", "true")
+        expect(advanced).to_contain_text("integer from 1 to 3")
+        starts.fill("1")
+        with page.expect_response(
+            lambda r: r.url == api + "/mixture-planning-models"
+            and r.request.method == "POST",
+            timeout=90000,
+        ) as bounded_fit:
+            workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
+            expect(starts).to_be_disabled()
+        assert bounded_fit.value.status == 201, bounded_fit.value.text()
+        model = bounded_fit.value.json()
+        assert bounded_fit.value.request.post_data_json["fit"]["fit_policy"]["deterministic_start_count"] == 1
+        assert model["fit"]["fit_policy"]["deterministic_start_count"] == 1
+        assert model["fit"]["search"]["model_max_evaluations"] == 1000
+        expect(workspace).to_contain_text("Deterministic optimizer starts: 1")
         diagnostics = workspace.get_by_role("region", name="Actual holds", exact=True)
         saved = verify_saved_matrix(
             browser,
@@ -191,6 +225,13 @@ def verify_mixture_completion(browser, base: str, output: Path, *, response_coun
         complete = observed.value.json()["study"]
         assert complete["trials"][:8] == study["trials"]
         assert all(len(t["response_values"]) == response_count for t in complete["trials"])
+        expect(workspace.get_by_text(
+            complete["observation_history"]["observation_history_sha256"], exact=True
+        ).first).to_be_visible()
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        expect(starts).to_have_value("3")
+        starts.fill("1")
         with page.expect_response(
             lambda r: r.url == api + "/mixture-planning-models"
             and r.request.method == "POST",
@@ -198,6 +239,7 @@ def verify_mixture_completion(browser, base: str, output: Path, *, response_coun
         ) as refitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
         assert refitted.value.status == 201, refitted.value.text()
+        assert refitted.value.json()["fit"]["fit_policy"]["deterministic_start_count"] == 1
         assert refitted.value.json()["history_sha256"] != model["history_sha256"]
         with page.expect_response(
             api + "/mixture-candidate-revisions", timeout=90000
@@ -224,6 +266,9 @@ def verify_mixture_completion(browser, base: str, output: Path, *, response_coun
         receipt = {
             "synthetic": True,
             "response_count": response_count,
+            "default_fit_status": default_fit_status,
+            "default_fit_error": default_fit.get("error", {}).get("code"),
+            "explicit_optimizer_starts": 1,
             "import_schema": 2,
             "import_layout_checks": layout_checks,
             "completed_before": 8,

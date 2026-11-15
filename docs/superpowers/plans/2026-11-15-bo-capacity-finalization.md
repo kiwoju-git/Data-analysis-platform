@@ -62,3 +62,28 @@ Earlier task logs are history, not evidence of this final commit.
   failure reproduced independently and fixed without extending the original deadline.
   Native full checks remain in progress; earlier stale-contract failures are recorded.
 - Main integration: pending.
+
+## Native Budget Recovery Follow-up
+
+Linux reproduced shared1000-evaluation exhaustion for the six-response mixture
+fixture; Windows used940. Keep all defaults, response data and budgets unchanged.
+The existing mixed-model API already permits1-3 deterministic starts. Extend the
+mixture fit controls with a collapsed advanced setting for that existing option,
+strictly validate it, lock it during a request, and display the saved model's
+applied count separately. This is a UI recovery path, not automatic fit reduction.
+Alternatives rejected: raising budgets silently or changing the fixture kernel
+to conceal the default-budget failure. An error-only path remains insufficient
+for UI users to change the hardcoded setting.
+
+- [x] RED: draft default3, explicit1/2, invalid inputs, and collapsed control tests.
+- [x] Implement minimal draft/UI/i18n changes; no API/schema/default changes.
+- [x] GREEN: focused tests, typecheck/localization, built six-response journey.
+- [x] E2E explicitly chooses1 and verifies request/applied settings before both fits.
+- [x] Preserve default failure as diagnostic evidence; native gates remain required.
+
+Windows full checks timed out while advancing, so two explicit file-round-robin
+shards replace the single pytest invocation only in CI. The existing Windows
+gate verifies both job results and exact collection coverage before static/UI
+checks; local check.ps1 defaults remain full. Real collection manifests cover4798
+tests exactly once;98 focused gate/partition tests passed. Native execution and
+main integration are still gated on the candidate's PR checks.
