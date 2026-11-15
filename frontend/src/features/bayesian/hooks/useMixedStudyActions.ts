@@ -8,6 +8,7 @@ import { createPlanningCommitFence, createPlanningRequestFence, planningHash, pl
 import { sameDesirabilityJson } from "../desirabilityResponseGuard";
 import { bayesianRequestId } from "../bayesianRequestId";
 import type { VectorObservationDraft } from "../bayesianVectorDraft";
+import { MAX_BO_TRIALS } from "../boLimits";
 
 type Mutation = { kind: "observations"; request: MixedObservationBatchRequest } |
   { kind: "replicates"; trialId: string; request: BayesianReplicateCreateRequest } |
@@ -84,7 +85,7 @@ export function useMixedStudyActions({ study, disabled, onCommitted, onRefresh }
   }
   function requestReplicates(trialId: string, count: number, budget: number, intent: boolean) {
     if (!invalidate() || disabled || study.status !== "active" || study.pending_trial_count !== 0 || !intent || !Number.isInteger(count) || count < 1 || count > 8 ||
-      !Number.isInteger(budget) || budget < study.trial_count + count || budget > 200 || !study.trials.some(row => row.trial_id === trialId && row.state === "completed")) return;
+      !Number.isInteger(budget) || budget < study.trial_count + count || budget > MAX_BO_TRIALS || !study.trials.some(row => row.trial_id === trialId && row.state === "completed")) return;
     try { setPreview({ kind: "replicates", trialId, request: { request_id: bayesianRequestId(), expected_history_revision_id: study.observation_history.history_revision_id,
       expected_history_sha256: study.observation_history.observation_history_sha256, count, total_trial_budget: budget, confirm_replicate_intent: true } }); }
     catch (caught) { setError(augmentationFailureCode(caught)); }

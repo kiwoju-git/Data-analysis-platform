@@ -20,12 +20,86 @@ class _Output:
         self.closed = True
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "bayesian_optimization_budget_exhausted",
+        "bayesian_optimization_time_budget_exhausted",
+        "bayesian_surrogate_covariance_invalid",
+        "bayesian_desirability_quadrature_not_converged",
+    ],
+)
+def test_mixture_calculation_preserves_typed_failure_code(monkeypatch, code):
+    from app.statistics import bo_mixture_planning
+
+    def fail(_payload):
+        raise BayesianOptimizationError(code)
+
+    monkeypatch.setattr(bo_mixture_planning, "fit_mixture_planning_model", fail)
+    with pytest.raises(BayesianOptimizationError) as error:
+        worker._calculate("mixture_fit", {})
+    assert error.value.code == code
+
+
+def test_mixture_calculation_redacts_untyped_exception(monkeypatch):
+    from app.statistics import bo_mixture_planning
+
+    def fail(_payload):
+        raise ValueError("synthetic-private-column-and-value")
+
+    monkeypatch.setattr(bo_mixture_planning, "fit_mixture_planning_model", fail)
+    with pytest.raises(BayesianOptimizationError) as error:
+        worker._calculate("mixture_fit", {})
+    assert error.value.code == "bayesian_mixture_planning_input_invalid"
+
+
 def _in_process(encoded, *, entrypoint, timeout_ms, cancel, max_result_bytes):
     output = _Output()
     entrypoint(output, encoded)
     assert output.closed and len(output.data) <= max_result_bytes
     assert timeout_ms == 21_000 and cancel is None
     return output.data
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected"),
+    [
+        ("bayesian_optimization_budget_exhausted", "bayesian_optimization_budget_exhausted"),
+        ("synthetic-private-column-and-value", "bayesian_planning_input_invalid"),
+    ],
+)
+def test_mixture_worker_transport_keeps_allowlist_boundary(monkeypatch, raised, expected):
+    from app.statistics import bo_mixture_planning
+
+    def fail(_payload):
+        raise BayesianOptimizationError(raised)
+
+    monkeypatch.setattr(bo_mixture_planning, "fit_mixture_planning_model", fail)
+    monkeypatch.setattr(execution, "_run_owned_worker", _in_process)
+    with pytest.raises(BayesianOptimizationError) as error:
+        worker.run_planning_operation("mixture_fit", {}, time_budget_ms=1000)
+    assert error.value.code == expected
+
+
+@pytest.mark.parametrize("operation", ["auto_augmentation", "auto_mixed_augmentation"])
+def test_distinct_auto_snapshots_are_not_deduplicated(monkeypatch, operation):
+    payload = {
+        "snapshot": {"synthetic_model": "a"},
+        "routing": {"snapshot": {"synthetic_model": "b"}},
+    }
+    seen = []
+
+    def transport(encoded, **kwargs):
+        assert json.loads(encoded)["payload"] == payload
+        seen.append(True)
+        return json.dumps(
+            {"status": "error", "code": "bayesian_optimization_budget_exhausted"}
+        ).encode()
+
+    monkeypatch.setattr(execution, "_run_owned_worker", transport)
+    with pytest.raises(BayesianOptimizationError, match="bayesian_optimization_budget_exhausted"):
+        worker.run_planning_operation(operation, payload, time_budget_ms=1000)
+    assert seen == [True]
 
 
 @pytest.mark.parametrize("operation", ["evaluate", "selection", "candidates", "fit"])

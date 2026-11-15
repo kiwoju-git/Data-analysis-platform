@@ -98,3 +98,25 @@
   margin-block: 12px;
   max-inline-size: 36rem;
 }
+
+.bo-dataset-import [aria-invalid="true"] {
+  border-color: var(--status-error, #b42318);
+  border-width: 2px;
+}
+
+.bo-dataset-import .bo-import-field-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-block-start: 6px;
+  color: var(--status-error, #b42318);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.bo-import-field-error svg { flex: 0 0 14px; margin-block-start: 3px; }
+.bo-import-validation-summary ul { display: grid; gap: 6px; padding-inline-start: 20px; }
+.bo-import-validation-summary a { color: inherit; text-decoration: underline; overflow-wrap: anywhere; }
+.bo-dataset-import .bo-vector-goals td { vertical-align: top; }

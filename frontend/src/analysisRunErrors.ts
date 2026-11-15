@@ -76,7 +76,7 @@ const exactErrorDetails: Record<string, AnalysisRunErrorDetails> = {
   },
   bayesian_optimization_trial_budget_invalid: {
     title: "전체 trial 예산 오류",
-    message: "전체 trial 예산은 2~200 사이의 정수여야 합니다.",
+    message: "전체 trial 예산은 2~500 사이의 정수여야 합니다.",
     action: "현재 trial 수보다 큰 예산을 입력하고 다시 추천하세요.",
   },
   bayesian_optimization_budget_exhausted: {

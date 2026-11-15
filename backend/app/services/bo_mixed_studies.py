@@ -36,6 +36,7 @@ from app.api.v1.schemas.bo_mixed_studies import (
     mixed_constraint_definitions,
     mixed_factor_domains,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services import bayesian_studies as legacy
@@ -188,7 +189,7 @@ def new_mixed_trial_record(
 ) -> BayesianTrialRecord:
     if (
         type(trial_number) is not int
-        or not 1 <= trial_number <= 200
+        or not 1 <= trial_number <= MAX_BAYESIAN_TRIALS
         or (origin == "replicate") != (replicate_of_trial_id is not None)
     ):
         raise legacy._artifact_error()
@@ -469,12 +470,12 @@ def load_validated_mixed_study(settings: Settings, study_id: str) -> MixedValida
     except (ValueError, TypeError, KeyError, ValidationError) as exc:
         raise legacy._artifact_error() from exc
     trials = list_bayesian_trial_records(
-        settings.workspace_root, version.study_version_id, limit=200
+        settings.workspace_root, version.study_version_id, limit=MAX_BAYESIAN_TRIALS
     )
     if (
         count_bayesian_trial_records(settings.workspace_root, version.study_version_id)
         != len(trials)
-        or not initial.generated_size <= len(trials) <= 200
+        or not initial.generated_size <= len(trials) <= MAX_BAYESIAN_TRIALS
         or [item.trial_number for item in trials] != list(range(1, len(trials) + 1))
     ):
         raise legacy._artifact_error()
@@ -488,7 +489,7 @@ def load_validated_mixed_study(settings: Settings, study_id: str) -> MixedValida
         raise legacy._artifact_error()
     event = get_bayesian_study_lifecycle_event_record(settings.workspace_root, study_id)
     batches = list_bayesian_recommendation_batch_records(
-        settings.workspace_root, version.study_version_id, limit=200
+        settings.workspace_root, version.study_version_id, limit=MAX_BAYESIAN_TRIALS
     )
     if count_bayesian_recommendation_records(
         settings.workspace_root, version.study_version_id
@@ -653,7 +654,7 @@ def mixed_study_response(bundle: MixedValidatedStudy) -> MixedStudyResponse:
         blockers.append("bayesian_optimization_pending_recommendation_exists")
     if owner.status != "active":
         blockers.append("bayesian_study_not_active")
-    if len(bundle.trials) >= 200:
+    if len(bundle.trials) >= MAX_BAYESIAN_TRIALS:
         blockers.append("bayesian_optimization_budget_exhausted")
     return MixedStudyResponse(
         study_id=UUID(owner.study_id),

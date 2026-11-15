@@ -15,6 +15,7 @@ from app.api.v1.schemas.bo_mixed_workflow import (
     MixedSelectionInput,
 )
 from app.api.v1.schemas.bo_planning import Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class _Model(BaseModel):
@@ -62,7 +63,9 @@ class MixedBatchResponse(_Model):
     definition_sha256: Sha256
     source: MixedBatchSource
     objective: AnyDesirabilityObjective
-    response_models: list[MixedResponseModel] | None = Field(min_length=1, max_length=4)
+    response_models: list[MixedResponseModel] | None = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     incumbent: MixedIncumbent | None
     observation_view: dict[str, JsonValue] | None
     warnings: list[str] = Field(max_length=128)
@@ -76,7 +79,7 @@ class MixedBatchResponse(_Model):
     batch_state: Literal[
         "pending", "partially_completed", "completed", "abandoned", "closed_mixed"
     ] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     provenance: DesirabilityProvenance
 
     @model_validator(mode="after")

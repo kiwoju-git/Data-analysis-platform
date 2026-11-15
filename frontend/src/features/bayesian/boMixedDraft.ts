@@ -8,6 +8,7 @@ import { planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { vectorObservationEntries, type VectorObservationDraft } from "./bayesianVectorDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
 import { validDatasetImportedInitialDesign } from "./boDatasetSource";
+import { MAX_BO_TRIALS, MAX_BO_RESPONSES } from "./boLimits";
 
 export interface MixedFactorDraft {
   key: number; factorId: string; name: string; unit: string; kind: "continuous" | "discrete_numeric" | "nominal" | "ordinal";
@@ -85,10 +86,10 @@ export function validateMixedCoordinates(actual: MixedActualPoint, encoded: Mixe
 }
 export function validMixedStudy(study: MixedStudyResponse, expectedId?: string): boolean {
   if (!study || study.study_schema_version !== 7 || !planningId(study.study_id) || (expectedId !== undefined && study.study_id !== expectedId) || !planningId(study.study_version_id) ||
-    !planningHash(study.definition_sha256) || study.objective?.goal_type !== "desirability" || !Array.isArray(study.objective.responses) || study.objective.responses.length < 1 || study.objective.responses.length > 4 ||
+    !planningHash(study.definition_sha256) || study.objective?.goal_type !== "desirability" || !Array.isArray(study.objective.responses) || study.objective.responses.length < 1 || study.objective.responses.length > MAX_BO_RESPONSES ||
     !planningId(study.observation_history?.history_revision_id) || !planningHash(study.observation_history?.observation_history_sha256) || study.observation_history.study_version_id !== study.study_version_id ||
     !Array.isArray(study.factors) || study.factors.length < 1 || study.factors.length > 10 || !study.factors.some(isMixedCategory) || new Set(study.factors.map(factor => factor.factor_id)).size !== study.factors.length ||
-    !Array.isArray(study.trials) || study.trials.length !== study.trial_count || study.trial_count < 1 || study.trial_count > 200 || new Set(study.trials.map(row => row.trial_id)).size !== study.trial_count) return false;
+    !Array.isArray(study.trials) || study.trials.length !== study.trial_count || study.trial_count < 1 || study.trial_count > MAX_BO_TRIALS || new Set(study.trials.map(row => row.trial_id)).size !== study.trial_count) return false;
   const initial = study.initial_design;
   if (initial?.policy === "dataset_observations_v1") {
     if (!validDatasetImportedInitialDesign(initial, study.factors.map(factor => factor.factor_id), study.objective.responses.map(response => response.response_id)) ||

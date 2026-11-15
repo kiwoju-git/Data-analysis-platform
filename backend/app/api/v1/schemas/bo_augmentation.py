@@ -15,6 +15,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _ResponsePrediction,
 )
 from app.api.v1.schemas.bo_planning import CandidateRow, Sha256
+from app.core.bo_limits import MAX_BAYESIAN_REFERENCE_POINTS, MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 AugmentationPolicy = Literal[
     "greedy_incremental_maxpro_v1",
@@ -35,14 +36,14 @@ class _AugmentationSelectionRequest(_Model):
     expected_definition_sha256: Sha256
     expected_history_revision_id: UUID
     expected_history_sha256: Sha256
-    expected_trial_count: int = Field(ge=1, le=200, strict=True)
+    expected_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
     candidate_revision_id: UUID
     expected_rows_sha256: Sha256
     model_id: UUID | None
     expected_model_sha256: Sha256 | None
     policy: AugmentationPolicy
     batch_size: int = Field(ge=1, le=8, strict=True)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     duplicate_tolerance: FiniteFloat = Field(default=1e-6, ge=1e-12, le=0.1)
     min_batch_distance_normalized: FiniteFloat = Field(default=0, ge=0)
     max_evaluations: int = Field(default=100000, ge=1, le=100000, strict=True)
@@ -113,7 +114,7 @@ class ResponseUncertainty(_Model):
     policy: Literal["importance_weighted_rms_normalized_latent_sd_v1"]
     variance_kind: Literal["latent"]
     scale: Literal["dimensionless"]
-    context: list[ResponseUncertaintyScale] = Field(min_length=1, max_length=4)
+    context: list[ResponseUncertaintyScale] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     schedule: Literal["first_ei_then_alternating_desirability_sd_response_sd"]
 
     @model_validator(mode="after")
@@ -139,8 +140,8 @@ class AugmentationTrace(_Model):
     ordinal_rank_distance: bool
     tie_break: Literal["row_id_ascending"]
     competitive_set_policy: Literal["mean_at_least_observed_location_latent_incumbent"] | None
-    reference_count: int = Field(ge=1, le=400)
-    raw_reference_count: int = Field(ge=1, le=400)
+    reference_count: int = Field(ge=1, le=MAX_BAYESIAN_REFERENCE_POINTS)
+    raw_reference_count: int = Field(ge=1, le=MAX_BAYESIAN_REFERENCE_POINTS)
     eligible_candidate_count: int = Field(ge=1, le=10000)
     projection_collisions: int = Field(ge=0)
     unscorable_candidates: list[UnscorableCandidate] = Field(max_length=10000)
@@ -174,7 +175,9 @@ class AugmentationTrace(_Model):
 
 
 class AugmentationPredictedRow(CandidateRow):
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition | None
     prediction_source: Literal["completed_observations_base_posterior"]

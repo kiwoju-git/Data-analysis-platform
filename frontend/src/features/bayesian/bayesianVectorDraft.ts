@@ -1,5 +1,6 @@
 import type { BayesianDesirabilityObjective, BayesianDesirabilityResponseGoal, BayesianStudyResponse } from "../../api";
 import { parseDoeResponseNumber } from "../../doe/doeResponsePaste";
+import { MAX_BO_RESPONSES } from "./boLimits";
 
 export interface ResponseGoalDraft {
   key: number;
@@ -23,7 +24,7 @@ export function newResponseDraft(key: number): ResponseGoalDraft {
 }
 
 export function buildVectorObjective(name: string, drafts: readonly ResponseGoalDraft[]): BayesianDesirabilityObjective | string {
-  if (!name.trim() || name.trim().length > 80 || drafts.length < 1 || drafts.length > 4) return "bayesian_vector_goals_invalid";
+  if (!name.trim() || name.trim().length > 80 || drafts.length < 1 || drafts.length > MAX_BO_RESPONSES) return "bayesian_vector_goals_invalid";
   const responses: BayesianDesirabilityResponseGoal[] = [];
   const ids = new Set<string>();
   for (const draft of drafts) {

@@ -16,6 +16,7 @@ from app.api.v1.schemas.bo_planning import (
     CandidateRow,
     Sha256,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 
 
 class CandidateRevisionCreateRequestV2(BaseModel):
@@ -30,7 +31,7 @@ class CandidateRevisionCreateRequestV2(BaseModel):
     expected_definition_sha256: Sha256
     expected_history_revision_id: UUID
     expected_history_sha256: Sha256
-    expected_trial_count: int = Field(ge=1, le=200, strict=True)
+    expected_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
     model_id: UUID | None = None
     expected_model_sha256: Sha256 | None = None
     duplicate_tolerance: float = Field(default=1e-6, ge=1e-12, le=0.1, allow_inf_nan=False)
@@ -69,7 +70,7 @@ class CandidateRevisionSummaryV2(BaseModel):
     rows_sha256: Sha256
     config_sha256: Sha256
     excluded_coordinates_sha256: Sha256
-    source_trial_count: int = Field(ge=1, le=200)
+    source_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     duplicate_tolerance: float = Field(ge=1e-12, le=0.1, allow_inf_nan=False)
     row_count: int = Field(ge=1, le=10000)
     eligible_count: int = Field(ge=0, le=10000)

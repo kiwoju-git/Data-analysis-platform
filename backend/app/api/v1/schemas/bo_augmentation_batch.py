@@ -12,6 +12,7 @@ from app.api.v1.schemas.bayesian_desirability_recommendations import (
 from app.api.v1.schemas.bo_augmentation import AugmentationRequest, AugmentationResult
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
 from app.api.v1.schemas.bo_planning import PlanningModelDetail, Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 
 
 class AugmentationBatchSource(BaseModel):
@@ -54,7 +55,7 @@ class AugmentationBatchResponse(BaseModel):
     batch_state: Literal[
         "pending", "partially_completed", "completed", "abandoned", "closed_mixed"
     ] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     provenance: DesirabilityProvenance
 
     @model_validator(mode="after")

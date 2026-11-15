@@ -8,6 +8,7 @@ from typing import Any
 
 from app.api.v1.schemas.bo_augmentation import AugmentationCalculation
 from app.api.v1.schemas.bo_planning import CandidateRow
+from app.core.bo_limits import MAX_BAYESIAN_REFERENCE_POINTS, MAX_BO_RESPONSES
 from app.services.bo_acquisition_receipts import (
     _ValidationBoundary,
     validate_legacy_acquisition_receipt,
@@ -43,7 +44,7 @@ def _same(left: Any, right: Any) -> bool:
 def _context(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     definitions = snapshot["calculation_request"]["objective"]["responses"]
     models = snapshot["response_models"]
-    _require(type(definitions) is list and 1 <= len(definitions) <= 4)
+    _require(type(definitions) is list and 1 <= len(definitions) <= MAX_BO_RESPONSES)
     _require(type(models) is list and len(models) == len(definitions))
     keys = [item["response_id"] for item in definitions]
     model_keys = [item["response_id"] for item in models]
@@ -216,7 +217,10 @@ def _validate(
         request["min_batch_distance_normalized" if mixed_domains is None else "min_batch_distance"],
         high=math.sqrt(len(factors)) if mixed_domains is None else math.inf,
     )
-    _require(type(existing_coordinates) is list and 1 <= len(existing_coordinates) <= 400)
+    _require(
+        type(existing_coordinates) is list
+        and 1 <= len(existing_coordinates) <= MAX_BAYESIAN_REFERENCE_POINTS
+    )
     references = []
     for values in existing_coordinates:
         _require(type(values) is list and len(values) == len(factor_ids))
@@ -362,7 +366,7 @@ def validate_augmentation_binding(
     ``request.factors`` is internal context in immutable study order. The caller
     still owns owner/hash/CAS checks; candidate points and GP moments are not
     re-generated. At most eight selected rows are numerically checked against at
-    most 400 reference points, with one cheap Beta evaluation per selected row.
+    most twice the trial bound in reference points, with one cheap Beta evaluation per selected row.
     """
     try:
         _validate(

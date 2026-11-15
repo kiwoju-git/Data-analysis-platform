@@ -5,6 +5,7 @@ import { ApiRequestError } from "../../api/client";
 import { useI18n } from "../../i18n/LocaleProvider";
 import { mixtureMessages } from "../../i18n/boMixture";
 import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { MAX_BO_RESPONSES } from "./boLimits";
 import { BayesianConstraintEditor } from "./BayesianConstraintEditor";
 import { BayesianCategoryCorrelationEditor } from "./BayesianCategoryCorrelationEditor";
 import { newMixedFactor, type MixedConstraintDraft } from "./boMixedDraft";
@@ -31,7 +32,7 @@ export function BayesianMixtureStudyBuilder({ ownerKey, disabled, onCreated, onC
   const group = buildMixtureGroup(total, unit, coding, components);
   const goalEditor = { responseGoals: goals,
     updateResponseGoal: <Field extends keyof Omit<ResponseGoalDraft, "key">>(key: number, field: Field, value: ResponseGoalDraft[Field]) => setGoals(current => current.map(row => row.key === key ? { ...row, [field]: value } : row)),
-    addResponseGoal: () => setGoals(current => current.length < 4 ? [...current, newResponseDraft(nextResponse.current++)] : current),
+    addResponseGoal: () => setGoals(current => current.length < MAX_BO_RESPONSES ? [...current, newResponseDraft(nextResponse.current++)] : current),
     removeResponseGoal: (key: number) => setGoals(current => current.length > 1 ? current.filter(row => row.key !== key) : current),
   };
   async function submit() {

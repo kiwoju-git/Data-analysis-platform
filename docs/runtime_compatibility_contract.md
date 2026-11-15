@@ -1,8 +1,31 @@
 # Runtime Compatibility Contract
 
+## BO Six Responses (API46)
+
+The current frontend and Windows launcher require API46/metadata39. Desirability
+supports one through six measured responses in numeric, mixed and mixture BO.
+This widens capacity, not the desirability formula or artifact shape. Existing
+one-through-four response artifacts retain their bytes and reader policies.
+No SQL migration is needed. Planning document/worker transfer limits are 24MiB;
+owner/workspace quotas, fit/evaluation deadlines and trial budgets are unchanged.
+See `bo_six_responses.md` for validation and rollback limits.
+
+## BO 500 Capacity (API45, Historical)
+
+That checkpoint required API45/metadata38. BO accepts at most
+500 total imported/generated trials; completed, pending and abandoned all count.
+Migration38 widens the actual BO SQL count constraints transactionally, without
+rewriting user artifacts. Statistical method/result schemas and saved budgets
+retain their meanings. Other fit/time/thread/query budgets remain enforced.
+See [capacity contract and evidence](bo_500_capacity.md).
+
+Older code cannot open metadata38. Reverting code is not a workspace downgrade;
+use an explicit pre-upgrade offline backup when an older runtime is required.
+Do not delete workspaces, original measurements or completed models to roll back.
+
 ## Saved Numeric and Mixed Auto Evidence (API42)
 
-Current frontend and Windows launcher require API42/metadata33 and
+That checkpoint's frontend and Windows launcher required API42/metadata33 and
 `bayesian_auto_selection_evidence`. Numeric selection4/calculation2/batch11 and
 mixed selection5/calculation4/batch12 store server-verified conditional LOO routing
 evidence; legacy selection2/batch9 and mixed selection3/batch10 remain readable.

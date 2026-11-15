@@ -18,6 +18,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     DesirabilitySearch,
 )
 from app.api.v1.schemas.bo_fit_quality import BayesianFitPolicy, DesirabilityFitCalculationResult
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class _Model(BaseModel):
@@ -37,10 +38,12 @@ class DesirabilityReviewRequest(_Model):
     batch_size: Literal[1] = 1
     expected_history_revision_id: UUID
     expected_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: BayesianObservationPolicyRequest
     xi_desirability: FiniteFloat = Field(ge=0, strict=True)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     search: DesirabilitySearch
 
     @model_validator(mode="before")
@@ -101,7 +104,7 @@ class DesirabilityBatchResponse(_Model):
     created_at: str
     is_latest: bool = False
     batch_state: Literal["pending", "completed", "abandoned"] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     provenance: DesirabilityProvenance
 
 
@@ -114,10 +117,12 @@ class _OrderedReviewRequestFields(_Model):
     batch_options: DesirabilityBatchOptions
     expected_history_revision_id: UUID
     expected_history_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: BayesianObservationPolicyRequest
     xi_desirability: FiniteFloat = Field(ge=0, strict=True)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     search: DesirabilitySearch
 
     @model_validator(mode="before")
@@ -195,7 +200,7 @@ class _OrderedBatchResponseFields(_Model):
     batch_state: Literal[
         "pending", "partially_completed", "completed", "abandoned", "closed_mixed"
     ] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     provenance: DesirabilityProvenance
 
     @model_validator(mode="after")

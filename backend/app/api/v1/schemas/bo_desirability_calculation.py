@@ -31,6 +31,7 @@ from app.api.v1.schemas.bayesian_noise import (
     BayesianSelectedSignalKernel,
     BayesianSurrogatePolicyRequest,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
     _validated_constraints,
@@ -95,7 +96,9 @@ class DesirabilityObservation(_StrictModel):
     trial_id: TrialId
     actual_coordinates: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=10)
     normalized_coordinates: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=10)
-    response_values: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=4)
+    response_values: dict[Identifier, FiniteFloat] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     condition_key: str | None = Field(default=None, max_length=128)
 
 
@@ -137,10 +140,16 @@ class _CalculationRequestFields(_StrictModel):
     batch_size: Literal[1] = 1
     factors: list[DesirabilityFactor] = Field(min_length=1, max_length=10)
     constraints: list[_Constraint] = Field(max_length=16)
-    observations: list[DesirabilityObservation] = Field(min_length=2, max_length=200)
-    excluded_normalized: list[list[FiniteFloat]] = Field(min_length=1, max_length=200)
+    observations: list[DesirabilityObservation] = Field(
+        min_length=2, max_length=MAX_BAYESIAN_TRIALS
+    )
+    excluded_normalized: list[list[FiniteFloat]] = Field(
+        min_length=1, max_length=MAX_BAYESIAN_TRIALS
+    )
     objective: Any
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: _StrictObservationPolicy
     xi_desirability: FiniteFloat = Field(ge=0)
     search: DesirabilitySearch
@@ -260,9 +269,9 @@ class _RawResponseModelFields(_StrictModel):
     normalization: BayesianNoiseNormalization
     optimizer: BayesianNoiseOptimizer
     log_marginal_likelihood: FiniteFloat
-    raw_observation_count: int = Field(ge=2, le=200)
-    effective_training_count: int = Field(ge=2, le=200)
-    training_group_counts: list[int] = Field(min_length=2, max_length=200)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    effective_training_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    training_group_counts: list[int] = Field(min_length=2, max_length=MAX_BAYESIAN_TRIALS)
     fit_elapsed_ms: FiniteFloat = Field(ge=0)
     package_versions: dict[str, str] = Field(max_length=10)
 
@@ -286,8 +295,8 @@ class _Weight(_StrictModel):
 class _SharedModelFields(_StrictModel):
     policy_version: Literal[1]
     factor_ids: list[Identifier] = Field(min_length=1, max_length=10)
-    response_ids: list[Identifier] = Field(min_length=1, max_length=4)
-    normalized_importance: list[_Weight] = Field(min_length=1, max_length=4)
+    response_ids: list[Identifier] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
+    normalized_importance: list[_Weight] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     curve_policy: Literal["derringer_suich_linear_v1"]
     moment_policy: Literal["independent_latent_gaussian_split_quadrature_v1"]
     independence_assumption: Literal[True]
@@ -295,7 +304,7 @@ class _SharedModelFields(_StrictModel):
 
 class _SharedModel(_SharedModelFields):
     schema_version: Literal[5]
-    response_models: list[_ResponseModelResult] = Field(min_length=1, max_length=4)
+    response_models: list[_ResponseModelResult] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
 
 
 class _ObservedDesirability(_StrictModel):
@@ -315,28 +324,30 @@ class _Incumbent(_StrictModel):
     latent_incumbent_value: FiniteFloat = Field(ge=0, le=1)
     latent_incumbent_trial_id: TrialId
     latent_incumbent_normalized_coordinates: dict[Identifier, FiniteFloat]
-    observed_trial_desirabilities: list[_ObservedDesirability] = Field(min_length=2, max_length=200)
+    observed_trial_desirabilities: list[_ObservedDesirability] = Field(
+        min_length=2, max_length=MAX_BAYESIAN_TRIALS
+    )
     training_posterior_desirabilities: list[_PosteriorDesirability] = Field(
-        min_length=2, max_length=200
+        min_length=2, max_length=MAX_BAYESIAN_TRIALS
     )
 
 
 class _SharedObservationGroup(_StrictModel):
-    member_trial_ids: list[TrialId] = Field(min_length=1, max_length=200)
-    member_indices: list[int] = Field(min_length=1, max_length=200)
+    member_trial_ids: list[TrialId] = Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)
+    member_indices: list[int] = Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)
     canonical_actual_coordinates: dict[Identifier, FiniteFloat]
     canonical_level_indices: dict[Identifier, int | None]
     condition_key: str | None
-    n: int = Field(ge=1, le=200)
+    n: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
 
 
 class _SharedObservationView(_StrictModel):
     mode: Literal["retain_raw", "exact_replicates", "nearby_diagnostics"]
-    raw_observation_count: int = Field(ge=2, le=200)
-    unique_condition_count: int = Field(ge=2, le=200)
-    unique_coordinate_count: int = Field(ge=2, le=200)
-    effective_training_count: int = Field(ge=2, le=200)
-    groups: list[_SharedObservationGroup] = Field(min_length=2, max_length=200)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    unique_condition_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    unique_coordinate_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    effective_training_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    groups: list[_SharedObservationGroup] = Field(min_length=2, max_length=MAX_BAYESIAN_TRIALS)
 
 
 class _ResponsePrediction(_StrictModel):
@@ -360,7 +371,9 @@ class _Candidate(_StrictModel):
     rank: Literal[1]
     actual_coordinates: dict[Identifier, FiniteFloat]
     normalized_coordinates: dict[Identifier, FiniteFloat]
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition
     nearest_existing_distance: FiniteFloat = Field(ge=0)
@@ -373,10 +386,10 @@ class _Budget(_StrictModel):
     evaluation_unit: Literal["candidate_with_all_response_desirability_moments"]
     posterior_evaluations: int = Field(ge=1)
     integrand_evaluations: int = Field(ge=0)
-    response_fit_count: int = Field(ge=1, le=4)
+    response_fit_count: int = Field(ge=1, le=MAX_BO_RESPONSES)
     model_max_evaluations_total: int = Field(ge=2, le=2000)
     model_evaluations_consumed: int = Field(ge=0, le=2000)
-    final_factorizations: int = Field(ge=1, le=4)
+    final_factorizations: int = Field(ge=1, le=MAX_BO_RESPONSES)
     time_budget_ms: int = Field(ge=1000, le=60_000)
     elapsed_ms: FiniteFloat = Field(ge=0)
     searches: list[BayesianMixedSearchSummary] = Field(min_length=1, max_length=1)

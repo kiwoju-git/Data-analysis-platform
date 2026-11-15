@@ -10,6 +10,7 @@ import { planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
 import { modelFreeAugmentation, validSavedAutoEvidence } from "./boAugmentationDraft";
 import { decimalLatticeValue, isRsmOnLattice } from "../../doe/rsmRegion";
+import { MAX_BO_TRIALS, suggestedBoTrialBudget } from "./boLimits";
 
 export interface MixedFitDraft {
   models: DesirabilityModelDraft[]; aggregation: "retain_raw" | "exact_replicates";
@@ -25,7 +26,7 @@ export const mixedSource = (study: MixedStudyResponse): MixedSourceRequest => ({
 export const initialMixedFit = (study: MixedStudyResponse): MixedFitDraft => ({ models: study.objective.responses.map(response => ({
   responseId: response.response_id, kernel: "matern_5_2", noise: "estimate", fixedSd: "", initial: ".01", lower: ".000001", upper: "1",
 })), aggregation: "retain_raw", xi: ".01", seed: "42", seconds: "60", evaluations: "1000", starts: "3", restarts: "0", moments: "8192" });
-export const initialMixedSelection = (): MixedSelectionDraft => ({ kind: "manual_ordered", policy: "greedy_mixed_maximin_v1", batchSize: "2", budget: "200", distance: "0", samples: "64", evaluations: "100000", moments: "65536", seconds: "60" });
+export const initialMixedSelection = (trialCount = 0): MixedSelectionDraft => ({ kind: "manual_ordered", policy: "greedy_mixed_maximin_v1", batchSize: "2", budget: String(suggestedBoTrialBudget(trialCount, 200)), distance: "0", samples: "64", evaluations: "100000", moments: "65536", seconds: "60" });
 
 export function mixedFitOptions(study: MixedStudyResponse, draft: MixedFitDraft): MixedFitOptions | null {
   if (draft.models.length !== study.objective.responses.length || new Set(draft.models.map(model => model.responseId)).size !== draft.models.length) return null;
@@ -102,7 +103,7 @@ export function mixedSelectionRequest(study: MixedStudyResponse, page: MixedCand
   if (!page || !validMixedPage(page, study) || !page.revision.source_is_current || page.revision.source_trial_count !== study.trial_count || page.revision.history_sha256 !== study.observation_history.observation_history_sha256 ||
     page.revision.source_history_revision_id !== study.observation_history.history_revision_id || study.status !== "active" || study.pending_trial_count !== 0) return null;
   const manual = draft.kind === "manual_ordered", free = !manual && modelFreeAugmentation(draft.policy), count = manual ? ids.length : planningInteger(draft.batchSize, 1, 8),
-    budget = planningInteger(draft.budget, 2, 200), samples = planningInteger(draft.samples, 16, 256), evaluations = planningInteger(draft.evaluations, 1, 100000), moments = planningInteger(draft.moments, 1, 65536), seconds = planningInteger(draft.seconds, 1, 60), distance = strictBoNumber(draft.distance);
+    budget = planningInteger(draft.budget, 2, MAX_BO_TRIALS), samples = planningInteger(draft.samples, 16, 256), evaluations = planningInteger(draft.evaluations, 1, 100000), moments = planningInteger(draft.moments, 1, 65536), seconds = planningInteger(draft.seconds, 1, 60), distance = strictBoNumber(draft.distance);
   if (count === null || count < 1 || count > 8 || count > page.revision.eligible_count || budget === null || budget < study.trial_count + count || samples === null || evaluations === null || moments === null || seconds === null || distance === null || distance < 0 || distance > Math.sqrt(study.factors.length) ||
     (!free && (!model || !currentMixedModel(model, study))) || (!manual && draft.policy === "greedy_incremental_maxpro_v1") || (manual && (new Set(ids).size !== count || !ids.every(planningHash)))) return null;
   if (autoReference && (manual || !model || !currentMixedModel(model, study) || autoReference.routing_model_id !== model.model_id || autoReference.expected_model_sha256 !== model.snapshot_sha256)) return null;

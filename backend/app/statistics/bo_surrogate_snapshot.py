@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_SNAPSHOT_NODES
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_factor_domains import (
     BoFactorDomain,
@@ -31,9 +32,9 @@ ERROR_CODE = "bayesian_surrogate_snapshot_invalid"
 Number = Annotated[float, Field(strict=True, allow_inf_nan=False)]
 Positive = Annotated[Number, Field(gt=0)]
 Nonnegative = Annotated[Number, Field(ge=0)]
-Count = Annotated[int, Field(strict=True, ge=1, le=200)]
+Count = Annotated[int, Field(strict=True, ge=1, le=MAX_BAYESIAN_TRIALS)]
 Parameters = Annotated[list[Number], Field(min_length=2, max_length=12)]
-Vector = Annotated[list[Number], Field(min_length=1, max_length=200)]
+Vector = Annotated[list[Number], Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)]
 KernelKind = Literal["matern_5_2", "matern_3_2", "gaussian", "exponential"]
 _TARGETS = TypeAdapter(Vector, config=ConfigDict(strict=True))
 
@@ -135,15 +136,15 @@ class _Diagnostics(_Strict):
 
 class _Training(_Strict):
     x_normalized: list[Annotated[list[Number], Field(min_length=1, max_length=10)]] = Field(
-        min_length=1, max_length=200
+        min_length=1, max_length=MAX_BAYESIAN_TRIALS
     )
     targets_scaled: Vector
-    group_counts: list[Count] = Field(min_length=1, max_length=200)
-    raw_observation_count: int = Field(ge=2, le=200)
+    group_counts: list[Count] = Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
 
 
 class _Factorization(_Strict):
-    lower: list[Vector] = Field(min_length=1, max_length=200)
+    lower: list[Vector] = Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)
     alpha: Vector
 
 
@@ -185,7 +186,7 @@ def _check_json_tree(payload: Any) -> None:
     while pending:
         value, depth = pending.pop()
         visited += 1
-        if visited > 50000 or depth > 8:
+        if visited > MAX_BO_SNAPSHOT_NODES or depth > 8:
             raise _invalid()
         kind = type(value)
         if kind is dict:
@@ -193,7 +194,7 @@ def _check_json_tree(payload: Any) -> None:
                 raise _invalid()
             pending.extend((item, depth + 1) for item in value.values())
         elif kind is list:
-            if len(value) > 200:
+            if len(value) > MAX_BAYESIAN_TRIALS:
                 raise _invalid()
             pending.extend((item, depth + 1) for item in value)
         elif kind is float:
@@ -449,7 +450,11 @@ def _target_list(values: Any) -> Any:
     import numpy as np
 
     if isinstance(values, np.ndarray):
-        if values.ndim != 1 or values.dtype.kind not in {"f", "i", "u"} or len(values) > 200:
+        if (
+            values.ndim != 1
+            or values.dtype.kind not in {"f", "i", "u"}
+            or len(values) > MAX_BAYESIAN_TRIALS
+        ):
             raise _invalid()
         return values.tolist()
     return values

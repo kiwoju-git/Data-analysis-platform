@@ -8,6 +8,7 @@ import type { CandidatePage, CandidateRevisionCreateRequest, CandidateRevisionSu
 import { bayesianRequestId } from "../bayesianRequestId";
 import { bayesianErrorCode } from "../bayesianDisplay";
 import { sameDesirabilityJson } from "../desirabilityResponseGuard";
+import { MAX_BO_TRIALS } from "../boLimits";
 import { createPlanningCommitFence, createPlanningRequestFence, currentPlanningModel, emptyPlanningOrder, planningStudyKey, redoPlanningOrder, undoPlanningOrder,
   updatePlanningOrder, validPlanningBatch, validPlanningEvaluation, validPlanningModel, validPlanningPage, validPlanningSelection } from "../boPlanningDraft";
 
@@ -172,7 +173,7 @@ export function useBayesianPlanning({ study, fitRequest, disabled, onConfirmed }
   function saveSelection(totalBudget: number) {
     const owner = sourceRequest();
     if (!owner || !model || !page || !page.revision.source_is_current || page.revision.source_trial_count !== study.trial_count || order.current.length < 1 || order.current.length > 8 ||
-      !Number.isInteger(totalBudget) || totalBudget > 200 || totalBudget < Math.max(2, study.trial_count + order.current.length)) return;
+      !Number.isInteger(totalBudget) || totalBudget > MAX_BO_TRIALS || totalBudget < Math.max(2, study.trial_count + order.current.length)) return;
     try { void mutate({ kind: "selection", model, request: { ...owner, request_id: bayesianRequestId(), candidate_revision_id: page.revision.revision_id,
       expected_rows_sha256: page.revision.rows_sha256, row_ids: order.current.map(row => row.row_id), total_trial_budget: totalBudget } }); }
     catch (caught) { setError(failure(caught)); }

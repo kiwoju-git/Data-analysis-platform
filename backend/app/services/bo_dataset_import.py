@@ -48,6 +48,7 @@ from app.api.v1.schemas.bo_mixture_dataset_import import (
     MixtureDatasetImportPreflightResponse,
     MixtureImportComponent,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services import bayesian_studies as legacy
@@ -284,15 +285,22 @@ def _prepare_source(
         )
         used += 1
         # Always exhaust and hash the canonical stream; never materialize more than the budget.
-        if used <= 200:
+        if used <= MAX_BAYESIAN_TRIALS:
             actual_rows.append(actual)
             encoded_rows.append(encoded)
             observations.append(observation)
             indices.append(row_index)
     if missing and body.missing_policy == "reject":
         raise _error("bayesian_import_missing_values")
-    if used > 200:
-        raise _error("bayesian_import_trial_limit")
+    if used > MAX_BAYESIAN_TRIALS:
+        from app.core.errors import ErrorLimits
+
+        raise ApiError(
+            code="bayesian_import_trial_limit",
+            message=f"측정값 {used}개가 최대 {MAX_BAYESIAN_TRIALS}개를 초과합니다.",
+            status_code=409,
+            limits=ErrorLimits(observed_count=used, maximum_count=MAX_BAYESIAN_TRIALS),
+        )
     if not used:
         raise _error("bayesian_import_no_observations")
     groups: dict[str, set[str]] = {}

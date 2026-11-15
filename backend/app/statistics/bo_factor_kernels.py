@@ -34,6 +34,7 @@ ANGLE_BOUNDS = (1e-4, math.pi - 1e-4)
 EQUALITY_BOUNDS = (1e-4, 1e2)
 LATENT_GAP_BOUNDS = (1e-4, 10.0)
 MAX_COVARIANCE_ENTRIES = 2_000_000
+MAX_GRADIENT_WORKING_BYTES = 256 * 1024 * 1024
 
 
 def _invalid() -> ValueError:
@@ -349,8 +350,20 @@ class BoFactorKernel(Kernel):  # type: ignore[misc]
             raise _invalid()
         x = self._matrix(X)
         y = x if Y is None else self._matrix(Y)
-        if len(x) * len(y) > MAX_COVARIANCE_ENTRIES or (eval_gradient and len(x) > 200):
+        if len(x) * len(y) > MAX_COVARIANCE_ENTRIES:
             raise ValueError("bayesian_factor_kernel_resource_limit")
+        if eval_gradient:
+            from app.core.bo_limits import MAX_COMPLETED_OBSERVATIONS
+
+            # Estimate the dense derivative copies and category temporaries before allocation.
+            parameter_count = self.numeric_kernel.n_dims + (
+                len(parameters) if bounds is not None else 0
+            )
+            estimated_bytes = (
+                8 * len(x) ** 2 * (6 * parameter_count + 2 * len(self.category_specs) + 12)
+            )
+            if len(x) > MAX_COMPLETED_OBSERVATIONS or estimated_bytes > MAX_GRADIENT_WORKING_BYTES:
+                raise ValueError("bayesian_factor_kernel_resource_limit")
         evaluated = self.numeric_kernel(
             x[:, self.numeric_indices],
             None if Y is None else y[:, self.numeric_indices],

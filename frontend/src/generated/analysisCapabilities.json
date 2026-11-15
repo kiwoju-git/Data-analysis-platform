@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "api_contract_version": 44,
-  "metadata_schema_version": 37,
+  "api_contract_version": 46,
+  "metadata_schema_version": 39,
   "methods": [
     {
       "method_id": "eda.descriptive",

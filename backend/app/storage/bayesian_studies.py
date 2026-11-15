@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.api.v1.schemas.bayesian import MAX_BAYESIAN_TRIALS, MAX_HISTORY_REVISIONS
+from app.core.bo_limits import MAX_BO_RESPONSES
 from app.storage.metadata import metadata_db_path
 
 _BATCH_COLUMNS = """
@@ -1533,7 +1534,7 @@ def _validated_observation_columns(
                     else {"derringer_suich_linear_v1"}
                 )
                 and isinstance(responses, list)
-                and 1 <= len(responses) <= 4
+                and 1 <= len(responses) <= MAX_BO_RESPONSES
                 and all(
                     isinstance(item, dict)
                     and isinstance(item.get("response_id"), str)

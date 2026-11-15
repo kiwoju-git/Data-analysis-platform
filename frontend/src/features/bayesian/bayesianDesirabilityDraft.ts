@@ -2,6 +2,7 @@ import type { BayesianKernelKind, BayesianStudyResponse, BayesianSurrogatePolicy
 import type { DesirabilityReviewRequest, DesirabilitySearch } from "../../api/types/bayesianDesirability";
 import { parseBoKernelKind } from "./boKernelPolicy";
 import { strictBoNumber } from "./boNoisePolicy";
+import { MAX_BO_TRIALS, suggestedBoTrialBudget } from "./boLimits";
 
 export interface DesirabilityModelDraft {
   responseId: string;
@@ -46,7 +47,7 @@ export function defaultDesirabilityDraft(study: BayesianStudyResponse | null): D
       responseId: response.response_id, kernel: "matern_5_2", noise: "estimate", fixedSd: "",
       initial: "0.01", lower: "0.000001", upper: "1",
     })) : [],
-    aggregation: "retain_raw", xi: "0.01", totalBudget: "40", seed: "42", timeMs: "60000", modelEvaluations: "1000",
+    aggregation: "retain_raw", xi: "0.01", totalBudget: String(suggestedBoTrialBudget(study?.trial_count ?? 0, 40, study?.recommendation_hard_trial_limit)), seed: "42", timeMs: "60000", modelEvaluations: "1000",
     batchSize: "1", sampleCount: "64", momentBudget: "8192", candidateBudget: "1024", minDistance: "0",
     q1CandidateBudget: "256", candidateCount: "32", localStarts: "0", localIterations: "50", modelIterations: "60",
     fitPolicy: "legacy", deterministicStarts: "1", randomRestarts: "0",
@@ -91,7 +92,7 @@ export function buildDesirabilityRequest(study: BayesianStudyResponse, draft: De
   });
   const xi = strictBoNumber(draft.xi);
   if (xi === null || xi < 0) errors.xi = "nonnegative";
-  const total = integer(draft.totalBudget, 2, Math.min(200, study.recommendation_hard_trial_limit));
+  const total = integer(draft.totalBudget, 2, Math.min(MAX_BO_TRIALS, study.recommendation_hard_trial_limit));
   const batchSize = integer(draft.batchSize, 1, 8);
   if (batchSize === null) errors.batchSize = "integer";
   if (total === null || total < study.trial_count + (purpose === "planning" ? 0 : (batchSize ?? 1))) errors.totalBudget = "budget";

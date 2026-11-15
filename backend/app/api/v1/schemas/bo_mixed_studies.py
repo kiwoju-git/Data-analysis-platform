@@ -27,6 +27,7 @@ from app.api.v1.schemas.bayesian import (
 from app.api.v1.schemas.bayesian_desirability import ResponseValues
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
 from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
     BoCorrelationPolicy,
@@ -156,7 +157,7 @@ class MixedTrialResponse(BaseModel):
 
     trial_id: UUID
     study_version_id: UUID
-    trial_number: int = Field(ge=1, le=200)
+    trial_number: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     origin: Literal["initial_design", "recommendation", "replicate"]
     state: Literal["pending", "completed", "abandoned"]
     actual_coordinates: dict[str, StrictFloat | StrictStr]
@@ -192,10 +193,10 @@ class MixedStudyResponse(BaseModel):
     objective: AnyDesirabilityObjective
     constraints: list[BayesianLinearConstraintResponse]
     initial_design: MixedInitialDesignResponse | DatasetImportedInitialDesign
-    trial_count: int = Field(ge=1, le=200)
-    pending_trial_count: int = Field(ge=0, le=200)
-    completed_trial_count: int = Field(ge=0, le=200)
-    abandoned_trial_count: int = Field(ge=0, le=200)
+    trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
+    pending_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    completed_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    abandoned_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     observation_history: BayesianHistoryRevisionResponse
     trials: list[MixedTrialResponse]
     surrogate_available: bool
@@ -204,7 +205,7 @@ class MixedStudyResponse(BaseModel):
         "fixed_candidate_mixed_planning_v1"
     )
     recommendation_minimum_completed_observations: int = Field(ge=2, le=11)
-    recommendation_hard_trial_limit: Literal[200] = 200
+    recommendation_hard_trial_limit: Literal[500] = MAX_BAYESIAN_TRIALS
     recommendation_blockers: list[str]
     lifecycle_event: BayesianStudyLifecycleEventResponse | None
 
@@ -214,7 +215,7 @@ class MixedObservationBatchResponse(BaseModel):
     batch_schema_version: Literal[2] = 2
     study: MixedStudyResponse
     completed_trial_ids: list[UUID]
-    completed_trial_count: int = Field(ge=1, le=200)
+    completed_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     observation_history: BayesianHistoryRevisionResponse
     request_id: UUID
     created_at: str
@@ -224,7 +225,7 @@ class MixedTrialListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     study_id: UUID
     study_version_id: UUID
-    total: int = Field(ge=0, le=200)
+    total: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=100)
     items: list[MixedTrialResponse]

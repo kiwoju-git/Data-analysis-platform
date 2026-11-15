@@ -10,6 +10,7 @@ import {
 import { DOE_FACTOR_CAPABILITIES } from "../../../doe/factorCapabilities";
 import { buildVectorObjective, newResponseDraft, type ResponseGoalDraft } from "../bayesianVectorDraft";
 import { parseDoeResponseNumber } from "../../../doe/doeResponsePaste";
+import { MAX_BO_RESPONSES } from "../boLimits";
 
 export function useBayesianStudyDraftState() {
   const [studyName, setStudyName] = useState("Sequential process study");
@@ -270,7 +271,7 @@ export function useBayesianStudyDraftState() {
     },
     addResponseGoal: () => {
       const row = newResponseDraft(nextResponseKey.current++);
-      setResponseGoals(current => current.length >= 4 ? current : [...current, row]);
+      setResponseGoals(current => current.length >= MAX_BO_RESPONSES ? current : [...current, row]);
     },
     removeResponseGoal: (key: number) => setResponseGoals(current => current.length <= 1 ? current : current.filter(row => row.key !== key)),
     addConstraint,

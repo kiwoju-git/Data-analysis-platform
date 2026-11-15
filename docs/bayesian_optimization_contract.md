@@ -2,6 +2,10 @@
 
 Last updated: 2026-11-09
 
+Capacity addendum (2026-11-15): API46 accepts one through six desirability
+responses. This supersedes older four-response limits below without changing
+the stored curve policy or statistical formulas. See `bo_six_responses.md`.
+
 ## Current Status
 
 `doe.bayesian_optimization` is an available dedicated API/UI method at version
@@ -291,7 +295,7 @@ The synchronous batch calculation and lifecycle are specified in
 
 ## Budgets And Failures
 
-Requests are bounded to ten factors, 200 total trials, 200 completed
+Requests are bounded to ten factors, 500 total trials, 500 completed
 observations, 201 observation-history revisions including the initial empty
 revision, 4,096 initial acquisition candidates, 16 local starts, 20,000
 acquisition evaluations, three
@@ -301,7 +305,7 @@ terminates it on timeout, and returns a redacted stable error. History is never
 silently sampled.
 
 The recommendation request's effective total-trial budget defaults to 50 and
-cannot exceed the hard 200-trial limit. The frontend displays this budget,
+cannot exceed the hard 500-trial limit. The frontend displays this budget,
 restores the latest recommendation request's value, and disables recommendation
 when the current trial count reaches it. The backend remains authoritative and
 returns `bayesian_optimization_budget_exhausted` for request-trial, model-fit,

@@ -10,6 +10,7 @@ from app.api.v1.schemas.bayesian_desirability import (
     BayesianDesirabilityObjective,
     DesirabilityResponseGoal,
 )
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 if TYPE_CHECKING:
     from app.statistics.bo_target_curve import GaussianTargetGoal
@@ -43,7 +44,7 @@ class GaussianTargetResponseGoal(DesirabilityResponseGoal):
 class VersionedCurveObjective(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     responses: list[GaussianTargetResponseGoal | DesirabilityResponseGoal] = Field(
-        min_length=1, max_length=4
+        min_length=1, max_length=MAX_BO_RESPONSES
     )
 
     @model_validator(mode="after")

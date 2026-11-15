@@ -2,12 +2,13 @@ import * as api from "../../api/boMixture";
 import { createPlanningRequestFence, planningHash, planningId } from "./boPlanningDraft";
 import { mixtureReviewDraftKey, validMixtureModel, validMixturePage, validMixtureSelection } from "./boMixtureDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
+import { MAX_BO_TRIALS } from "./boLimits";
 
 const mismatch = () => Error("bayesian_mixture_source_mismatch");
 export function validMixtureSelectionConfig(config: api.MixtureSelectionRequest): boolean {
   return !!config && config.schema_version === 6 && planningId(config.request_id) && planningId(config.candidate_revision_id) && planningHash(config.expected_rows_sha256) &&
     ["manual_mixture_base_posterior_v1", "greedy_mixture_maximin_v1"].includes(config.policy) && Number.isSafeInteger(config.batch_size) && config.batch_size >= 1 && config.batch_size <= 8 &&
-    Number.isSafeInteger(config.expected_trial_count) && config.expected_trial_count >= 1 && Number.isSafeInteger(config.total_trial_budget) && config.total_trial_budget >= config.expected_trial_count + config.batch_size && config.total_trial_budget <= 200 &&
+    Number.isSafeInteger(config.expected_trial_count) && config.expected_trial_count >= 1 && Number.isSafeInteger(config.total_trial_budget) && config.total_trial_budget >= config.expected_trial_count + config.batch_size && config.total_trial_budget <= MAX_BO_TRIALS &&
     Number.isFinite(config.min_batch_distance) && config.min_batch_distance >= 0 && Number.isSafeInteger(config.time_budget_ms) && config.time_budget_ms >= 1000 && config.time_budget_ms <= 60000 &&
     Number.isSafeInteger(config.max_moment_evaluations) && config.max_moment_evaluations >= 1 && config.max_moment_evaluations <= 65536 && Array.isArray(config.row_ids) &&
     (config.policy === "manual_mixture_base_posterior_v1" ? config.row_ids.length === config.batch_size && new Set(config.row_ids).size === config.row_ids.length && config.row_ids.every(planningHash) : config.row_ids.length === 0);

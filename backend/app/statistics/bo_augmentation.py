@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from app.core.bo_limits import MAX_BAYESIAN_REFERENCE_POINTS, MAX_BO_RESPONSES
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 
 MAXPRO = "greedy_incremental_maxpro_v1"
@@ -67,7 +68,7 @@ class _Candidate:
 
 
 def _response_context(value: Any) -> list[dict[str, Any]]:
-    if type(value) is not list or not 1 <= len(value) <= 4:
+    if type(value) is not list or not 1 <= len(value) <= MAX_BO_RESPONSES:
         raise _error()
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -308,7 +309,7 @@ def select_augmentation(
         or type(time_budget_ms) is not int
         or not 1000 <= time_budget_ms <= 60_000
         or type(existing_coordinates) is not list
-        or not 1 <= len(existing_coordinates) <= 400
+        or not 1 <= len(existing_coordinates) <= MAX_BAYESIAN_REFERENCE_POINTS
     ):
         raise _error()
     kinds = tuple(factor_kinds.values())

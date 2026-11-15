@@ -58,6 +58,7 @@ from rsm_context import verify_rsm_context
 from bo_noise_extension import verify_bo_noise_context, verify_bo_noise_extension
 from bo_progress import verify_bo_progress
 from bo_dataset_import import verify_bo_dataset_import
+from bo_capacity import verify_capacity
 from bo_mixture_completion import verify_mixture_completion
 from bo_persistent_planning import verify_profile_constraints
 from bo_xy_gpr_navigation import verify_bo_xy_gpr_navigation
@@ -240,12 +241,12 @@ SUITE_STAGES = {
     "data": ("dataset_context", "schema_concurrency", "pilot_ingestion"),
     "prediction": ("gp_prediction_context", "gp_validation_extension", "pilot_prediction"),
     "workflows": (
-        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import", "bo_profile_constraints", "bo_mixture_completion",
+        "chart_interactions", "result_chart_models", "desktop_resize", "localization_shell", "bo_dataset_import", "bo_capacity", "bo_profile_constraints", "bo_mixture_completion",
         "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "bo_noise_extension", "legacy_workflow",
     ),
 }
 FULL_STAGE_ORDER = (
-    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_profile_constraints", "bo_mixture_completion", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
+    "analysis_completion", "report_center_context", "rsm_context", "bo_noise_context", "bo_progress", "bo_vector_history", "bo_dataset_import", "bo_capacity", "bo_profile_constraints", "bo_mixture_completion", "bo_xy_gpr_navigation", "api_translation", "dataset_context",
     "gp_prediction_context", "gp_validation_extension", "schema_concurrency", "chart_interactions", "result_chart_models",
     "chart_formatting", "pilot_feedback", "pilot_ingestion", "pilot_prediction",
     "pilot_groups", "fractional_completion", "doe_rsm_completion", "doe_browser_zoom", "gage_followup", "gage_six_panel", "english_system_text", "result_metric_layout", "bo_noise_extension",
@@ -254,6 +255,7 @@ FULL_STAGE_ORDER = (
 WORKFLOW_DEV_STAGES = frozenset({
     "chart_interactions", "result_chart_models", "desktop_resize", "legacy_workflow",
 })
+BUILT_APPLICATION_SUITES = frozenset({"workflows", "data"})
 
 
 def suite_stage_ids(suite: str) -> tuple[str, ...]:
@@ -308,7 +310,7 @@ def main() -> int:
             json.dumps({
                 "schema_version": 1, "suite": args.suite, "stages": suite_stage_ids(args.suite),
                 "frontend_modes": {
-                    stage: "built" if args.suite == "workflows" and stage not in WORKFLOW_DEV_STAGES else "dev"
+                    stage: "built" if args.suite in BUILT_APPLICATION_SUITES and stage not in WORKFLOW_DEV_STAGES else "dev"
                     for stage in suite_stage_ids(args.suite)
                 },
             }, indent=2),
@@ -345,7 +347,7 @@ def main() -> int:
         frontend_log = frontend_log_path.open("wb")
         log_handles.extend([backend_log, frontend_log])
 
-        if args.suite == "workflows":
+        if args.suite in BUILT_APPLICATION_SUITES:
             diagnostics.step("build isolated workflow frontend")
             frontend_dist = (workspace_root / "frontend-dist").resolve()
             with (log_root / "frontend-build.log").open("wb") as build_log:
@@ -433,7 +435,7 @@ def main() -> int:
             args.report_center_context_only,
             args.analysis_completion_only,
             suite=args.suite,
-            built_workflow_base_url=backend_base_url if args.suite == "workflows" else None,
+            built_workflow_base_url=backend_base_url if args.suite in BUILT_APPLICATION_SUITES else None,
             synthetic_workspace=workspace_root / "workspace",
         )
         print("E2E critical path passed")
@@ -827,6 +829,9 @@ def run_browser_flow(
                 if "bo_dataset_import" in stages:
                     diagnostics.step("verify measured X/Y import and next multiresponse recommendation")
                     verify_bo_dataset_import(browser, frontend_base_url, diagnostics.root / "bo-dataset-import", isolated_workspace=True)
+                if "bo_capacity" in stages:
+                    diagnostics.step("verify full 240-row BO import and 500 total capacity")
+                    verify_capacity(browser, frontend_base_url, diagnostics.root / "bo-capacity", isolated_workspace=True)
                 if "bo_profile_constraints" in stages:
                     diagnostics.step("verify constrained saved-model profiler values and status")
                     verify_profile_constraints(browser, frontend_base_url, diagnostics.root / "bo-profile-constraints", synthetic_workspace=synthetic_workspace)

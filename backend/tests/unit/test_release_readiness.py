@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts/release_readiness.py"
@@ -77,6 +78,38 @@ def test_windows_e2e_matrix_aggregate_requires_every_suite_success(result) -> No
     jobs["windows-e2e"]["result"] = result
     with pytest.raises(ValueError, match="did not succeed"):
         readiness.require_successful_jobs(jobs, "windows-e2e", SHA)
+
+
+@pytest.mark.parametrize("result", ["failure", "cancelled", "skipped", "in_progress", None])
+def test_windows_native_gate_requires_all_backend_shards(result) -> None:
+    jobs = {"windows-backend": {"result": "success"}}
+    assert readiness.require_successful_jobs(jobs, "windows-native", SHA)["status"] == "passed"
+    jobs["windows-backend"]["result"] = result
+    with pytest.raises(ValueError, match="did not succeed"):
+        readiness.require_successful_jobs(jobs, "windows-native", SHA)
+
+
+def test_windows_shards_preserve_the_existing_product_gate() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    shards = workflow.split("  windows-backend:", 1)[1].split("  windows:", 1)[0]
+    assert "shard: [0, 1]" in shards and "fail-fast: false" in shards
+    assert "backend/tests" in shards and "--datalab-shard-count 2" in shards
+    native = workflow.split("  windows:", 1)[1].split("  windows-e2e:", 1)[0]
+    assert "needs: windows-backend" in native and "always()" in native
+    assert "release_readiness.py gate --kind windows-native" in native
+    assert "scripts/pytest_shard.py validate" in native
+    assert "-SkipBackendTests" in native
+    check = (ROOT / "scripts/check.ps1").read_text(encoding="utf-8")
+    assert "[switch] $SkipBackendTests" in check
+    assert "if (-not $SkipBackendTests)" in check
+
+
+def test_windows_shards_use_native_powershell_module_environment() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["windows-backend"]["steps"]
+    step = next(item for item in steps if item.get("name") == "Complete native backend shard")
+    assert step["shell"] == "powershell"
+    assert "-m pytest backend/tests -p scripts.pytest_shard" in step["run"]
 
 
 def test_version_uses_metadata_or_explicit_validated_override(tmp_path: Path) -> None:

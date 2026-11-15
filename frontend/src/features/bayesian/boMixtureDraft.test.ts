@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMixtureGroup, validMixtureCoordinates, validMixtureModel, currentMixtureModel, validMixturePage, validMixtureSelection, mixtureReviewDraftKey } from "./boMixtureDraft";
+import { buildMixtureGroup, validMixtureCoordinates, validMixtureModel, currentMixtureModel, validMixturePage, validMixtureSelection, mixtureReviewDraftKey, mixtureFit } from "./boMixtureDraft";
 import { mixtureFixture } from "./boMixture.test.fixture";
 import { buildDatasetImportRequest, type DatasetImportDraft } from "./boDatasetImportDraft";
 import { newMixedFactor } from "./boMixedDraft";
@@ -54,6 +54,20 @@ describe("mixture existing-data import", () => {
 });
 
 describe("mixture immutable planning ownership", () => {
+  it("keeps default starts and budgets while accepting an explicit bounded start count", () => {
+    const { study } = mixtureFixture();
+    const original = mixtureFit(study, "matern_5_2", "60", "42");
+    expect(original?.fit_policy.deterministic_start_count).toBe(3);
+    for (const starts of ["1", "2", "3"]) {
+      const fit = mixtureFit(study, "matern_5_2", "60", "42", starts);
+      expect(fit).toEqual({ ...original, fit_policy: { ...original!.fit_policy, deterministic_start_count: Number(starts) } });
+      expect(fit?.search.model_max_evaluations).toBe(1000);
+      expect(fit?.search.time_budget_ms).toBe(60000);
+    }
+    for (const invalid of ["", " ", "0", "4", "1.5", "1abc", "NaN", "Infinity"]) {
+      expect(mixtureFit(study, "matern_5_2", "60", "42", invalid)).toBeNull();
+    }
+  });
   it("invalidates a reviewed selection for every mutable selection input", () => {
     const draft = { seed: "42", budget: "20", distance: "0", batch: "2", manual: true, selected: ["a", "b"] };
     const reviewed = mixtureReviewDraftKey(draft);

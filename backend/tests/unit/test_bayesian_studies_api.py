@@ -823,7 +823,7 @@ def test_bayesian_initial_design_minimum_matches_factor_count(
     assert accepted.json()["initial_design"]["generated_size"] == minimum
 
 
-@pytest.mark.parametrize("completed_count", [199, MAX_COMPLETED_OBSERVATIONS])
+@pytest.mark.parametrize("completed_count", [199, 499, MAX_COMPLETED_OBSERVATIONS])
 def test_bayesian_history_validation_accepts_completed_observation_boundary(
     completed_count: int,
 ) -> None:
@@ -845,7 +845,7 @@ def test_bayesian_history_validation_rejects_observation_over_limit() -> None:
     assert captured.value.code == "bayesian_study_artifact_mismatch"
 
 
-def test_internal_history_loader_and_public_page_accept_201_revision_boundary(
+def test_internal_history_loader_and_public_page_accept_501_revision_boundary(
     tmp_path,
     monkeypatch,
 ) -> None:
@@ -886,7 +886,7 @@ def test_internal_history_loader_and_public_page_accept_201_revision_boundary(
             ),
         )
         page = client.get(
-            f"/api/v1/bayesian-studies/{study['study_id']}/history" "?offset=190&limit=100"
+            f"/api/v1/bayesian-studies/{study['study_id']}/history" "?offset=490&limit=100"
         )
 
         with sqlite3.connect(metadata_db_path(tmp_path)) as connection:
@@ -897,7 +897,7 @@ def test_internal_history_loader_and_public_page_accept_201_revision_boundary(
                     schema_version, completed_trial_ids_json,
                     completed_trial_count, observation_history_sha256,
                     previous_history_sha256, created_at
-                ) VALUES (?, ?, 202, 1, '[]', 0, ?, ?, ?);
+                ) VALUES (?, ?, 502, 1, '[]', 0, ?, ?, ?);
                 """,
                 (
                     str(uuid4()),

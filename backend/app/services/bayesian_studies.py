@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import numpy as np
 from fastapi import status
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.analyses.registry import METHOD_VERSIONS, get_analysis_method
 from app.api.v1.schemas.analyses import MethodAvailability
@@ -54,6 +54,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianVectorTrialResponse,
     minimum_bayesian_initial_design_size,
 )
+from app.api.v1.schemas.bayesian_desirability import ResponseValues
 from app.api.v1.schemas.bo_curve_policy import (
     AnyDesirabilityObjective as BayesianDesirabilityObjective,
 )
@@ -139,6 +140,7 @@ from app.storage.bayesian_studies import (
 from app.storage.managed_report_artifacts import ManagedReportStorageError
 
 BAYESIAN_METHOD_ID: Final = "doe.bayesian_optimization"
+_RESPONSE_VALUES_ADAPTER: Final[TypeAdapter[dict[str, float]]] = TypeAdapter(ResponseValues)
 BAYESIAN_STUDY_SCHEMA_VERSION: Final[Literal[4]] = 4
 BAYESIAN_HISTORY_SCHEMA_VERSION: Final[Literal[1]] = 1
 SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS: Final = frozenset(
@@ -2881,11 +2883,7 @@ def _trial_observation(trial: BayesianTrialRecord) -> float | dict[str, float] |
         return result
 
     try:
-        from pydantic import TypeAdapter
-
-        from app.api.v1.schemas.bayesian_desirability import ResponseValues
-
-        return TypeAdapter(ResponseValues).validate_python(
+        return _RESPONSE_VALUES_ADAPTER.validate_python(
             json.loads(trial.response_values_json, object_pairs_hook=unique_object)
         )
     except (ValueError, TypeError) as exc:

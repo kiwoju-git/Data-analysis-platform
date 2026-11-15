@@ -388,12 +388,16 @@ jobs:
           GATE_RESULTS: ${{ toJSON(needs) }}
         run: python scripts/release_readiness.py gate --kind dependencies --source-commit "$GITHUB_SHA" --output .tmp/dependency-gate.json
 
-  windows:
+  windows-backend:
     if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
     runs-on: windows-latest
-    # Run39467075706 was still advancing at 87% when the 60-minute job expired.
-    # Preserve every check; allow the native spawn-heavy suite plus frontend work.
+    # Run43717196485 advanced through72% before90min. Partition every collected
+    # test file, preserving all tests and the existing per-job deadline.
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     env:
       DATALAB_GP_REFERENCE_MODE: independent
     steps:
@@ -409,9 +413,54 @@ jobs:
       - name: Bootstrap
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
+      - name: Complete native backend shard
+        # Match check.ps1: PS7 -> Python -> PS5 inherits incompatible module paths.
+        shell: powershell
+        run: .\.venv\Scripts\python.exe -m pytest backend/tests -p scripts.pytest_shard --datalab-shard-index ${{ matrix.shard }} --datalab-shard-count 2 --datalab-shard-manifest .tmp/windows-shard-${{ matrix.shard }}.json --durations=25
+      - name: Upload collection coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-collection-${{ matrix.shard }}-${{ github.sha }}
+          path: .tmp/windows-shard-${{ matrix.shard }}.json
+          if-no-files-found: error
+
+  windows:
+    if: always() && inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
+    needs: windows-backend
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      DATALAB_GP_REFERENCE_MODE: independent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Require both native shards
+        shell: pwsh
+        env:
+          GATE_RESULTS: ${{ toJSON(needs) }}
+        run: python scripts/release_readiness.py gate --kind windows-native --source-commit "${{ github.sha }}" --output .tmp/windows-native-gate.json
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: windows-collection-*-${{ github.sha }}
+          path: .tmp/windows-collections
+          merge-multiple: true
+      - name: Verify exact full collection coverage
+        shell: pwsh
+        run: python scripts/pytest_shard.py validate .tmp/windows-collections/windows-shard-0.json .tmp/windows-collections/windows-shard-1.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Bootstrap
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
       - name: Check
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\check.ps1 -SkipBackendTests
 
   windows-e2e:
     if: inputs.generate_linux_locks != true && inputs.browser_diagnostics_only != true
@@ -603,12 +652,27 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $python -m pip check
           exit $LASTEXITCODE
+      - name: Diagnose the unchanged six-response mixture fit budget
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          New-Item -ItemType Directory -Force .tmp/gp-resources | Out-Null
+          & $python scripts/probe_bo_mixture_fit.py | Tee-Object -FilePath .tmp/gp-resources/mixture-fit-diagnostic.json
+          exit $LASTEXITCODE
       - name: Measure synthetic fit CV restoration and prediction
         shell: pwsh
         run: |
           $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
           & $python scripts/benchmark_gp_resources.py --rows 501 1000 2000 --output .tmp/gp-resources/results.json
           exit $LASTEXITCODE
+      - name: Measure 500-row six-response BO with an explicit bounded fit
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          foreach ($kind in @('numeric', 'mixed')) {
+            & $python scripts/benchmark_bo_capacity.py --kind $kind --rows 500 --responses 6 --iterations 5 --output ".tmp/gp-resources/bo-500x6-$kind.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Preserve synthetic measurement and failure evidence
         if: always()
         uses: actions/upload-artifact@v4

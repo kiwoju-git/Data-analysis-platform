@@ -17,6 +17,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _Weight,
 )
 from app.api.v1.schemas.bo_fit_quality import BayesianFitPolicy, _ResponseModel
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 
 class CurveCalculationProjection(_CalculationRequestFields):
@@ -39,12 +40,14 @@ class CurveSharedModel(_StrictModel):
     schema_version: Literal[7]
     policy_version: Literal[1]
     factor_ids: list[Identifier] = Field(min_length=1, max_length=10)
-    response_ids: list[Identifier] = Field(min_length=1, max_length=4)
-    normalized_importance: list[_Weight] = Field(min_length=1, max_length=4)
+    response_ids: list[Identifier] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
+    normalized_importance: list[_Weight] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     curve_policy: Literal["per_response_target_gaussian_or_ds_v1"]
     moment_policy: Literal["independent_latent_versioned_curve_moments_v1"]
     independence_assumption: Literal[True]
-    response_models: list[_ResponseModel | _ResponseModelResult] = Field(min_length=1, max_length=4)
+    response_models: list[_ResponseModel | _ResponseModelResult] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
 
 
 class DesirabilityCurveCalculationResult(_BatchCalculationResultFields):

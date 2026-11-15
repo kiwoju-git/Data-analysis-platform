@@ -48,25 +48,33 @@ def verify_saved_matrix(browser, page, api, model, host, button, output: Path):
                     if not axis["points"]:
                         expect(cell.locator("svg")).to_have_count(0)
                         expect(cell).to_contain_text(axis["path"]["unavailable_reason"])
+                    # Read one immutable DOM snapshot per cell; keep every point
+                    # assertion without thousands of cross-process round trips.
+                    markers = cell.locator("[data-point-id]").evaluate_all(
+                        "nodes => nodes.map(e => ({id:e.dataset.pointId,"
+                        "x:e.dataset.x,y:e.dataset.y,tag:e.tagName}))"
+                    )
+                    by_id = {}
+                    for marker in markers:
+                        assert marker["id"] not in by_id
+                        by_id[marker["id"]] = marker
+                    assert len(by_id) == len(axis["points"])
                     for coordinate_index, point in enumerate(axis["points"]):
-                        marker = cell.locator(f'[data-point-id="{point["row_id"]}"]')
-                        expect(marker).to_have_count(1)
+                        marker = by_id[point["row_id"]]
                         prediction = next(
                             p
                             for p in point["response_predictions"]
                             if p["response_id"] == response["response_id"]
                         )
-                        assert (
-                            float(marker.get_attribute("data-y")) == prediction[metric]
-                        )
+                        assert float(marker["y"]) == prediction[metric]
                         x = (
                             coordinate_index
                             if axis["kind"] in {"nominal", "ordinal"}
                             else point["actual_coordinates"][axis["factor_id"]]
                         )
-                        assert float(marker.get_attribute("data-x")) == x
+                        assert float(marker["x"]) == x
                         if not point["constraints_satisfied"]:
-                            assert marker.evaluate("e => e.tagName") == "polygon"
+                            assert marker["tag"] == "polygon"
                     if axis["kind"] in {"nominal", "ordinal"}:
                         assert cell.locator("path.interactive-data-line").count() == 0
             if start + 2 < len(payload["axes"]):

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Any, Literal
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_fit_policy import (
     BoFitPolicy,
@@ -385,7 +386,7 @@ def fit_bo_surrogate(
     if (
         points.ndim != 2
         or not 1 <= points.shape[1] <= 10
-        or not 2 <= len(points) <= 200
+        or not 2 <= len(points) <= MAX_BAYESIAN_TRIALS
         or observed.shape != (len(points),)
         or not np.all(np.isfinite(points))
         or not np.all(np.isfinite(observed))

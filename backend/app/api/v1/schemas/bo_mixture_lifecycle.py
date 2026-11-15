@@ -10,6 +10,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianStudyLifecycleEventResponse,
 )
 from app.api.v1.schemas.bo_mixture import MixtureStudyResponse, MixtureTrialResponse
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 
 
 class MixtureObservationBatchResponse(BaseModel):
@@ -17,7 +18,7 @@ class MixtureObservationBatchResponse(BaseModel):
     batch_schema_version: Literal[3] = 3
     study: MixtureStudyResponse
     completed_trial_ids: list[UUID]
-    completed_trial_count: int = Field(ge=1, le=200)
+    completed_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     observation_history: BayesianHistoryRevisionResponse
     request_id: UUID
     created_at: str
@@ -27,7 +28,7 @@ class MixtureTrialListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     study_id: UUID
     study_version_id: UUID
-    total: int = Field(ge=0, le=200)
+    total: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=100)
     items: list[MixtureTrialResponse]

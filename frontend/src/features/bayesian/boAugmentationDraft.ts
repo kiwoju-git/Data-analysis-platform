@@ -8,6 +8,7 @@ import { isReportSourceDescriptor } from "../../managedReportSource";
 import { currentPlanningModel, parsePlanningPoint, planningHash, planningId, planningInteger } from "./boPlanningDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
 import { validAutoStrategy } from "../../api/boAutoStrategy";
+import { MAX_BO_TRIALS, suggestedBoTrialBudget } from "./boLimits";
 
 export interface AugmentationDraft {
   policy: AugmentationPolicy; batchSize: string; budget: string; distance: string;
@@ -19,7 +20,7 @@ export function augmentationFailureCode(caught: unknown): string {
 }
 export function initialAugmentationDraft(study: BayesianStudyResponse): AugmentationDraft {
   return { policy: study.factors.every(factor => factor.domain_kind !== "discrete_numeric") ? "greedy_incremental_maxpro_v1" : "greedy_mixed_maximin_v1",
-    batchSize: "2", budget: "200", distance: "0", evaluations: "100000", moments: "65536", seconds: "60" };
+    batchSize: "2", budget: String(suggestedBoTrialBudget(study.trial_count, 200, study.recommendation_hard_trial_limit)), distance: "0", evaluations: "100000", moments: "65536", seconds: "60" };
 }
 export function modelFreeAugmentation(policy: AugmentationPolicy): boolean {
   return policy === "greedy_incremental_maxpro_v1" || policy === "greedy_mixed_maximin_v1";
@@ -33,7 +34,7 @@ export function augmentationRequest(study: BayesianStudyResponse, page: Candidat
     page.revision.study_version_id !== study.study_version_id || page.revision.definition_sha256 !== study.definition_sha256 ||
     page.revision.source_history_revision_id !== study.observation_history.history_revision_id || page.revision.history_sha256 !== study.observation_history.observation_history_sha256 ||
     study.status !== "active" || study.pending_trial_count !== 0 || study.objective.goal_type !== "desirability" || ![5, 6].includes(study.study_schema_version)) return null;
-  const batch = planningInteger(draft.batchSize, 1, 8), budget = planningInteger(draft.budget, 2, 200),
+  const batch = planningInteger(draft.batchSize, 1, 8), budget = planningInteger(draft.budget, 2, MAX_BO_TRIALS),
     evaluations = planningInteger(draft.evaluations, 1, 100000), moments = planningInteger(draft.moments, 1, 65536),
     seconds = planningInteger(draft.seconds, 1, 60), distance = parseDoeResponseNumber(draft.distance), tolerance = page.revision.duplicate_tolerance;
   if (batch === null || budget === null || budget < study.trial_count + batch || evaluations === null || moments === null || seconds === null ||

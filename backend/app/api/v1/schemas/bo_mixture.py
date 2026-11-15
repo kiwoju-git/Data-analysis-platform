@@ -32,6 +32,7 @@ from app.api.v1.schemas.bo_mixed_studies import (
 )
 from app.api.v1.schemas.bo_mixed_workflow import MixedCandidateImport, MixedSourceRequest
 from app.api.v1.schemas.bo_planning import CandidateGeneration, Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
     BoFactorDomain,
@@ -144,7 +145,7 @@ class MixtureTrialResponse(BaseModel):
 
     trial_id: UUID
     study_version_id: UUID
-    trial_number: int = Field(ge=1, le=200)
+    trial_number: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     origin: Literal["initial_design", "recommendation", "replicate"]
     state: Literal["pending", "completed", "abandoned"]
     actual_coordinates: dict[str, float | str]
@@ -183,10 +184,10 @@ class MixtureStudyResponse(BaseModel):
     objective: AnyDesirabilityObjective
     constraints: list[BayesianLinearConstraintRequest]
     initial_design: dict[str, JsonValue]
-    trial_count: int = Field(ge=1, le=200)
-    pending_trial_count: int = Field(ge=0, le=200)
-    completed_trial_count: int = Field(ge=0, le=200)
-    abandoned_trial_count: int = Field(ge=0, le=200)
+    trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
+    pending_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    completed_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
+    abandoned_trial_count: int = Field(ge=0, le=MAX_BAYESIAN_TRIALS)
     observation_history: BayesianHistoryRevisionResponse
     trials: list[MixtureTrialResponse]
     surrogate_available: bool
@@ -195,7 +196,7 @@ class MixtureStudyResponse(BaseModel):
         "fixed_candidate_mixture_planning_v1"
     )
     recommendation_minimum_completed_observations: int
-    recommendation_hard_trial_limit: Literal[200] = 200
+    recommendation_hard_trial_limit: Literal[500] = MAX_BAYESIAN_TRIALS
     recommendation_blockers: list[str]
     lifecycle_event: dict[str, JsonValue] | None
 
@@ -236,7 +237,7 @@ class MixtureSelectionCreateRequest(MixtureSourceRequest):
     policy: Literal["manual_mixture_base_posterior_v1", "greedy_mixture_maximin_v1"]
     row_ids: list[Sha256] = Field(default_factory=list, max_length=8)
     batch_size: int = Field(ge=1, le=8, strict=True)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     min_batch_distance: FiniteFloat = Field(default=0, ge=0)
     time_budget_ms: int = Field(default=60000, ge=1000, le=60000, strict=True)
     max_moment_evaluations: int = Field(default=16384, ge=1, le=65536, strict=True)
@@ -269,7 +270,9 @@ class MixtureEvaluatedRow(BaseModel):
     nearest_existing_distance: FiniteFloat | None = Field(ge=0)
     novel: bool
     eligible: bool
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition | None
     prediction_source: Literal["completed_observations_base_posterior"]

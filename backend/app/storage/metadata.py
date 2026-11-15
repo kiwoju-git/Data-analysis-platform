@@ -9,11 +9,13 @@ from typing import Final, Literal
 from uuid import NAMESPACE_URL, uuid5
 
 from app.storage.bo_auto_evidence_schema import BO_AUTO_EVIDENCE_MIGRATION_SQL
+from app.storage.bo_capacity_schema import BO_CAPACITY_MIGRATION_SQL
 from app.storage.bo_mixture_schema import BO_MIXTURE_MIGRATION_SQL
 from app.storage.bo_planning_schema import BO_PLANNING_MIGRATION_SQL
 from app.storage.bo_planning_v2_schema import BO_PLANNING_V2_MIGRATION_SQL
+from app.storage.bo_snapshot_capacity_schema import BO_SNAPSHOT_CAPACITY_MIGRATION_SQL
 
-SCHEMA_VERSION: Final = 37
+SCHEMA_VERSION: Final = 39
 METADATA_DB_RELATIVE_PATH: Final = Path("db") / "metadata.sqlite3"
 
 
@@ -2179,6 +2181,18 @@ MIGRATIONS: Final[tuple[Migration, ...]] = (
         sql=BO_MIXTURE_MIGRATION_SQL,
         requires_foreign_keys_off=True,
     ),
+    Migration(
+        version=38,
+        name="bayesian_500_trial_capacity",
+        sql=BO_CAPACITY_MIGRATION_SQL,
+        requires_foreign_keys_off=True,
+    ),
+    Migration(
+        version=39,
+        name="bayesian_six_response_snapshot_capacity",
+        sql=BO_SNAPSHOT_CAPACITY_MIGRATION_SQL,
+        requires_foreign_keys_off=True,
+    ),
 )
 
 
@@ -2280,6 +2294,10 @@ def _apply_migrations(connection: sqlite3.Connection) -> None:
                 connection.execute("PRAGMA foreign_keys = OFF;")
             try:
                 connection.executescript(migration.sql)
+                if migration.version in {38, 39} and connection.execute(
+                    "PRAGMA integrity_check;"
+                ).fetchall() != [("ok",)]:
+                    raise MetadataSchemaCompatibilityError("workspace_metadata_invalid")
                 if (
                     migration.requires_foreign_keys_off
                     and connection.execute("PRAGMA foreign_key_check;").fetchone() is not None

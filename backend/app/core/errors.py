@@ -4,10 +4,17 @@ from uuid import uuid4
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 LOGGER = logging.getLogger(__name__)
+
+
+class ErrorLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    observed_count: int = Field(ge=0, strict=True)
+    maximum_count: int = Field(ge=1, strict=True)
 
 
 class ErrorBody(BaseModel):
@@ -17,6 +24,7 @@ class ErrorBody(BaseModel):
     message: str
     correlation_id: str
     developer_detail: str | None = None
+    limits: ErrorLimits | None = None
 
 
 class ErrorResponse(BaseModel):
@@ -32,12 +40,14 @@ class ApiError(Exception):
         message: str,
         status_code: int = status.HTTP_400_BAD_REQUEST,
         developer_detail: str | None = None,
+        limits: ErrorLimits | None = None,
     ) -> None:
         super().__init__(message)
         self.code = code
         self.message = message
         self.status_code = status_code
         self.developer_detail = developer_detail
+        self.limits = limits
 
 
 def get_correlation_id(request: Request) -> str:
@@ -53,6 +63,7 @@ def error_response(
     correlation_id: str,
     status_code: int,
     developer_detail: str | None = None,
+    limits: ErrorLimits | None = None,
 ) -> JSONResponse:
     body = ErrorResponse(
         error=ErrorBody(
@@ -60,9 +71,13 @@ def error_response(
             message=message,
             correlation_id=correlation_id,
             developer_detail=developer_detail,
+            limits=limits,
         ),
     )
-    return JSONResponse(status_code=status_code, content=body.model_dump())
+    content = body.model_dump()
+    if limits is None:
+        del content["error"]["limits"]
+    return JSONResponse(status_code=status_code, content=content)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -123,6 +138,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             correlation_id=correlation_id,
             status_code=exc.status_code,
             developer_detail=exc.developer_detail,
+            limits=exc.limits,
         )
 
     @app.exception_handler(Exception)

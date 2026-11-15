@@ -6,6 +6,13 @@ import { setCurrentLocale } from "./i18n/store";
 describe("attribute control chart run errors", () => {
   afterEach(() => setCurrentLocale("ko"));
 
+  it.each(["ko", "en"] as const)("reports the actual 500 total-trial bound in %s", locale => {
+    const message = getAnalysisRunErrorDetails("bayesian_optimization_trial_budget_invalid", locale).message;
+    expect(message).toContain("500");
+    expect(message).not.toContain("200");
+    if (locale === "en") expect(message).not.toMatch(/[\uAC00-\uD7AF]/u);
+  });
+
   it.each([
     ["invalid_attribute_control_chart_options", "계수형 관리도 옵션 형식 오류"],
     ["attribute_control_chart_count_definition_mismatch", "계수 정의 불일치"],

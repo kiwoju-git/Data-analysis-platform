@@ -10,12 +10,12 @@ from app.api.v1.schemas.bo_curve_policy import (
     AnyDesirabilityObjective as BayesianDesirabilityObjective,
 )
 from app.api.v1.schemas.bo_dataset_source import DatasetImportedInitialDesign
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS as MAX_BAYESIAN_TRIALS
+from app.core.bo_limits import MAX_COMPLETED_OBSERVATIONS as MAX_COMPLETED_OBSERVATIONS
+from app.core.bo_limits import MAX_HISTORY_REVISIONS as MAX_HISTORY_REVISIONS
 from app.core.doe_capabilities import BAYESIAN_STUDY_FACTOR_LIMIT
 from app.statistics.doe_factor_domain import DoeFactorDomain, validate_factor_domain
 
-MAX_BAYESIAN_TRIALS: Final = 200
-MAX_COMPLETED_OBSERVATIONS: Final = 200
-MAX_HISTORY_REVISIONS: Final = MAX_COMPLETED_OBSERVATIONS + 1
 DEFAULT_TOTAL_TRIAL_BUDGET: Final = 50
 
 

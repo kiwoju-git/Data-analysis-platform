@@ -1,6 +1,10 @@
 # Bayesian Initial Observation Import Contract
 
-Last updated: 2026-11-13
+Last updated: 2026-11-15
+
+API46 supports up to six mapped desirability responses. Each Y requires its own
+valid goal and positive importance; see `bo_six_responses.md` for capacity,
+compatibility and fresh validation evidence.
 
 ## Supported Source
 
@@ -33,6 +37,32 @@ clear those coefficients or remove their constraints first. Removing unrelated
 factors does not erase constraints. Locale and viewport changes do not rewrite
 names, category identities, policies, numeric strings, mappings, goals or filters.
 No API, import schema or mixture support changes are introduced by these controls.
+
+### Field Feedback
+
+Preflight now identifies all locally detectable missing/invalid inputs together:
+study name, X/Y mappings, numeric bounds/step, category levels, response targets,
+importance and explicit display aliases. Each issue has a stable field identity,
+locale-independent code, visible inline text/icon and accessible invalid/description
+attributes. A linked summary focuses the corresponding control. Initial submission
+focuses the first editable invalid control; subsequent typing does not move focus.
+Locked factor mappings retain their constraint explanation instead of offering a
+nonfunctional summary link. Fixing a field clears its issue without clearing drafts.
+
+The presentation validator does not replace the request builder or backend checks.
+Inactive thresholds remain optional; valid fixed mixture components keep equal
+bounds. Partial numeric strings remain editable but cannot be submitted. No bound,
+target, column, category or observation is guessed, reformatted or overwritten.
+Locale changes translate only the feedback, not user-owned names or request values.
+Source/schema/filter changes retain the existing source-keyed reset behavior.
+Ambiguous server-only data, constraint and source failures remain form-level notices;
+the UI does not claim to identify a bad field from an error code alone.
+
+The built-app regression is `tests/e2e/bo_import_validation.py`, also called by the
+existing import workflow suite. It uses an isolated synthetic workspace, invalid
+POST counts, real successful preflight, focus/navigation checks, DOM error spacing,
+KO/EN switches and preserved Korean user text. Current evidence and limitations are
+in `superpowers/plans/2026-11-15-bo-import-field-validation.md`.
 
 ## API
 
@@ -71,11 +101,23 @@ Preflight returns:
 - `preflight_sha256`, binding the complete normalized request, source identity,
   counts, original zero-based row indices, and full-precision measured values.
 
-The hard limit is 200 retained raw observations after the explicit filter and
-missing policy, not 200 unique coordinates. There is no silent truncation.
+The hard limit is 500 retained raw observations after the explicit filter and
+missing policy, not 500 unique coordinates. Imported observations and all later
+completed, pending, or abandoned trials share the same total limit. There is no
+silent truncation. Importing 500 observations leaves no room for a new trial.
 The canonical iterator always reaches EOF and verifies its recorded hash, size,
-row count, and dimensions before successful preflight or creation. At most 200
+row count, and dimensions before successful preflight or creation. At most 500
 observation rows are retained in memory; all source rows are streamed.
+
+Over-capacity requests return HTTP409 `bayesian_import_trial_limit` with optional
+aggregate `limits: {observed_count, maximum_count}`. The localized UI displays
+these counts and an explicit-filter/smaller-source recovery path; it never sends
+raw cells, source names, or exception details in this error. The ordinary error
+envelope remains unchanged when no limit metadata is supplied.
+
+The API45/metadata38 capacity extension and validation evidence are documented
+in [BO 500 capacity](bo_500_capacity.md). Existing receipt schemas, statistical
+policies, stored request budgets and artifact hashes are not rewritten.
 
 Commit repeats the same request plus a UUID `request_id` and
 `expected_preflight_sha256`. It returns the normal numeric or mixed study

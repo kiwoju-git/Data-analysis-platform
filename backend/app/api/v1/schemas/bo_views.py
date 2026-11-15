@@ -14,6 +14,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
 from app.api.v1.schemas.bo_loo import LooCalculation
 from app.api.v1.schemas.bo_mixed_planning import ActualPoint
 from app.api.v1.schemas.bo_planning import Sha256
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 
 class _Model(BaseModel):
@@ -61,7 +62,9 @@ class ProfilePoint(_Model):
     row_id: Sha256
     actual_coordinates: ActualPoint
     constraints_satisfied: bool
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     prediction_source: Literal["completed_observations_base_posterior"]
 
@@ -107,7 +110,7 @@ class ProfilerMatrixPayload(_Model):
     holds: ActualPoint
     axes: list[ProfileAxis] = Field(min_length=1, max_length=10)
     constraints: list[BayesianLinearConstraintRequest] = Field(max_length=16)
-    responses: list[ViewResponse] = Field(min_length=1, max_length=4)
+    responses: list[ViewResponse] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     point_count: int = Field(ge=0, le=1000, strict=True)
     warnings: list[str] = Field(max_length=64)
 
@@ -150,7 +153,7 @@ class ConditionalLooPayload(_Model):
     kind: Literal["conditional_loo"]
     source: ViewSource
     model_refit: Literal[False] = False
-    responses: list[ViewResponse] = Field(min_length=1, max_length=4)
+    responses: list[ViewResponse] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     calculation: LooCalculation
     calculation_sha256: Sha256
 

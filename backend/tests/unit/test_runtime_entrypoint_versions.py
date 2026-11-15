@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from app.core.runtime_contract import API_CONTRACT_VERSION
+from app.storage.metadata import SCHEMA_VERSION
 
 
 def _declared_integer(path: Path, pattern: str) -> int:
@@ -25,7 +26,7 @@ def test_backend_frontend_and_windows_launcher_require_same_api_contract() -> No
     assert frontend == launcher == API_CONTRACT_VERSION
 
 
-def test_frontend_and_windows_launcher_require_metadata37_mixture_contract() -> None:
+def test_frontend_and_windows_launcher_require_current_metadata_contract() -> None:
     root = Path(__file__).resolve().parents[3]
     frontend = _declared_integer(
         root / "frontend/src/runtimeCompatibility.ts",
@@ -35,4 +36,4 @@ def test_frontend_and_windows_launcher_require_metadata37_mixture_contract() -> 
         root / "scripts/dev_runtime_helpers.ps1",
         r"^\$script:MinimumMetadataSchemaVersion = (\d+)$",
     )
-    assert frontend == launcher == 37
+    assert frontend == launcher == SCHEMA_VERSION

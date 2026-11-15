@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
 from app.api.v1.schemas.bo_desirability_calculation import Identifier
 from app.api.v1.schemas.bo_planning import Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class _Model(BaseModel):
@@ -20,7 +21,7 @@ class LooRequest(_Model):
 
 class LooPoint(_Model):
     trial_id: UUID
-    observation_index: int = Field(ge=1, le=200, strict=True)
+    observation_index: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
     observed: FiniteFloat
     predicted: FiniteFloat
     residual: FiniteFloat
@@ -28,13 +29,13 @@ class LooPoint(_Model):
 
 class LooResponseDiagnostic(_Model):
     response_id: Identifier
-    raw_observation_count: int = Field(ge=2, le=200, strict=True)
-    effective_training_count: int = Field(ge=1, le=200, strict=True)
-    n_scored: int = Field(ge=2, le=200, strict=True)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
+    effective_training_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
+    n_scored: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     rmse: FiniteFloat = Field(ge=0)
     r_squared: FiniteFloat | None = Field(le=1)
     r_squared_reason: Literal["constant_observations"] | None
-    points: list[LooPoint] = Field(min_length=2, max_length=200)
+    points: list[LooPoint] = Field(min_length=2, max_length=MAX_BAYESIAN_TRIALS)
 
     @model_validator(mode="after")
     def complete_rows(self) -> "LooResponseDiagnostic":
@@ -67,7 +68,7 @@ class LooCalculation(_Model):
             "category_vocabulary_and_parameters_frozen",
         ]
     ] = Field(min_length=3, max_length=4)
-    responses: list[LooResponseDiagnostic] = Field(min_length=1, max_length=4)
+    responses: list[LooResponseDiagnostic] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
 
 
 class LooSnapshot(_Model):

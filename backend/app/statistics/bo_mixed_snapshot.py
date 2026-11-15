@@ -9,6 +9,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_SNAPSHOT_NODES
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_factor_domains import (
     BoFactorDomain,
@@ -32,7 +33,7 @@ SNAPSHOT_SCHEMA_VERSION = 2
 SNAPSHOT_POLICY = "bo_mixed_surrogate_state_v1"
 Number = Annotated[float, Field(strict=True, allow_inf_nan=False)]
 Positive = Annotated[Number, Field(gt=0)]
-Vector = Annotated[list[Number], Field(min_length=1, max_length=200)]
+Vector = Annotated[list[Number], Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)]
 Parameters = Annotated[list[Number], Field(max_length=76)]
 
 
@@ -117,16 +118,18 @@ class _Diagnostics(_Strict):
 
 class _Training(_Strict):
     x_encoded: list[Annotated[list[Number], Field(min_length=1, max_length=10)]] = Field(
-        min_length=1, max_length=200
+        min_length=1, max_length=MAX_BAYESIAN_TRIALS
     )
     targets_scaled: Vector
     within_ss_scaled: Vector
-    group_counts: list[Annotated[int, Field(ge=1, le=200)]] = Field(min_length=1, max_length=200)
-    raw_observation_count: int = Field(ge=2, le=200)
+    group_counts: list[Annotated[int, Field(ge=1, le=MAX_BAYESIAN_TRIALS)]] = Field(
+        min_length=1, max_length=MAX_BAYESIAN_TRIALS
+    )
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
 
 
 class _Factorization(_Strict):
-    lower: list[Vector] = Field(min_length=1, max_length=200)
+    lower: list[Vector] = Field(min_length=1, max_length=MAX_BAYESIAN_TRIALS)
     alpha: Vector
 
 
@@ -163,7 +166,7 @@ def _json_tree(payload: Any) -> None:
     while pending:
         value, depth = pending.pop()
         visited += 1
-        if visited > 60_000 or depth > 12:
+        if visited > MAX_BO_SNAPSHOT_NODES or depth > 12:
             raise _invalid()
         kind = type(value)
         if kind is dict:
@@ -171,7 +174,7 @@ def _json_tree(payload: Any) -> None:
                 raise _invalid()
             pending.extend((item, depth + 1) for item in value.values())
         elif kind is list:
-            if len(value) > 200:
+            if len(value) > MAX_BAYESIAN_TRIALS:
                 raise _invalid()
             pending.extend((item, depth + 1) for item in value)
         elif kind is float:
@@ -358,7 +361,9 @@ def load_bo_mixed_surrogate(
         ):
             raise _invalid()
         kernel, policy = _restore_kernel(state, domains)
-        points = validate_mixed_coordinates(state.training.x_encoded, domains, maximum=200)
+        points = validate_mixed_coordinates(
+            state.training.x_encoded, domains, maximum=MAX_BAYESIAN_TRIALS
+        )
         _check_fit(state, kernel, domains)
     except (ValueError, OverflowError):
         raise _invalid() from None

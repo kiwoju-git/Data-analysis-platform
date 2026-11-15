@@ -26,6 +26,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _SharedObservationView,
 )
 from app.api.v1.schemas.bo_fit_quality import _ResponseModel
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Numeric = Annotated[FiniteFloat, Field(strict=True)]
@@ -64,7 +65,9 @@ class PlanningModelSummary(_Model):
 class PlanningModelDetail(PlanningModelSummary):
     fit: PlanningFitOptions
     objective: DesirabilityObjective | VersionedCurveObjective
-    response_models: list[_ResponseModelResult | _ResponseModel] = Field(min_length=1, max_length=4)
+    response_models: list[_ResponseModelResult | _ResponseModel] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     incumbent: _Incumbent
     observation_view: _SharedObservationView
     warnings: list[str] = Field(max_length=64)
@@ -80,7 +83,7 @@ class PlanningSourceRequest(_Model):
     expected_model_sha256: Sha256
     expected_history_revision_id: UUID
     expected_history_sha256: Sha256
-    expected_trial_count: int = Field(ge=1, le=200, strict=True)
+    expected_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
 
 
 class CandidateGeneration(_Model):
@@ -140,7 +143,9 @@ class CandidateRow(_Model):
 
 
 class EvaluatedCandidateRow(CandidateRow):
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition
     prediction_source: Literal["completed_observations_base_posterior"]
@@ -158,7 +163,7 @@ class CandidateRevisionSummary(_Model):
     rows_sha256: Sha256
     config_sha256: Sha256
     excluded_coordinates_sha256: Sha256
-    source_trial_count: int = Field(ge=1, le=200)
+    source_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     row_count: int = Field(ge=1, le=10000)
     eligible_count: int = Field(ge=0, le=10000)
     created_at: str
@@ -189,7 +194,7 @@ class PlanningEvaluationResponse(_Model):
     request_sha256: Sha256
     items: list[EvaluatedCandidateRow] = Field(min_length=1, max_length=100)
     source_is_current: bool
-    eligibility_source_trial_count: int = Field(ge=1, le=200)
+    eligibility_source_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     eligibility_coordinates_sha256: Sha256
     eligibility_is_current: bool
     model_refit: Literal[False] = False
@@ -200,7 +205,7 @@ class PlanningSelectionCreateRequest(PlanningSourceRequest):
     candidate_revision_id: UUID
     expected_rows_sha256: Sha256
     row_ids: list[Sha256] = Field(min_length=1, max_length=8)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
 
     @model_validator(mode="after")
     def unique_ordered_rows(self) -> PlanningSelectionCreateRequest:
@@ -220,7 +225,9 @@ class ManualPlanningScore(_Model):
 class PlanningSelectionItem(CandidateRow):
     rank: int = Field(ge=1, le=8)
     nearest_selected_distance: FiniteFloat | None = Field(ge=0)
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition
     planning: ManualPlanningScore

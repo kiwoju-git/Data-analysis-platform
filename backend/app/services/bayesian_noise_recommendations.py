@@ -28,6 +28,7 @@ from app.api.v1.schemas.bayesian_noise import (
     parse_current_batch_response,
     parse_current_calculation,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.analysis_run_execution import (
@@ -174,14 +175,20 @@ def validated_noise_source(
     if any(t.state == "pending" for t in study.trials):
         raise _error("bayesian_optimization_pending_recommendation_exists")
     completed = [t for t in study.trials if t.state == "completed"]
-    if not study.recommendation_minimum_completed_observations <= len(completed) <= 200:
+    if (
+        not study.recommendation_minimum_completed_observations
+        <= len(completed)
+        <= MAX_BAYESIAN_TRIALS
+    ):
         raise _error("bayesian_optimization_history_incomplete")
     goal = study.objective.goal_type or study.objective.direction
     if body.acquisition.kind != (
         "expected_target_improvement" if goal == "match_target" else "expected_improvement"
     ):
         raise _error("bayesian_optimization_acquisition_goal_mismatch")
-    if len(study.trials) + body.batch_size > min(body.search.total_trial_budget, 200):
+    if len(study.trials) + body.batch_size > min(
+        body.search.total_trial_budget, MAX_BAYESIAN_TRIALS
+    ):
         raise _error("bayesian_optimization_batch_budget_exceeded")
     payload = worker_payload(study, body, completed)
     return study, payload

@@ -52,10 +52,17 @@ def test_invalid_threshold_is_not_coerced(threshold):
         decide([0.5], threshold=threshold)
 
 
-@pytest.mark.parametrize("values", [[], [0.1] * 5, [math.nan], [math.inf], [1.001], [True]])
+@pytest.mark.parametrize("values", [[], [0.1] * 7, [math.nan], [math.inf], [1.001], [True]])
 def test_all_metrics_validated_before_any_low_branch(values):
     with pytest.raises(ValueError, match="bayesian_auto_strategy_invalid"):
         decide(values)
+
+
+@pytest.mark.parametrize("count", [5, 6])
+def test_every_response_in_expanded_capacity_influences_auto_advice(count):
+    result = decide([0.9] * (count - 1) + [0.1])
+    assert result["below_threshold_response_ids"] == [f"r{count - 1}"]
+    assert result["reason"] == "any_response_below_threshold"
 
 
 def test_duplicate_response_and_unknown_domain_rejected():

@@ -15,7 +15,7 @@ from playwright.sync_api import expect, sync_playwright
 ROUTE = "/analysis/doe/doe.bayesian_optimization"
 
 
-def verify_mixture_completion(browser, base: str, output: Path):
+def verify_mixture_completion(browser, base: str, output: Path, *, response_count=6):
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -25,9 +25,12 @@ def verify_mixture_completion(browser, base: str, output: Path):
     ) as page:
         page.set_default_timeout(20000)
         csv = (
-            "성분 A,Component B,Fixed,Temperature,Lot,Yield\n"
+            "성분 A,Component B,Fixed,Temperature,Lot,"
+            + ",".join("Yield" if i == 0 else f"Yield {i + 1}" for i in range(response_count))
+            + "\n"
             + "\n".join(
-                f"{a},{b},0.1,{temp},{lot},{20 + 3*a - b + temp/100}"
+                f"{a},{b},0.1,{temp},{lot},"
+                + ",".join(str(20 + 3*a - b + temp/100 + i * 0.1) for i in range(response_count))
                 for a, b, temp, lot in (
                     (0.2, 0.7, 10, "A"),
                     (0.3, 0.6, 20, "A"),
@@ -76,11 +79,14 @@ def verify_mixture_completion(browser, base: str, output: Path):
         form.get_by_label("X 5 type", exact=True).select_option("nominal")
         form.get_by_label("X 5 levels", exact=True).fill("A\nB")
         form.get_by_label("Response objective", exact=True).select_option("vector")
-        form.get_by_label("Y 1", exact=True).select_option(
-            version["columns"][5]["column_id"]
-        )
-        form.get_by_label("Response 1 lower", exact=True).fill("0")
-        form.get_by_label("Response 1 target", exact=True).fill("30")
+        for i in range(response_count):
+            if i:
+                form.get_by_role("button", name="Add response", exact=True).click()
+            form.get_by_label(f"Y {i + 1}", exact=True).select_option(
+                version["columns"][5 + i]["column_id"]
+            )
+            form.get_by_label(f"Response {i + 1} lower", exact=True).fill("0")
+            form.get_by_label(f"Response {i + 1} target", exact=True).fill("30")
         layout_checks = []
         for width in (1024, 1440):
             page.set_viewport_size({"width": width, "height": 900})
@@ -113,8 +119,42 @@ def verify_mixture_completion(browser, base: str, output: Path):
             timeout=90000,
         ) as fitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
-        assert fitted.value.status == 201, fitted.value.text()
-        model = fitted.value.json()
+        default_fit_status = fitted.value.status
+        default_fit = fitted.value.json()
+        assert fitted.value.request.post_data_json["fit"]["fit_policy"]["deterministic_start_count"] == 3
+        if default_fit_status == 409:
+            # Native optimizer paths can consume different counts. Exhaustion is
+            # an explicit atomic failure, never a partial model or input error.
+            assert default_fit["error"]["code"] == "bayesian_optimization_budget_exhausted", default_fit
+            expect(workspace.get_by_role("alert")).to_contain_text("shared optimizer evaluation budget")
+            assert page.request.get(api + "/mixture-planning-models").json()["items"] == []
+            assert page.request.get(api).json() == study
+        else:
+            assert default_fit_status == 201, fitted.value.text()
+            assert len(default_fit["response_models"]) == response_count
+            assert default_fit["fit"]["fit_policy"]["deterministic_start_count"] == 3
+        advanced = workspace.locator("details").filter(has=page.get_by_text("Advanced fit settings", exact=True))
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        starts = workspace.get_by_label("Deterministic optimizer starts", exact=True)
+        expect(starts).to_have_value("3")
+        starts.fill("1.5")
+        expect(starts).to_have_attribute("aria-invalid", "true")
+        expect(advanced).to_contain_text("integer from 1 to 3")
+        starts.fill("1")
+        with page.expect_response(
+            lambda r: r.url == api + "/mixture-planning-models"
+            and r.request.method == "POST",
+            timeout=90000,
+        ) as bounded_fit:
+            workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
+            expect(starts).to_be_disabled()
+        assert bounded_fit.value.status == 201, bounded_fit.value.text()
+        model = bounded_fit.value.json()
+        assert bounded_fit.value.request.post_data_json["fit"]["fit_policy"]["deterministic_start_count"] == 1
+        assert model["fit"]["fit_policy"]["deterministic_start_count"] == 1
+        assert model["fit"]["search"]["model_max_evaluations"] == 1000
+        expect(workspace).to_contain_text("Deterministic optimizer starts: 1")
         diagnostics = workspace.get_by_role("region", name="Actual holds", exact=True)
         saved = verify_saved_matrix(
             browser,
@@ -135,6 +175,7 @@ def verify_mixture_completion(browser, base: str, output: Path):
         assert candidate.value.status == 201, candidate.value.text()
         keys = [c["factor_id"] for c in study["mixture"]["components"]]
         for point in candidate.value.json()["items"]:
+            assert len(point["response_predictions"]) == response_count
             assert math.isclose(
                 sum(point["actual_coordinates"][key] for key in keys), 1, abs_tol=1e-14
             )
@@ -171,15 +212,26 @@ def verify_mixture_completion(browser, base: str, output: Path):
         assert current["pending_trial_count"] == 2
         for trial in current["trials"]:
             if trial["state"] == "pending":
-                workspace.get_by_label(
-                    f'{trial["trial_number"]}: Yield', exact=True
-                ).fill("22.125")
+                for i, response in enumerate(study["objective"]["responses"]):
+                    workspace.get_by_label(
+                        f'{trial["trial_number"]}: {response["name"]}', exact=True
+                    ).fill(str(22.125 + i * 0.1))
         with page.expect_response(api + "/observations/batch") as observed:
             workspace.get_by_role(
                 "button", name="Save observations", exact=True
             ).click()
         assert observed.value.status == 200, observed.value.text()
         assert observed.value.json()["study"]["completed_trial_count"] == 10
+        complete = observed.value.json()["study"]
+        assert complete["trials"][:8] == study["trials"]
+        assert all(len(t["response_values"]) == response_count for t in complete["trials"])
+        expect(workspace.get_by_text(
+            complete["observation_history"]["observation_history_sha256"], exact=True
+        ).first).to_be_visible()
+        expect(advanced).not_to_have_attribute("open", "")
+        advanced.locator("summary").click()
+        expect(starts).to_have_value("3")
+        starts.fill("1")
         with page.expect_response(
             lambda r: r.url == api + "/mixture-planning-models"
             and r.request.method == "POST",
@@ -187,6 +239,7 @@ def verify_mixture_completion(browser, base: str, output: Path):
         ) as refitted:
             workspace.get_by_role("button", name="Fit surrogate", exact=True).click()
         assert refitted.value.status == 201, refitted.value.text()
+        assert refitted.value.json()["fit"]["fit_policy"]["deterministic_start_count"] == 1
         assert refitted.value.json()["history_sha256"] != model["history_sha256"]
         with page.expect_response(
             api + "/mixture-candidate-revisions", timeout=90000
@@ -212,6 +265,10 @@ def verify_mixture_completion(browser, base: str, output: Path):
         page.screenshot(path=output / "historical-mixture-view.png", full_page=True)
         receipt = {
             "synthetic": True,
+            "response_count": response_count,
+            "default_fit_status": default_fit_status,
+            "default_fit_error": default_fit.get("error", {}).get("code"),
+            "explicit_optimizer_starts": 1,
             "import_schema": 2,
             "import_layout_checks": layout_checks,
             "completed_before": 8,
