@@ -185,6 +185,16 @@ An independent final read-only review found no blocking gate issue: failure,
 cancellation and skipped shards cannot pass the Windows aggregate; collection
 receipts are not treated as execution success. Native completion remains required.
 
+Run `43726720150` at `fe64788` completed both Linux3.12 and Python3.11 backend
+suites with4763 passed/34 skipped and one stale workflow-contract assertion.
+That assertion still classified `windows` as an ordinary job rather than the
+new always-run shard aggregate. It was reproduced locally, then corrected to
+require the exact aggregate guard for `windows` and the exact ordinary guard
+for `windows-backend`. No calculation or workflow behavior changed. The full
+partition/shard/release-readiness test group then passed195 tests; Ruff and
+format checks passed. Independent review found no other contradictory Windows
+gate assertion. These failed native runs remain evidence, not a passing final CI.
+
 ## Verification Ledger
 
 - Fresh full-check attempts retained: missing worktree Ruff launcher corrected

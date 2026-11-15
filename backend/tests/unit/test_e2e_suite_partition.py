@@ -720,7 +720,7 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
             ]
         },
     }
-    for name in ("dependency-security", "e2e", "release-ready"):
+    for name in ("dependency-security", "windows", "e2e", "release-ready"):
         assert jobs[name]["if"] == (
             "always() && inputs.generate_linux_locks != true"
             " && inputs.browser_diagnostics_only != true"
@@ -728,7 +728,7 @@ def test_native_linux_lock_generation_is_not_a_product_or_release_gate():
     for name in (
         "security-python",
         "security-npm",
-        "windows",
+        "windows-backend",
         "windows-e2e",
         "linux",
         "python311",
