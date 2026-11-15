@@ -928,6 +928,7 @@ browser critical path.
   Stage3d also runs actual UI goal creation/entry, partial-vector rejection,
   same-request replay after a lost response, delayed failure protection and reload)
 - `verify measured X/Y import and next multiresponse recommendation`
+- `verify full 240-row BO import and 500 total capacity`
 - `verify constrained saved-model profiler values and status`
 - `verify measured mixture import, saved profiler and next batch`
 - `verify canonical GPR navigation with selected dataset`

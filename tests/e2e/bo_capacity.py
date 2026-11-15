@@ -229,6 +229,33 @@ def verify_capacity(browser, base, output, *, isolated_workspace):
         assert page.request.get(base + "/api/v1/bayesian-studies").json() == before
         page.screenshot(path=str(output / "capacity501-rejected.png"), full_page=True)
         receipt["501_rejected_atomically"] = True
+    with diagnosed_page(
+        browser,
+        output,
+        "capacity500",
+        init_script="localStorage.setItem('statistical-twin.locale','en')",
+    ) as page:
+        form, source_hash = fill_import(page, base, 500)
+        with page.expect_response("**/bayesian-studies/import-preflight") as response:
+            form.get_by_role("button", name="Preflight import", exact=True).click()
+        assert response.value.status == 200, response.value.text()
+        assert response.value.json()["n_used"] == 500
+        with page.expect_response("**/bayesian-studies/from-dataset") as response:
+            form.get_by_role(
+                "button", name="Import observations and create study", exact=True
+            ).click()
+        assert response.value.status == 201, response.value.text()
+        full = response.value.json()
+        assert full["trial_count"] == full["completed_trial_count"] == 500
+        assert full["pending_trial_count"] == 0
+        assert len(full["trials"]) == 500
+        api = base + "/api/v1/bayesian-studies/" + full["study_id"]
+        page.reload(wait_until="domcontentloaded")
+        wait_for_bayesian_ready(page, "en", ROUTE)
+        assert page.request.get(api).json() == full
+        page.screenshot(path=str(output / "capacity500-restored.png"), full_page=True)
+        receipt["500_imported_and_restored"] = True
+        receipt["500_csv_sha256"] = source_hash
     return receipt
 
 

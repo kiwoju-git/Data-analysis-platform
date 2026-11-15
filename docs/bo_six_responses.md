@@ -1,5 +1,8 @@
 # BO Six-Response Capacity
 
+This document retains implementation checkpoints. Current finalization, native
+results and remaining gates are recorded in [bo_capacity_finalization.md](bo_capacity_finalization.md).
+
 ## Contract
 
 API46 widens desirability from 1-4 to 1-6 measured responses. Final metadata39

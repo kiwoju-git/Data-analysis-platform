@@ -3,10 +3,17 @@ import hashlib
 import multiprocessing
 import os
 import threading
+from functools import partial
 from types import SimpleNamespace
 
 import pytest
-from desirability_worker_probe import abruptly_exit, oversized_result, partial_frame, slow_result
+from desirability_worker_probe import (
+    abruptly_exit,
+    oversized_result,
+    partial_frame,
+    result_then_delayed_exit,
+    slow_result,
+)
 from test_bo_desirability_contract import calculation_request
 
 from app.services import bo_desirability_worker as worker
@@ -281,5 +288,55 @@ def test_partial_pipe_frame_cannot_disable_timeout(monkeypatch):
     before = {p.pid for p in multiprocessing.active_children()}
     with pytest.raises(BayesianOptimizationError, match="time_budget_exhausted"):
         worker._run_owned_worker(b"{}", timeout_ms=1500, cancel=None)
+    assert {p.pid for p in multiprocessing.active_children()} <= before
+    assert not any(t.name == "bo-desirability-receiver" for t in threading.enumerate())
+
+
+def test_successful_result_waits_for_clean_exit_within_original_deadline():
+    before = {p.pid for p in multiprocessing.active_children()}
+    result = worker._run_owned_worker(
+        b"3", timeout_ms=15_000, cancel=None, entrypoint=result_then_delayed_exit
+    )
+    assert result == b"completed-synthetic-result"
+    assert {p.pid for p in multiprocessing.active_children()} <= before
+    assert not any(t.name == "bo-desirability-receiver" for t in threading.enumerate())
+
+
+@pytest.mark.parametrize("case", ["cancel", "timeout", "nonzero_exit"])
+def test_post_result_exit_still_checks_cancel_deadline_and_exit_code(case):
+    ready = multiprocessing.get_context("spawn").Event()
+    cancel = threading.Event()
+    waiter = None
+    if case == "cancel":
+
+        def cancel_after_result():
+            if ready.wait(timeout=15):
+                cancel.set()
+
+        waiter = threading.Thread(target=cancel_after_result)
+        waiter.start()
+    before = {p.pid for p in multiprocessing.active_children()}
+    expected = {
+        "cancel": "cancelled",
+        "timeout": "time_budget_exhausted",
+        "nonzero_exit": "worker_failed",
+    }[case]
+    try:
+        with pytest.raises(BayesianOptimizationError, match=expected):
+            worker._run_owned_worker(
+                b"synthetic",
+                timeout_ms=15_000,
+                cancel=cancel,
+                entrypoint=partial(
+                    result_then_delayed_exit,
+                    delay=60,
+                    ready=ready,
+                    exit_code=7 if case == "nonzero_exit" else 0,
+                ),
+            )
+    finally:
+        if waiter is not None:
+            waiter.join(timeout=16)
+    assert ready.is_set(), "Probe must publish a result before testing teardown"
     assert {p.pid for p in multiprocessing.active_children()} <= before
     assert not any(t.name == "bo-desirability-receiver" for t in threading.enumerate())

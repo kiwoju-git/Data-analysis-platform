@@ -28,3 +28,16 @@ def partial_frame(output, payload_bytes):
         time.sleep(60)
     finally:
         output.close()
+
+
+def result_then_delayed_exit(output, payload_bytes, *, delay=3, ready=None, exit_code=0):
+    import os
+    from multiprocessing.util import Finalize
+
+    Finalize(None, time.sleep, args=(delay,), exitpriority=0)
+    output.send_bytes(b"completed-synthetic-result")
+    output.close()
+    if ready is not None:
+        ready.set()
+    if exit_code:
+        os._exit(exit_code)

@@ -3902,13 +3902,13 @@ def test_bayesian_versioned_response_and_replicate_contracts(
         assert "response_values" in schemas[name]["required"]
         assert schemas[name]["properties"]["objective_value"]["type"] == "null"
         values = schemas[name]["properties"]["response_values"]
-        assert values["minProperties"] == 1 and values["maxProperties"] == 4
+        assert values["minProperties"] == 1 and values["maxProperties"] == 6
         assert values["patternProperties"] == {r"^[A-Za-z][A-Za-z0-9_]{0,63}$": {"type": "number"}}
     objective = schemas["BayesianDesirabilityObjective"]
     assert objective["additionalProperties"] is False
     assert objective["properties"]["goal_type"]["const"] == "desirability"
     assert objective["properties"]["curve_policy"]["const"] == "derringer_suich_linear_v1"
-    assert objective["properties"]["responses"]["maxItems"] == 4
+    assert objective["properties"]["responses"]["maxItems"] == 6
     replicate = schemas["BayesianReplicateTrialResponse"]
     assert replicate["properties"]["origin"]["const"] == "replicate"
     assert "replicate_of_trial_id" in replicate["required"]

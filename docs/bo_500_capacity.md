@@ -1,5 +1,9 @@
 # BO 500 Capacity
 
+Final integration evidence and limitations are tracked in
+[bo_capacity_finalization.md](bo_capacity_finalization.md); the logs below are
+earlier implementation checkpoints, not final-source CI claims.
+
 Date: 2026-11-14. Base: `0a4f6ec5fd94217210a7b4ec11b37e611fe667ae`.
 Isolated branch: `feat/bo-500-observations`. Synthetic workspaces were used for
 testing; the owner-approved local preview was subsequently upgraded after backup.

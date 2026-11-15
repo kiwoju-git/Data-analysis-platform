@@ -239,8 +239,16 @@ def _run_owned_worker(
                     raise BayesianOptimizationError(
                         "bayesian_desirability_result_invalid"
                     ) from None
-                process.join(timeout=2)
-                if process.is_alive() or process.exitcode != 0:
+                # Receiving a frame is not process completion. Teardown shares
+                # the original deadline and remains cancellable, like calculation.
+                process.join(timeout=min(0.05, max(0.0, deadline - time.monotonic())))
+                if process.is_alive():
+                    continue
+                if cancel is not None and cancel.is_set():
+                    raise BayesianOptimizationError("bayesian_desirability_cancelled")
+                if time.monotonic() >= deadline:
+                    raise BayesianOptimizationError("bayesian_optimization_time_budget_exhausted")
+                if process.exitcode != 0:
                     raise BayesianOptimizationError("bayesian_desirability_worker_failed")
                 return data
     finally:

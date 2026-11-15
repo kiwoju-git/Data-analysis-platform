@@ -50,7 +50,7 @@ def test_500_vector_reads_do_not_rebuild_the_fixed_schema(monkeypatch):
         '{"yield":"40"}',
         '{"yield":null}',
         '{"invalid response id":40}',
-        '{"a":1,"b":2,"c":3,"d":4,"e":5}',
+        '{"a":1,"b":2,"c":3,"d":4,"e":5,"f":6,"g":7}',
         "{}",
         "[]",
         "null",
