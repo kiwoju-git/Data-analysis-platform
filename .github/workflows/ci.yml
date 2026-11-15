@@ -414,7 +414,8 @@ jobs:
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File .\scripts\bootstrap.ps1
       - name: Complete native backend shard
-        shell: pwsh
+        # Match check.ps1: PS7 -> Python -> PS5 inherits incompatible module paths.
+        shell: powershell
         run: .\.venv\Scripts\python.exe -m pytest backend/tests -p scripts.pytest_shard --datalab-shard-index ${{ matrix.shard }} --datalab-shard-count 2 --datalab-shard-manifest .tmp/windows-shard-${{ matrix.shard }}.json --durations=25
       - name: Upload collection coverage
         if: always()

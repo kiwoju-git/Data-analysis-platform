@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts/release_readiness.py"
@@ -101,6 +102,14 @@ def test_windows_shards_preserve_the_existing_product_gate() -> None:
     check = (ROOT / "scripts/check.ps1").read_text(encoding="utf-8")
     assert "[switch] $SkipBackendTests" in check
     assert "if (-not $SkipBackendTests)" in check
+
+
+def test_windows_shards_use_native_powershell_module_environment() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["windows-backend"]["steps"]
+    step = next(item for item in steps if item.get("name") == "Complete native backend shard")
+    assert step["shell"] == "powershell"
+    assert "-m pytest backend/tests -p scripts.pytest_shard" in step["run"]
 
 
 def test_version_uses_metadata_or_explicit_validated_override(tmp_path: Path) -> None:

@@ -195,6 +195,18 @@ partition/shard/release-readiness test group then passed195 tests; Ruff and
 format checks passed. Independent review found no other contradictory Windows
 gate assertion. These failed native runs remain evidence, not a passing final CI.
 
+The same run's Windows shard1 exposed two additional archive-fingerprint test
+failures (`Get-FileHash` unavailable). The new shard launched Python directly
+from PowerShell7; Python's Windows PowerShell5.1 children inherited incompatible
+PS7 module paths. This is the intermediate-process case documented by
+[Microsoft PSModulePath](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_psmodulepath?view=powershell-7.3).
+Only the shard execution shell now uses Windows PowerShell, restoring the
+original check.ps1 process ancestry. Hashing, child environments, test assertions
+and budgets are unchanged. An exact-shell regression failed before that change.
+The complete local startup/partition/shard/readiness group then passed230 tests
+in159.17s; Ruff/format passed. Independent review accepted the narrow environment
+fix. Native Windows confirmation is still required.
+
 ## Verification Ledger
 
 - Fresh full-check attempts retained: missing worktree Ruff launcher corrected
