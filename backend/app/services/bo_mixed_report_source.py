@@ -17,6 +17,7 @@ from app.api.v1.schemas.bo_mixed_studies import (
     mixed_factor_domains,
 )
 from app.api.v1.schemas.reports import BayesianHistoryReportSource
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.services.bayesian_studies import (
     SUPPORTED_BAYESIAN_STUDY_METHOD_VERSIONS,
@@ -114,7 +115,7 @@ def read_mixed_bayesian(
         not isinstance(members, list)
         or not all(isinstance(item, str) for item in members)
         or len(members) != history.completed_trial_count
-        or len(members) > 200
+        or len(members) > MAX_BAYESIAN_TRIALS
         or len(set(members)) != len(members)
     ):
         raise invalid("report_source_changed")
@@ -162,9 +163,9 @@ def read_mixed_bayesian(
         cutoff = config.get("source_trial_count") if isinstance(config, dict) else None
         if (
             type(cutoff) is not int
-            or not 1 <= cutoff <= 200
+            or not 1 <= cutoff <= MAX_BAYESIAN_TRIALS
             or not 1 <= record.batch_size <= 8
-            or cutoff + record.batch_size > 200
+            or cutoff + record.batch_size > MAX_BAYESIAN_TRIALS
         ):
             raise invalid("report_source_changed")
         # Later trials and batches are not dependencies of this immutable source.

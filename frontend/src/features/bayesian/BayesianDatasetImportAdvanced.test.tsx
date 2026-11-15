@@ -32,6 +32,7 @@ class Runner {
       const effects: (() => void)[] = [], previous = dispatcher.current;
       dispatcher.current = {
         useContext: () => null,
+        useId: () => { const slot = this.slot(); if (!("value" in slot)) slot.value = `test-import-${this.cursor}`; return slot.value; },
         useRef: (value: unknown) => { const slot = this.slot(); if (!("value" in slot)) slot.value = { current: value }; return slot.value; },
         useState: (initial: unknown) => {
           const slot = this.slot(); if (!("value" in slot)) slot.value = typeof initial === "function" ? (initial as () => unknown)() : initial;

@@ -20,6 +20,7 @@ from app.api.v1.schemas.bo_mixture import (
     MixtureGroupRequest,
     MixtureStudyDefinition,
 )
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 
 class MixtureImportComponent(MixtureComponentRequest):
@@ -41,7 +42,9 @@ class MixtureDatasetImportPreflightRequest(BaseModel):
     mixture: MixtureGroupRequest
     factor_mappings: list[MixtureDatasetFactorMapping] = Field(min_length=2, max_length=10)
     objective: AnyDesirabilityObjective
-    response_mappings: list[DatasetResponseMapping] = Field(min_length=1, max_length=4)
+    response_mappings: list[DatasetResponseMapping] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     constraints: list[BayesianLinearConstraintRequest] = Field(default_factory=list, max_length=16)
     filter_snapshot: AnalysisFilterSnapshot
     missing_policy: Literal["reject", "complete_case"]

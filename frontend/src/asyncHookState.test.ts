@@ -4292,6 +4292,23 @@ describe("async workbench hooks", () => {
     runner.unmount();
   });
 
+  it("suggests capacity for imported scalar studies without resetting an edited budget", async () => {
+    apiMocks.fetchLatestBayesianRecommendation.mockResolvedValue({ item: null });
+    const props = { selectedStudyId: "imported-240", sourceTrialCount: 240,
+      sourceHistoryKey: "history-a", requestedRecommendationId: null, onRecommendationSelected: vi.fn() };
+    const runner = new HookRunner(useBayesianRecommendationState, props);
+    await runner.flush();
+    expect(runner.output.totalTrialBudget).toBe("248");
+    await runner.act(() => runner.output.setTotalTrialBudget("300"));
+    runner.update({ ...props, sourceHistoryKey: "history-b", sourceTrialCount: 241 });
+    await runner.flush();
+    expect(runner.output.totalTrialBudget).toBe("300");
+    runner.update({ ...props, selectedStudyId: "imported-499", sourceTrialCount: 499 });
+    await runner.flush();
+    expect(runner.output.totalTrialBudget).toBe("500");
+    runner.unmount();
+  });
+
   it("restores only the current Study recommendation and preserves its request budget", async () => {
     const latestA = deferred<{ item: BayesianRecommendationResponse | null }>();
     const exactB = deferred<BayesianRecommendationResponse>();

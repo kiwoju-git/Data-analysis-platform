@@ -5,6 +5,7 @@ import { buildVectorObjective, type ResponseGoalDraft } from "./bayesianVectorDr
 import { parseMixedConstraintDefinitions, parseMixedFactorDefinitions, type MixedConstraintDraft, type MixedFactorDraft } from "./boMixedDraft";
 import type { MixtureDatasetImportRequest } from "../../api/boMixture";
 import { buildMixtureDatasetRequest } from "./boMixtureDraft";
+export { datasetImportFieldIssues } from "./boDatasetImportValidation";
 
 export interface DatasetImportFactorDraft extends MixedFactorDraft { columnId: string }
 export interface DatasetImportDraft {
@@ -15,7 +16,7 @@ export interface DatasetImportDraft {
   displayNames?: Record<string, string>;
   mixture?: { total: string; unit: string; coding: "lower" | "upper" | "auto"; componentKeys: number[] };
 }
-type ImportVersion = Pick<DatasetVersionResponse, "version_id" | "schema_hash"> & {
+export type ImportVersion = Pick<DatasetVersionResponse, "version_id" | "schema_hash"> & {
   columns: Pick<DatasetColumnResponse, "column_id" | "display_name" | "unit">[];
 };
 export function buildDatasetImportRequest(version: ImportVersion, filter: AnalysisFilterSnapshot, draft: DatasetImportDraft): DatasetImportRequest | MixtureDatasetImportRequest | string {

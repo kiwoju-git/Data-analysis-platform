@@ -30,12 +30,15 @@ function localeHeaders(existing: HeadersInit | undefined): HeadersInit {
   return headers;
 }
 
+export interface ApiCountLimits { observed_count: number; maximum_count: number }
+
 export class ApiRequestError extends Error {
   readonly status: number;
   readonly code: string;
   readonly routeNotFound: boolean;
   readonly correlationId: string | null;
   readonly backendMessage: string | null;
+  readonly limits: ApiCountLimits | null;
 
   constructor({
     status,
@@ -44,6 +47,7 @@ export class ApiRequestError extends Error {
     message,
     routeNotFound,
     correlationId,
+    limits,
   }: {
     status: number;
     code: string;
@@ -51,6 +55,7 @@ export class ApiRequestError extends Error {
     message?: string;
     routeNotFound: boolean;
     correlationId: string | null;
+    limits?: ApiCountLimits | null;
   }) {
     super(code);
     this.name = "ApiRequestError";
@@ -59,6 +64,7 @@ export class ApiRequestError extends Error {
     this.routeNotFound = routeNotFound;
     this.correlationId = correlationId;
     this.backendMessage = backendMessage ?? message ?? null;
+    this.limits = safeImportCountLimits(code, limits);
   }
 }
 
@@ -70,6 +76,7 @@ export async function apiRequestError(
   let backendMessage: string | null = null;
   let correlationId: string | null = null;
   let detail: string | null = null;
+  let limits: ApiCountLimits | null = null;
   try {
     const payload: unknown = await response.json();
     if (typeof payload === "object" && payload !== null) {
@@ -80,6 +87,7 @@ export async function apiRequestError(
         const errorRecord = error as Record<string, unknown>;
         if (typeof errorRecord.code === "string") backendCode = errorRecord.code;
         if (typeof errorRecord.message === "string") backendMessage = errorRecord.message;
+        limits = safeImportCountLimits(backendCode, errorRecord.limits);
         if (typeof errorRecord.correlation_id === "string") {
           correlationId = errorRecord.correlation_id;
         }
@@ -97,9 +105,18 @@ export async function apiRequestError(
     backendMessage: backendMessage ?? detail,
     routeNotFound,
     correlationId,
+    limits,
   });
   observeApiFailure({ code: error.code, status: error.status, correlationId: error.correlationId });
   return error;
+}
+
+function safeImportCountLimits(code: string | null, value: unknown): ApiCountLimits | null {
+  if (code !== "bayesian_import_trial_limit" || typeof value !== "object" || value === null) return null;
+  const { observed_count, maximum_count } = value as Record<string, unknown>;
+  if (typeof observed_count !== "number" || !Number.isSafeInteger(observed_count) || observed_count < 0 ||
+    typeof maximum_count !== "number" || !Number.isSafeInteger(maximum_count) || maximum_count < 1) return null;
+  return { observed_count, maximum_count };
 }
 
 export async function apiErrorCode(response: Response, fallback: string): Promise<string> {

@@ -139,7 +139,7 @@ def test_discrete_identity_uses_canonical_level_index():
 
 @pytest.mark.parametrize("mode", ["retain_raw", "exact_replicates", "nearby_diagnostics"])
 def test_raw_budget_cannot_be_bypassed_by_compression(mode):
-    rows = _observations([0] * 200 + [1], list(range(201)))
+    rows = _observations([0] * 500 + [1], list(range(501)))
     kwargs = {"nearby_tolerances": {"x": 0.1}} if mode == "nearby_diagnostics" else {}
     with pytest.raises(BoObservationGroupsError, match="observation_limit"):
         prepare_bo_observation_view(rows, _factors(), mode=mode, **kwargs)
@@ -248,7 +248,7 @@ def test_empty_or_insufficient_observations_fail(rows):
         prepare_bo_observation_view(rows, _factors())
 
 
-@pytest.mark.parametrize("minimum", [0, 1, True, 1.5, 201])
+@pytest.mark.parametrize("minimum", [0, 1, True, 1.5, 501])
 def test_explicit_minimum_cannot_weaken_product_unique_policy(minimum):
     with pytest.raises(BoObservationGroupsError, match="unique_condition_policy_invalid"):
         prepare_bo_observation_view(

@@ -6,10 +6,13 @@ import { BayesianTargetCurvePreview } from "./BayesianTargetCurvePreview";
 import { desirabilityMessages } from "../../i18n/boDesirability";
 import { BayesianCurvePolicy } from "./BayesianCurvePolicy";
 import { curvePolicyMessages } from "../../i18n/boCurvePolicy";
+import { BoInlineFieldError } from "./BoImportFieldFeedback";
+import { boFieldProps, type BoFieldFeedback } from "./boImportFieldSupport";
+import { MAX_BO_RESPONSES } from "./boLimits";
 
 type GoalEditor = Pick<ReturnType<typeof useBayesianStudyDraftState>, "responseGoals" | "updateResponseGoal" | "removeResponseGoal" | "addResponseGoal"> &
   Partial<Pick<ReturnType<typeof useBayesianStudyDraftState>, "studyName" | "factors" | "predecessorStudyId">>;
-export function BayesianResponseGoals({ draft, sourceKey, namesReadOnly = false, showCreationNotice = true }: { draft: GoalEditor; sourceKey?: string; namesReadOnly?: boolean; showCreationNotice?: boolean }) {
+export function BayesianResponseGoals({ draft, sourceKey, namesReadOnly = false, showCreationNotice = true, fieldFeedback }: { draft: GoalEditor; sourceKey?: string; namesReadOnly?: boolean; showCreationNotice?: boolean; fieldFeedback?: (key: number, field: string) => BoFieldFeedback }) {
   const { locale } = useI18n();
   const text = (ko: string, en: string) => boText(locale, ko, en);
   return <section aria-label={text("반응별 목표", "Response goals")}>
@@ -33,16 +36,17 @@ export function BayesianResponseGoals({ draft, sourceKey, namesReadOnly = false,
         {(["lower", "target", "upper", "importance"] as const).map(field => {
           const unused = (field === "lower" && row.goal === "minimize") || (field === "upper" && row.goal === "maximize");
           const label = { lower: text("하한", "lower"), target: text("목표값", "target"), upper: text("상한", "upper"), importance: text("중요도", "importance") }[field];
-          return <td key={field}>{unused ? <span aria-label={text("해당 없음", "Not applicable")}>-</span> : <input inputMode="decimal"
+          const feedback = fieldFeedback?.(row.key, field);
+          return <td key={field}>{unused ? <span aria-label={text("해당 없음", "Not applicable")}>-</span> : <><input inputMode="decimal" {...boFieldProps(feedback)}
             aria-label={`${text("반응", "Response")} ${index + 1} ${label}`} value={row[field]}
-            onChange={event => draft.updateResponseGoal(row.key, field, event.currentTarget.value)} />}</td>;
+            onChange={event => draft.updateResponseGoal(row.key, field, event.currentTarget.value)} /><BoInlineFieldError feedback={feedback} /></>}</td>;
         })}
         <td><button type="button" className="secondary-button" disabled={draft.responseGoals.length <= 1}
           aria-label={`${text("반응 삭제", "Remove response")} ${index + 1}`} title={text("반응 삭제", "Remove response")}
           onClick={() => draft.removeResponseGoal(row.key)}><Trash2 size={16} aria-hidden="true" /></button></td>
       </tr>)}</tbody>
     </table></div>
-    <button type="button" className="secondary-button" disabled={draft.responseGoals.length >= 4} onClick={draft.addResponseGoal}>
+    <button type="button" className="secondary-button" disabled={draft.responseGoals.length >= MAX_BO_RESPONSES} onClick={draft.addResponseGoal}>
       <Plus size={16} aria-hidden="true" /> {text("반응 추가", "Add response")}
     </button>
     <BayesianCurvePolicy draft={draft} />

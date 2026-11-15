@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from importlib.metadata import version
 from typing import Any, Literal
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
@@ -402,17 +403,17 @@ def fit_bo_mixed_surrogate(
     ):
         raise _invalid()
     domains = tuple(factor_domains)
-    points = validate_mixed_coordinates(x, domains, maximum=200)
+    points = validate_mixed_coordinates(x, domains, maximum=MAX_BAYESIAN_TRIALS)
     y = _numeric_array(targets_scaled)
     if y.shape != (len(points),):
         raise _invalid()
     counts = tuple(group_counts) if group_counts is not None else (1,) * len(points)
     if len(counts) != len(points) or any(
-        type(value) is not int or not 1 <= value <= 200 for value in counts
+        type(value) is not int or not 1 <= value <= MAX_BAYESIAN_TRIALS for value in counts
     ):
         raise _invalid("bayesian_observation_group_invalid")
     raw_count = sum(counts)
-    if not 2 <= raw_count <= 200 or (
+    if not 2 <= raw_count <= MAX_BAYESIAN_TRIALS or (
         raw_observation_count is not None
         and (type(raw_observation_count) is not int or raw_observation_count != raw_count)
     ):

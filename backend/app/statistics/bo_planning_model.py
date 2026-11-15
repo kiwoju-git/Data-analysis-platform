@@ -13,6 +13,7 @@ from app.api.v1.schemas.bo_curve_calculation import DesirabilityCurveCalculation
 from app.api.v1.schemas.bo_desirability_batch_calculation import DesirabilityBatchCalculationRequest
 from app.api.v1.schemas.bo_desirability_calculation import _Incumbent
 from app.api.v1.schemas.bo_fit_quality import DesirabilityFitCalculationRequest
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
     _SearchBudget,
@@ -484,7 +485,7 @@ def _eligibility_coordinates(
 ) -> list[list[float]]:
     if current is None:
         return model.excluded
-    if not isinstance(current, list) or len(current) > 200:
+    if not isinstance(current, list) or len(current) > MAX_BAYESIAN_TRIALS:
         raise BayesianOptimizationError("bayesian_candidate_input_invalid")
     rows = list(current)
     for row in model.excluded:

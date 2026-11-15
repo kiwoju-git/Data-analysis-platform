@@ -13,6 +13,7 @@ from app.api.v1.schemas.bo_mixed_planning import (
     MixedPlanningSelectionCalculation,
 )
 from app.api.v1.schemas.bo_mixed_studies import mixed_constraint_definitions, mixed_factor_domains
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_desirability import composite_desirability, independent_desirability_moments
 from app.statistics.bo_desirability_acquisition import beta_expected_improvement
@@ -477,7 +478,7 @@ def evaluate_mixed_planning_points(
     if eligibility_excluded_encoded is not None:
         if (
             type(eligibility_excluded_encoded) is not list
-            or len(eligibility_excluded_encoded) > 200
+            or len(eligibility_excluded_encoded) > MAX_BAYESIAN_TRIALS
         ):
             raise _error("bayesian_planning_input_invalid")
         for point in eligibility_excluded_encoded:
@@ -570,7 +571,7 @@ def score_mixed_ordered_selection(
     if eligibility_excluded_encoded is not None:
         if (
             type(eligibility_excluded_encoded) is not list
-            or len(eligibility_excluded_encoded) > 200
+            or len(eligibility_excluded_encoded) > MAX_BAYESIAN_TRIALS
         ):
             raise _error("bayesian_planning_input_invalid")
         for point in eligibility_excluded_encoded:

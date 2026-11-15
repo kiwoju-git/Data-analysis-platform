@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 
 POLICY = "fixed_full_fit_parameters_row_loo_v1"
@@ -19,7 +20,7 @@ def conditional_row_loo(model: Any, raw_x: Any, raw_y: Any, trial_ids: list[str]
     x, y = np.asarray(raw_x, dtype=float), np.asarray(raw_y, dtype=float)
     n = len(trial_ids)
     if (
-        not 2 <= n <= 200
+        not 2 <= n <= MAX_BAYESIAN_TRIALS
         or len(set(trial_ids)) != n
         or any(not isinstance(key, str) or not key for key in trial_ids)
         or x.ndim != 2

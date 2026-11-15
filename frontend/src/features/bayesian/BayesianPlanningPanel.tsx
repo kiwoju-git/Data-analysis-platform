@@ -21,6 +21,7 @@ import { BayesianProfileMatrix } from "./BayesianProfileMatrix";
 import { useBoDiagnosticView } from "./hooks/useBoDiagnosticView";
 import { matrixFromReceipt } from "./boSavedViews";
 import { BoViewSaveAction } from "./BoViewSaveAction";
+import { MAX_BO_TRIALS } from "./boLimits";
 
 interface Props { study: BayesianStudyResponse; fitRequest: DesirabilityReviewRequest | null; disabled?: boolean; onConfirmed: (batchId: string) => void; onConfirmingChange?: (busy: boolean) => void; manualSeed?: AugmentationManualSeed | null }
 function initialHolds(study: BayesianStudyResponse): Record<string, string> {
@@ -45,7 +46,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   const [name, setName] = useState("");
   const [count, setCount] = useState(String(Math.min(study.factors.length * 1000, 10000)));
   const [seed, setSeed] = useState("0"), [content, setContent] = useState(""), [header, setHeader] = useState(false);
-  const [budget, setBudget] = useState(String(fitRequest?.total_trial_budget ?? Math.min(200, study.trial_count + 8)));
+  const [budget, setBudget] = useState(String(fitRequest?.total_trial_budget ?? Math.min(MAX_BO_TRIALS, study.trial_count + 8)));
   const [pastePreview, setPastePreview] = useState<{ sourceKey: string; content: string; header: boolean; points: Record<string, number>[] } | null>(null);
   const [inputError, setInputError] = useState(false);
   const [holds, setHolds] = useState(() => initialHolds(study));
@@ -62,7 +63,7 @@ export function BayesianPlanningPanel({ study, fitRequest, disabled = false, onC
   const canEdit = state.canMutate && page?.revision.source_is_current === true && page.revision.source_trial_count === study.trial_count;
   const countValue = planningInteger(count, 1, 10000), seedValue = planningInteger(seed, 0, 2147483647);
   const fitIsCurrent = fitRequest !== null && fitRequest.expected_history_revision_id === study.observation_history.history_revision_id && fitRequest.expected_history_sha256 === study.observation_history.observation_history_sha256;
-  const budgetValue = planningInteger(budget, Math.max(2, study.trial_count + state.order.current.length), 200);
+  const budgetValue = planningInteger(budget, Math.max(2, study.trial_count + state.order.current.length), MAX_BO_TRIALS);
   const point = parsePlanningPoint(holds, study.factors), curve = planningProfilePoints(holds, study.factors, axis);
   const preview = pastePreview?.sourceKey === sourceKey && pastePreview.content === content && pastePreview.header === header ? pastePreview : null;
   const evaluatedRows = new Map(state.pageEvaluation?.items.map(row => [row.row_id, row]));

@@ -24,7 +24,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   const callback = useRef(onConfirmed); callback.current = onConfirmed;
   const [models, setModels] = useState<MixedModelSummary[]>([]), [candidates, setCandidates] = useState<MixedCandidateSummary[]>([]), [selections, setSelections] = useState<MixedSelectionSummary[]>([]);
   const [model, setModel] = useState<MixedModelDetail | null>(null), [page, setPage] = useState<MixedCandidatePage | null>(null), [selection, setSelection] = useState<MixedSelectionResponse | null>(null);
-  const [fitDraft, setFitDraft] = useState(() => initialMixedFit(study)), [draft, setDraft] = useState(initialMixedSelection);
+  const [fitDraft, setFitDraft] = useState(() => initialMixedFit(study)), [draft, setDraft] = useState(() => initialMixedSelection(study.trial_count));
   const [autoReference, setAutoReference] = useState<AutoEvidenceRequest | null>(null);
   const [order, setOrder] = useState<{ past: string[][]; current: string[]; future: string[][] }>({ past: [], current: [], future: [] });
   const [profile, setProfile] = useState<MixedProfile | null>(null), [evaluatedPage, setEvaluatedPage] = useState<{ revision: string; offset: number; model: string; rows: EvaluatedMixedCandidateRow[] } | null>(null);
@@ -48,7 +48,7 @@ export function useMixedPlanning({ study, disabled, onConfirmed }: Options) {
   useEffect(() => {
     mounted.current = true; stateOwner.current = token; fence.invalidate(); running.current = false;
     setAutoReference(null);
-    setModel(null); setPage(null); setSelection(null); setProfile(null); setEvaluatedPage(null); setOrder({ past: [], current: [], future: [] }); setFitDraft(initialMixedFit(study)); setDraft(initialMixedSelection());
+    setModel(null); setPage(null); setSelection(null); setProfile(null); setEvaluatedPage(null); setOrder({ past: [], current: [], future: [] }); setFitDraft(initialMixedFit(study)); setDraft(initialMixedSelection(study.trial_count));
     setModels([]); setCandidates([]); setSelections([]); setError(null); setRetry(null); if (!commit.pending()) setBusy(null);
     void latestRefresh.current();
     return () => { mounted.current = false; fence.invalidate(); catalogLane.current += 1; };

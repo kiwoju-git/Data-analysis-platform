@@ -1,5 +1,6 @@
 import type { DatasetImportedInitialDesign } from "../../api/types/boDatasetSource";
 import { planningHash, planningId } from "./boPlanningDraft";
+import { MAX_BO_TRIALS } from "./boLimits";
 
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const count = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): value is number =>
@@ -7,7 +8,7 @@ const count = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): value is
 
 export function validDatasetImportedInitialDesign(value: unknown, factorIds?: readonly string[], responseIds?: readonly string[], expectedVersion: 1 | 2 = 1): value is DatasetImportedInitialDesign {
   if (!record(value) || value.policy !== "dataset_observations_v1" || value.import_schema_version !== expectedVersion ||
-    !count(value.n_total) || !count(value.n_filtered) || !count(value.n_missing) || !count(value.n_used, 1, 200) ||
+    !count(value.n_total) || !count(value.n_filtered) || !count(value.n_missing) || !count(value.n_used, 1, MAX_BO_TRIALS) ||
     value.n_total !== value.n_filtered + value.n_missing + value.n_used ||
     value.requested_size !== value.n_used || value.generated_size !== value.n_used ||
     !count(value.unique_coordinate_count, 1, value.n_used) ||

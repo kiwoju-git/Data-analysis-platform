@@ -28,6 +28,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _StrictModel,
     _StrictObservationPolicy,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class DesirabilityBatchOptions(_StrictModel):
@@ -41,10 +42,16 @@ class _BatchCalculationRequestFields(_StrictModel):
     batch_options: DesirabilityBatchOptions
     factors: list[DesirabilityFactor] = Field(min_length=1, max_length=10)
     constraints: list[_Constraint] = Field(max_length=16)
-    observations: list[DesirabilityObservation] = Field(min_length=2, max_length=200)
-    excluded_normalized: list[list[FiniteFloat]] = Field(min_length=1, max_length=200)
+    observations: list[DesirabilityObservation] = Field(
+        min_length=2, max_length=MAX_BAYESIAN_TRIALS
+    )
+    excluded_normalized: list[list[FiniteFloat]] = Field(
+        min_length=1, max_length=MAX_BAYESIAN_TRIALS
+    )
     objective: Any
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: _StrictObservationPolicy
     xi_desirability: FiniteFloat = Field(ge=0)
     search: DesirabilitySearch
@@ -88,7 +95,7 @@ class _CovarianceSummary(_StrictModel):
 class _Sampler(_NumericalPolicyFields):
     policy_version: Literal["conditional_mc_desirability_beta_marginal_v1"]
     root_seed: int = Field(ge=0, le=2_147_483_647)
-    response_sample_seeds: dict[Identifier, str] = Field(min_length=1, max_length=4)
+    response_sample_seeds: dict[Identifier, str] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     batch_step: int = Field(ge=0, le=7)
     requested_sample_count: int = Field(ge=16, le=256)
     effective_sample_count: int = Field(ge=0, le=256)
@@ -100,7 +107,7 @@ class _Sampler(_NumericalPolicyFields):
     score_is_exact_joint_ei: Literal[False]
     mc_standard_error_excludes_beta_approximation_error: Literal[True]
     covariance_adjustment_is_measurement_noise: Literal[False]
-    selected_covariance: dict[Identifier, _CovarianceSummary] = Field(max_length=4)
+    selected_covariance: dict[Identifier, _CovarianceSummary] = Field(max_length=MAX_BO_RESPONSES)
     moment_evaluation_unit: Literal["joint_response_desirability_moments"]
     max_moment_evaluations: int = Field(ge=1, le=65536)
     moment_evaluations: int = Field(ge=1, le=65536)
@@ -119,7 +126,7 @@ class _ResponseProof(_StrictModel):
 
 
 class _PlanningProof(_StrictModel):
-    response_proofs: dict[Identifier, _ResponseProof] = Field(max_length=4)
+    response_proofs: dict[Identifier, _ResponseProof] = Field(max_length=MAX_BO_RESPONSES)
     thresholds: list[FiniteFloat] = Field(max_length=256)
     sample_moments: list[DesirabilityMomentResult] = Field(max_length=256)
 
@@ -127,7 +134,9 @@ class _PlanningProof(_StrictModel):
 class _Planning(_StrictModel):
     score: FiniteFloat = Field(ge=0, le=1)
     mc_standard_error: FiniteFloat = Field(ge=0, le=0.5)
-    conditional_variance_raw: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=4)
+    conditional_variance_raw: dict[Identifier, FiniteFloat] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     search_seed: int = Field(ge=0, le=2**32 - 1)
     sampler: _Sampler
     proof: _PlanningProof
@@ -137,7 +146,9 @@ class DesirabilityBatchCandidate(_StrictModel):
     rank: int = Field(ge=1, le=8)
     actual_coordinates: dict[Identifier, FiniteFloat]
     normalized_coordinates: dict[Identifier, FiniteFloat]
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition
     nearest_existing_distance: FiniteFloat = Field(ge=0)
@@ -150,7 +161,7 @@ class _BatchBudget(_Budget):
     searches: list[BayesianMixedSearchSummary] = Field(min_length=1, max_length=8)
     max_moment_evaluations: int = Field(ge=1, le=65536)
     moment_evaluations: int = Field(ge=1, le=65536)
-    incumbent_moment_evaluations: int = Field(ge=1, le=200)
+    incumbent_moment_evaluations: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     response_moment_evaluations: int = Field(ge=1, le=262144)
     initial_pool_upper_bound_per_step: int = Field(ge=1, le=4416)
     preflight_moment_allowance: int = Field(ge=1, le=65536)

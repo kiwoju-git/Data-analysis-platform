@@ -10,12 +10,14 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from app.core.bo_limits import MAX_BO_PLANNING_BYTES
 from app.storage.bayesian_studies import BayesianStorageConflict
 from app.storage.metadata import metadata_db_path
 
 MAX_OWNER_MODELS = 32
 MAX_OWNER_CANDIDATE_SETS = 32
-MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
+MAX_DOCUMENT_BYTES = MAX_BO_PLANNING_BYTES
+MAX_NON_MODEL_DOCUMENT_BYTES = 16 * 1024 * 1024
 MAX_OWNER_SELECTIONS = 32
 MAX_OWNER_BYTES = 128 * 1024 * 1024
 MAX_WORKSPACE_BYTES = 256 * 1024 * 1024
@@ -81,9 +83,14 @@ def require_current_source(
 def _documents(record: dict[str, Any], pairs: tuple[tuple[str, str], ...]) -> None:
     for field, digest in pairs:
         value = record[field]
+        limit = (
+            MAX_DOCUMENT_BYTES
+            if field == "snapshot_json"
+            else min(MAX_DOCUMENT_BYTES, MAX_NON_MODEL_DOCUMENT_BYTES)
+        )
         if (
             not isinstance(value, str)
-            or len(value.encode("utf-8")) > MAX_DOCUMENT_BYTES
+            or len(value.encode("utf-8")) > limit
             or hashlib.sha256(value.encode("utf-8")).hexdigest() != record[digest]
         ):
             raise BayesianStorageConflict("bayesian_planning_artifact_invalid")

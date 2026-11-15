@@ -8,6 +8,7 @@ import { bayesianRequestId } from "../bayesianRequestId";
 import { validDatasetImportedInitialDesign } from "../boDatasetSource";
 import { planningHash } from "../boPlanningDraft";
 import { sameDesirabilityJson } from "../desirabilityResponseGuard";
+import { ApiRequestError, type ApiCountLimits } from "../../../api/client";
 
 const normalizedFilter = (filter: DatasetImportRequest["filter_snapshot"]) => ({
   ...filter, conditions: filter.conditions.map(condition => ({ ...condition, value: condition.value ?? null })),
@@ -18,11 +19,12 @@ export function useDatasetImport(onCreated: (study: AnyBayesianStudyResponse | M
   const abort = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState<"preflight" | "create" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorLimits, setErrorLimits] = useState<ApiCountLimits | null>(null);
   const [review, setReview] = useState<{ request: DatasetImportRequest | MixtureDatasetImportRequest; result: Omit<DatasetImportPreflightResponse, "schema_version"> & { schema_version: 1 | 2 } } | null>(null);
   const [retryAvailable, setRetryAvailable] = useState(false);
   useEffect(() => () => { session.invalidate(); abort.current?.abort(); }, [session]);
   function invalidate() {
-    session.invalidate(); abort.current?.abort(); setBusy(null); setError(null); setReview(null); setRetryAvailable(false);
+    session.invalidate(); abort.current?.abort(); setBusy(null); setError(null); setErrorLimits(null); setReview(null); setRetryAvailable(false);
   }
   async function preflight(request: DatasetImportRequest | MixtureDatasetImportRequest | string) {
     invalidate();
@@ -36,12 +38,12 @@ export function useDatasetImport(onCreated: (study: AnyBayesianStudyResponse | M
         result.source.schema_hash !== request.expected_schema_hash || !planningHash(result.preflight_sha256)) throw new Error("bayesian_import_source_mismatch");
       if (session.current(token)) setReview({ request: structuredClone(request), result });
     } catch (cause) {
-      if (session.current(token)) setError(errorCode(cause));
+      if (session.current(token)) { setError(errorCode(cause)); setErrorLimits(cause instanceof ApiRequestError ? cause.limits : null); }
     } finally { if (session.current(token)) setBusy(null); }
   }
   async function create(retry = false) {
     if (review === null || busy !== null) return;
-    const token = session.begin(); setBusy("create"); setError(null);
+    const token = session.begin(); setBusy("create"); setError(null); setErrorLimits(null);
     try {
       const request = retry ? session.retry() : { ...review.request, request_id: bayesianRequestId(), expected_preflight_sha256: review.result.preflight_sha256 };
       if (request === null) throw new Error("bayesian_import_review_required");
@@ -56,10 +58,10 @@ export function useDatasetImport(onCreated: (study: AnyBayesianStudyResponse | M
         !sameDesirabilityJson(receipt.response_columns, Object.fromEntries(request.response_mappings.map(row => [row.response_id ?? "objective", row.column_id])))) throw new Error("bayesian_import_source_mismatch");
       if (session.current(token)) { setRetryAvailable(false); onCreated(created); }
     } catch (cause) {
-      if (session.current(token)) { setError(errorCode(cause)); setRetryAvailable(session.retry() !== null); }
+      if (session.current(token)) { setError(errorCode(cause)); setErrorLimits(cause instanceof ApiRequestError ? cause.limits : null); setRetryAvailable(session.retry() !== null); }
     } finally { if (session.current(token)) setBusy(null); }
   }
-  return { busy, error, review, retryAvailable, invalidate, preflight, create };
+  return { busy, error, errorLimits, review, retryAvailable, invalidate, preflight, create };
 }
 function errorCode(cause: unknown): string {
   const code = cause instanceof Error ? cause.message : "";

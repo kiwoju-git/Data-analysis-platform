@@ -6,6 +6,7 @@ import math
 import time
 from typing import Any
 
+from app.core.bo_limits import MAX_BO_RESPONSES
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_augmentation import CONFIRM, REFINE, REFINE_V2, select_augmentation
 from app.statistics.bo_candidate_points import validated_candidate_rows
@@ -87,7 +88,9 @@ def build_augmentation_view(
         if policy == REFINE_V2:
             definitions = raw["objective"]["responses"]
             importance = [finite_number(item["importance"]) for item in definitions]
-            if not 1 <= len(importance) <= 4 or any(value <= 0 for value in importance):
+            if not 1 <= len(importance) <= MAX_BO_RESPONSES or any(
+                value <= 0 for value in importance
+            ):
                 raise BayesianOptimizationError("bayesian_augmentation_input_invalid")
             # Same max-scaled normalization as desirability importance, without
             # constructing surrogate goals or changing the saved curve policy.

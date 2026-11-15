@@ -37,6 +37,7 @@ STAGE_CALLS = {
     "bo_progress": "verify_bo_progress",
     "bo_vector_history": "verify_bo_vector_history",
     "bo_dataset_import": "verify_bo_dataset_import",
+    "bo_capacity": "verify_capacity",
     "bo_profile_constraints": "verify_profile_constraints",
     "bo_mixture_completion": "verify_mixture_completion",
     "bo_xy_gpr_navigation": "verify_bo_xy_gpr_navigation",
@@ -81,6 +82,7 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
         "bo_progress",
         "bo_vector_history",
         "bo_dataset_import",
+        "bo_capacity",
         "bo_profile_constraints",
         "bo_mixture_completion",
         "bo_xy_gpr_navigation",
@@ -124,6 +126,8 @@ def test_default_full_order_and_exact_disjoint_suite_union(driver):
     assert "bo_vector_history" in driver.suite_stage_ids("context")
     assert "bo_xy_gpr_navigation" in driver.suite_stage_ids("context")
     assert "bo_dataset_import" in driver.suite_stage_ids("workflows")
+    assert "bo_capacity" in driver.suite_stage_ids("workflows")
+    assert "bo_capacity" not in driver.suite_stage_ids("context")
     assert "bo_profile_constraints" in driver.suite_stage_ids("workflows")
     assert "bo_mixture_completion" in driver.suite_stage_ids("workflows")
     assert "bo_profile_constraints" not in driver.suite_stage_ids("context")
@@ -169,7 +173,7 @@ def test_actual_dispatch_invokes_exact_partition_and_closes_browser(
 
         def invoke(*_args, _stage=stage, **_kwargs):
             calls.append(_stage)
-            if _stage in {"bo_dataset_import", "bo_xy_gpr_navigation"}:
+            if _stage in {"bo_dataset_import", "bo_capacity", "bo_xy_gpr_navigation"}:
                 assert _kwargs == {"isolated_workspace": True}
             if _stage == "localization_shell":
                 raise LegacyBoundary()
@@ -281,6 +285,7 @@ def test_runner_builds_only_workflows_in_fresh_owned_directory(
         manifest = json.loads((diagnostics / "suite-manifest.json").read_text(encoding="utf-8"))
         assert manifest.get("frontend_modes") == {
             "bo_dataset_import": "built",
+            "bo_capacity": "built",
             "bo_profile_constraints": "built",
             "bo_mixture_completion": "built",
             "chart_interactions": "dev",
@@ -397,6 +402,7 @@ def test_workflow_dispatch_routes_dev_fixtures_without_moving_built_journeys(
         )
     assert calls == [
         ("bo_dataset_import", "http://built"),
+        ("bo_capacity", "http://built"),
         ("bo_profile_constraints", "http://built"),
         ("bo_mixture_completion", "http://built"),
         ("chart_interactions", "http://source"),

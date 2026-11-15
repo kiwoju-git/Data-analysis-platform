@@ -32,6 +32,7 @@ from app.api.v1.schemas.bo_mixed_studies import (
     mixed_constraint_definitions,
     mixed_factor_domains,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 from app.statistics.bo_factor_domains import BoCategoricalFactorDomain, encode_bo_point
 from app.statistics.bo_mixed_initial_design import (
     mixed_constraints_satisfied,
@@ -53,7 +54,9 @@ class MixedPlanningObservation(_Model):
     trial_id: Annotated[UUID, Field(strict=False)]
     actual_coordinates: ActualPoint
     encoded_coordinates: EncodedPoint
-    response_values: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=4)
+    response_values: dict[Identifier, FiniteFloat] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     condition_key: str | None = Field(default=None, max_length=128)
 
 
@@ -72,12 +75,16 @@ class MixedPlanningCalculationRequest(_Model):
     schema_version: Literal[8]
     factors: list[MixedFactorRequest] = Field(min_length=1, max_length=10)
     constraints: list[BayesianLinearConstraintRequest] = Field(max_length=16)
-    observations: list[MixedPlanningObservation] = Field(min_length=2, max_length=200)
+    observations: list[MixedPlanningObservation] = Field(
+        min_length=2, max_length=MAX_BAYESIAN_TRIALS
+    )
     excluded_encoded: list[Annotated[list[FiniteFloat], Field(min_length=1, max_length=10)]] = (
-        Field(max_length=200)
+        Field(max_length=MAX_BAYESIAN_TRIALS)
     )
     objective: AnyDesirabilityObjective
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: MixedPlanningObservationPolicy
     xi_desirability: FiniteFloat = Field(ge=0)
     search: DesirabilitySearch
@@ -183,7 +190,9 @@ class MixedCandidateRow(_Model):
 
 
 class EvaluatedMixedCandidateRow(MixedCandidateRow):
-    response_predictions: list[_ResponsePrediction] = Field(min_length=1, max_length=4)
+    response_predictions: list[_ResponsePrediction] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     desirability_moments: DesirabilityMomentResult
     acquisition: _Acquisition | None
     prediction_source: Literal["completed_observations_base_posterior"]
@@ -197,7 +206,9 @@ class MixedManualPlanningScore(_Model):
     score: FiniteFloat = Field(ge=0, le=1)
     mc_standard_error: FiniteFloat = Field(ge=0, le=0.5)
     sampler: MixedPlanningSampler
-    conditional_variance_raw: dict[Identifier, FiniteFloat] = Field(min_length=1, max_length=4)
+    conditional_variance_raw: dict[Identifier, FiniteFloat] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     proof: _PlanningProof
 
 

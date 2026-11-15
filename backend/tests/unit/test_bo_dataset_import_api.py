@@ -189,7 +189,7 @@ def test_mixed_import_combined_category_budget_is_controlled_error(tmp_path):
         (b"x,y\n0,1\n11,2\n", "bayesian_import_factor_out_of_domain"),
         (b"x,y\n0,1\n5,inf\n", "bayesian_import_nonfinite_value"),
         (b"x,y\n0,1\n5,invalid\n", "bayesian_import_numeric_column_required"),
-        (("x,y\n" + "5,1\n" * 201).encode(), "bayesian_import_trial_limit"),
+        (("x,y\n" + "5,1\n" * 501).encode(), "bayesian_import_trial_limit"),
     ],
 )
 def test_invalid_rows_never_create_studies(tmp_path, content, code):

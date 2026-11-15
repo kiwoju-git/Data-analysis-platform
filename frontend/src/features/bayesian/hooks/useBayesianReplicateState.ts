@@ -5,6 +5,7 @@ import { createLatestRequestGuard } from "../../../latestRequest";
 import { bayesianRequestId } from "../bayesianRequestId";
 import { strictBoNumber } from "../boNoisePolicy";
 import { bayesianErrorCode } from "../bayesianDisplay";
+import { MAX_BO_TRIALS } from "../boLimits";
 
 type Snapshot = { studyId: string; studyVersionId: string; parentId: string; sourceKey: string; payload: BayesianReplicateCreateRequest };
 
@@ -37,7 +38,7 @@ export function useBayesianReplicateState(study: BayesianStudyResponse | null) {
         study.trials.some(trial => trial.state === "pending") ||
         study.trials.find(trial => trial.trial_id === parentId)?.state !== "completed" ||
         n === null || !Number.isInteger(n) || n < 1 || n > 8 || !confirmed ||
-        budget === null || !Number.isInteger(budget) || budget < 2 || budget > 200 || study.trials.length + n > budget) {
+        budget === null || !Number.isInteger(budget) || budget < 2 || budget > MAX_BO_TRIALS || study.trials.length + n > budget) {
         setError("bayesian_replicate_input_invalid"); return false;
       }
       try {

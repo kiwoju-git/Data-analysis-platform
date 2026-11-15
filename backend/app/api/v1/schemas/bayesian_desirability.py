@@ -6,12 +6,16 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
 
+from app.core.bo_limits import MAX_BO_RESPONSES
+
 if TYPE_CHECKING:
     from app.statistics.bo_desirability import DesirabilityGoal
 
 ResponseId = Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,63}$")]
 ResponseNumber = Annotated[FiniteFloat, Field(strict=True)]
-ResponseValues = Annotated[dict[ResponseId, ResponseNumber], Field(min_length=1, max_length=4)]
+ResponseValues = Annotated[
+    dict[ResponseId, ResponseNumber], Field(min_length=1, max_length=MAX_BO_RESPONSES)
+]
 
 
 class DesirabilityResponseGoal(BaseModel):
@@ -49,7 +53,7 @@ class DesirabilityResponseGoal(BaseModel):
 class DesirabilityObjective(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    responses: list[DesirabilityResponseGoal] = Field(min_length=1, max_length=4)
+    responses: list[DesirabilityResponseGoal] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
 
     @model_validator(mode="after")
     def validate_weights(self) -> DesirabilityObjective:

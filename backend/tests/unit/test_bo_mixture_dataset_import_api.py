@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -11,7 +12,8 @@ from tests.unit.test_bo_mixture_lifecycle_api import request
 from tests.unit.test_dataset_version_retention_api import _confirm
 
 
-def test_mixture_import_fixed_component_repeats_and_restart_preserve_actual(tmp_path):
+@pytest.mark.parametrize("count", [4, 240, 500])
+def test_mixture_import_fixed_component_repeats_and_restart_preserve_actual(tmp_path, count):
     settings = Settings(workspace_root=tmp_path / "mixture import workspace")
     with TestClient(create_app(settings)) as client:
         upload = client.post(
@@ -19,7 +21,11 @@ def test_mixture_import_fixed_component_repeats_and_restart_preserve_actual(tmp_
             files={
                 "file": (
                     "synthetic.csv",
-                    b"a,b,fixed,y\n0.2,0.7,0.1,1\n0.3,0.6,0.1,2\n0.4,0.5,0.1,3\n0.4,0.5,0.1,4\n",
+                    (
+                        "a,b,fixed,y\n0.2,0.7,0.1,1\n0.3,0.6,0.1,2\n"
+                        + "0.4,0.5,0.1,3\n" * (count - 3)
+                        + "0.4,0.5,0.1,4\n"
+                    ).encode(),
                     "text/csv",
                 )
             },
@@ -49,7 +55,7 @@ def test_mixture_import_fixed_component_repeats_and_restart_preserve_actual(tmp_
         }
         preview = preflight(client, body)
         assert preview["schema_version"] == 2
-        assert preview["n_used"] == 4 and preview["repeated_coordinate_count"] == 1
+        assert preview["n_used"] == count and preview["repeated_coordinate_count"] == count - 3
         commit = commit_request(body, preview)
         response = client.post(f"{ROOT}/from-dataset", json=commit)
         assert response.status_code == 201, response.text
@@ -57,8 +63,10 @@ def test_mixture_import_fixed_component_repeats_and_restart_preserve_actual(tmp_
         assert study["study_schema_version"] == 8
         assert study["initial_design"]["import_schema_version"] == 2
         assert "seed" not in study["initial_design"]
-        assert study["completed_trial_count"] == 4
-        assert [t["actual_coordinates"]["a"] for t in study["trials"]] == [0.2, 0.3, 0.4, 0.4]
+        assert study["completed_trial_count"] == count
+        assert [t["actual_coordinates"]["a"] for t in study["trials"]] == [0.2, 0.3] + [0.4] * (
+            count - 2
+        )
         assert client.post(f"{ROOT}/from-dataset", json=commit).json() == study
         missing = deepcopy(body)
         missing["factor_mappings"] = missing["factor_mappings"][:-1]

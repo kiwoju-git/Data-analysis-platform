@@ -1,7 +1,7 @@
 import type { RuntimeCapabilities, RuntimeInfoResponse } from "./api";
 
-export const EXPECTED_API_CONTRACT_VERSION = 44;
-export const MINIMUM_METADATA_SCHEMA_VERSION = 37;
+export const EXPECTED_API_CONTRACT_VERSION = 46;
+export const MINIMUM_METADATA_SCHEMA_VERSION = 39;
 
 export const REQUIRED_RUNTIME_CAPABILITIES = [
   "asset_management",

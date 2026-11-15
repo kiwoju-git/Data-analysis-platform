@@ -126,7 +126,7 @@ def verify_mixed_builder(page, base: str) -> dict:
     }
 
 
-def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evidence_only=False) -> dict:
+def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evidence_only=False, response_count=1) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -173,15 +173,15 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
                     "curve_policy": "derringer_suich_linear_v1",
                     "responses": [
                         {
-                            "response_id": "desirability",
-                            "name": "Yield",
+                            "response_id": "desirability" if i == 0 else f"y{i}",
+                            "name": "Yield" if i == 0 else f"Yield {i + 1}",
                             "unit": "g",
                             "goal": "maximize",
                             "lower": 0,
                             "target": 10,
                             "upper": None,
                             "importance": 1,
-                        }
+                        } for i in range(response_count)
                     ],
                 },
             },
@@ -214,9 +214,10 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
                 + ["1", "한글 <raw>", "=FORMULA()"].index(point["material"]) * 0.25
             )
             measured += ["low", "middle", "high"].index(point["grade"]) * 0.4
-            source.get_by_label(
-                f"Trial {trial['trial_number']}: Yield", exact=True
-            ).fill(str(measured))
+            for i, response in enumerate(study["objective"]["responses"]):
+                source.get_by_label(
+                    f"Trial {trial['trial_number']}: {response['name']}", exact=True
+                ).fill(str(measured + i * 0.1))
         source.get_by_role(
             "button", name="Review complete observations", exact=True
         ).click()
@@ -233,8 +234,10 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
             "region", name="Mixed-factor candidates and planning", exact=True
         )
         panel.get_by_label("Typed deterministic starts", exact=True).fill("1")
-        panel.get_by_label("Measurement noise", exact=True).select_option("fixed")
-        panel.get_by_label("Measured SD (response units)", exact=True).fill("0.05")
+        for noise in panel.get_by_label("Measurement noise", exact=True).all():
+            noise.select_option("fixed")
+        for sd in panel.get_by_label("Measured SD (response units)", exact=True).all():
+            sd.fill("0.05")
         with page.expect_response(
             lambda response: response.url == api + "/mixed-planning-models"
             and response.request.method == "POST",
@@ -279,6 +282,9 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
             panel.get_by_role("button", name="Evaluate this page", exact=True).click()
         assert evaluated.value.status == 200, evaluated.value.text()
         assert evaluated.value.json()["model_refit"] is False
+        expected_ids = {r["response_id"] for r in study["objective"]["responses"]}
+        for row in evaluated.value.json()["items"]:
+            assert {r["response_id"] for r in row["response_predictions"]} == expected_ids
         boxes = candidate_table.get_by_role("checkbox")
         enabled = [box for box in boxes.all() if box.is_enabled()]
         assert len(enabled) >= 2
@@ -447,12 +453,32 @@ def verify_mixed_workflow(browser: Browser, base: str, output: Path, *, auto_evi
         after = page.request.get(api).json()
         assert after["trial_count"] == 14 and after["pending_trial_count"] == 2
         assert after["observation_history"] == before["observation_history"]
+        if response_count == 6:
+            for trial in after["trials"]:
+                if trial["state"] == "pending":
+                    for i, response in enumerate(study["objective"]["responses"]):
+                        source.get_by_label(
+                            f"Trial {trial['trial_number']}: {response['name']}", exact=True
+                        ).fill(str(4 + i * 0.1))
+            source.get_by_role("button", name="Review complete observations", exact=True).click()
+            with page.expect_response(api + "/observations/batch") as measured:
+                source.get_by_role("button", name="Save actual observations", exact=True).click()
+            assert measured.value.status == 200, measured.value.text()
+            complete = page.request.get(api).json()
+            assert complete["completed_trial_count"] == 14
+            assert complete["pending_trial_count"] == 0
+            assert complete["trials"][:12] == before["trials"]
+            assert all(len(t["response_values"]) == 6 for t in complete["trials"])
+            page.reload(wait_until="domcontentloaded")
+            wait_for_bayesian_ready(page, "en", ROUTE)
+            assert page.request.get(api).json() == complete
         assert (
             len([url for url in writes if url == api + "/mixed-planning-models"]) == 1
         )
         assert not errors, errors
         receipt = {
             "synthetic": True,
+            "response_count": response_count,
             "separate_ui_builder": builder_receipt,
             "browser": browser.version,
             "study_id": study["study_id"],

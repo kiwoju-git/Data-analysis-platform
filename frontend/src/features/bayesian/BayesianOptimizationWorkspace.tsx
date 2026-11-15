@@ -123,6 +123,7 @@ export function BayesianOptimizationWorkspace({ version, filterSnapshot }: Bayes
   const scalarStudy = study?.objective.goal_type !== "desirability" ? study : null;
   const recommendation = useBayesianRecommendationState({
     selectedStudyId: scalarStudy?.study_id ?? null,
+    sourceTrialCount: scalarStudy?.trial_count ?? 0,
     sourceHistoryKey: scalarStudy === null ? null : `${scalarStudy.study_id}:${scalarStudy.observation_history.history_revision_id}:${scalarStudy.observation_history.observation_history_sha256}`,
     requestedBatchId,
     requestedRecommendationId,

@@ -16,6 +16,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
     _SharedModelFields,
     _StrictModel,
 )
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 
 class BayesianFitPolicy(_StrictModel):
@@ -81,7 +82,7 @@ class _ResponseModel(_StrictModel):
 
 class DesirabilityFittedSharedModel(_SharedModelFields):
     schema_version: Literal[6]
-    response_models: list[_ResponseModel] = Field(min_length=1, max_length=4)
+    response_models: list[_ResponseModel] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
 
 
 class DesirabilityFitCalculationRequest(_BatchCalculationRequestFields):

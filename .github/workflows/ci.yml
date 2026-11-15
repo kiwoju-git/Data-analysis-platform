@@ -609,6 +609,14 @@ jobs:
           $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
           & $python scripts/benchmark_gp_resources.py --rows 501 1000 2000 --output .tmp/gp-resources/results.json
           exit $LASTEXITCODE
+      - name: Measure 500-row six-response BO with an explicit bounded fit
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { '.venv/Scripts/python.exe' } else { '.venv/bin/python' }
+          foreach ($kind in @('numeric', 'mixed')) {
+            & $python scripts/benchmark_bo_capacity.py --kind $kind --rows 500 --responses 6 --iterations 5 --output ".tmp/gp-resources/bo-500x6-$kind.json"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
       - name: Preserve synthetic measurement and failure evidence
         if: always()
         uses: actions/upload-artifact@v4

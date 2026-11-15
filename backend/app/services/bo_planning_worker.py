@@ -8,11 +8,12 @@ import time
 from multiprocessing.connection import Connection
 from typing import Any
 
+from app.core.bo_limits import MAX_BO_PLANNING_BYTES
 from app.services import bo_desirability_worker as execution
 from app.services.analysis_run_execution import canonical_json_bytes
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 
-MAX_PLANNING_BYTES = 16 * 1024 * 1024
+MAX_PLANNING_BYTES = MAX_BO_PLANNING_BYTES
 PLANNING_ERRORS = frozenset(
     {
         "bayesian_planning_input_invalid",
@@ -220,6 +221,10 @@ def _worker_entry(output: Connection, payload_bytes: bytes) -> None:
             raise BayesianOptimizationError("bayesian_planning_input_invalid")
         deadline = time.perf_counter() + duration / 1000
         operation, payload = envelope["operation"], envelope["payload"]
+        if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
+            routing = payload["routing"]
+            if "snapshot" not in routing:
+                routing["snapshot"] = payload["snapshot"]
         with threadpool_limits(limits=1):
             result = _calculate(operation, payload)
             # Numerical revalidation shares admission, thread limit and the
@@ -402,8 +407,21 @@ def run_planning_operation(
     try:
         if cancel is not None and cancel.is_set():
             raise BayesianOptimizationError("bayesian_desirability_cancelled")
+        wire_payload = payload
+        if operation in {"auto_augmentation", "auto_mixed_augmentation"}:
+            snapshot, routing = payload.get("snapshot"), payload.get("routing")
+            if (
+                snapshot is not None
+                and isinstance(routing, dict)
+                and routing.get("snapshot") == snapshot
+            ):
+                # Serialize identical model state once; the child restores a shared reference.
+                wire_payload = {
+                    **payload,
+                    "routing": {key: value for key, value in routing.items() if key != "snapshot"},
+                }
         encoded = canonical_json_bytes(
-            {"operation": operation, "payload": payload, "time_budget_ms": time_budget_ms}
+            {"operation": operation, "payload": wire_payload, "time_budget_ms": time_budget_ms}
         )
         if len(encoded) > MAX_PLANNING_BYTES:
             raise BayesianOptimizationError("bayesian_desirability_input_too_large")

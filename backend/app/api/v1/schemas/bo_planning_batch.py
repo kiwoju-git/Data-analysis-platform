@@ -20,6 +20,7 @@ from app.api.v1.schemas.bo_desirability_calculation import (
 )
 from app.api.v1.schemas.bo_fit_quality import _ResponseModel
 from app.api.v1.schemas.bo_planning import PlanningSelectionCalculation, Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class PlanningBatchSource(BaseModel):
@@ -51,7 +52,9 @@ class PlanningBatchResponse(BaseModel):
     definition_sha256: Sha256
     source: PlanningBatchSource
     objective: DesirabilityObjective | VersionedCurveObjective
-    response_models: list[_ResponseModelResult | _ResponseModel] = Field(min_length=1, max_length=4)
+    response_models: list[_ResponseModelResult | _ResponseModel] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     incumbent: _Incumbent
     observation_view: _SharedObservationView
     warnings: list[str] = Field(max_length=64)
@@ -68,7 +71,7 @@ class PlanningBatchResponse(BaseModel):
         "abandoned",
         "closed_mixed",
     ] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     provenance: DesirabilityProvenance
 
     @model_validator(mode="after")

@@ -9,11 +9,12 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from app.core.bo_limits import MAX_BO_RESPONSES
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 
 CURVE_POLICY = "derringer_suich_linear_v1"
 MOMENT_POLICY = "independent_latent_gaussian_split_quadrature_v1"
-MAX_RESPONSES = 4
+MAX_RESPONSES = MAX_BO_RESPONSES
 _NORMAL_CUTOFF = 12.0
 
 

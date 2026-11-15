@@ -28,6 +28,7 @@ from app.api.v1.schemas.doe import (
     LatinHypercubeDesignQualityResponse,
 )
 from app.api.v1.schemas.reports import BayesianHistoryReportSource, LhsDesignReportSource
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services.bayesian_recommendation_consistency import validate_bayesian_recommendation_record
@@ -492,7 +493,7 @@ def _batch_snapshot(
         from app.services.bo_planning_batches import validate_planning_batch_record
 
         trials = list_bayesian_trial_records(
-            settings.workspace_root, version.study_version_id, limit=200
+            settings.workspace_root, version.study_version_id, limit=MAX_BAYESIAN_TRIALS
         )
         for stored_trial in trials:
             _verified_trial(stored_trial, source.definition_sha256, factors)

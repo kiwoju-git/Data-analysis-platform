@@ -1,5 +1,10 @@
 # Mixed BO Fitted State
 
+Current capacity supersession (API46/metadata39): raw/effective BO observations
+are bounded at500 and desirability at6 responses. Older200-row evidence below
+is historical; see `bo_500_capacity.md` and `bo_capacity_finalization.md` for
+current limits and actual validation. Statistical and encoding policies remain.
+
 Status: pure-core implementation and focused Windows/Python 3.10 checks passed;
 product service, browser, other native-target and archive integration remain
 separate gates. This is not evidence of numerical parity with JMP.

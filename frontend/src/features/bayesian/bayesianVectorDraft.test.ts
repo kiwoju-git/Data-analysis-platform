@@ -19,7 +19,7 @@ describe("measured vector drafts", () => {
   });
   it("rejects order, duplicate IDs, nonpositive importance and response limits", () => {
     const valid = { ...newResponseDraft(1), lower: "0", target: "1" };
-    for (const rows of [[{ ...valid, target: "0" }], [valid, valid], [{ ...valid, importance: "0" }], [], Array.from({ length: 5 }, (_, i) => ({ ...valid, responseId: `r${i}` }))]) {
+    for (const rows of [[{ ...valid, target: "0" }], [valid, valid], [{ ...valid, importance: "0" }], [], Array.from({ length: 7 }, (_, i) => ({ ...valid, responseId: `r${i}` }))]) {
       expect(typeof buildVectorObjective("Q", rows)).toBe("string");
     }
   });

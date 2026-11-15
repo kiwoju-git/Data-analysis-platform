@@ -2,7 +2,7 @@
 
 Mixture BO is an explicit study-schema 8, local persistent planning workflow for
 one continuous group of 2-8 components, optional executable numeric/discrete or
-declared nominal/ordinal process factors, and 1-4 desirability responses. The
+declared nominal/ordinal process factors, and 1-6 desirability responses (API46). The
 total original-factor limit remains 10, including fixed components. Legacy scalar
 EI/ETI studies are not converted. Multiple mixture groups and discrete mixture
 components are unsupported and rejected by the typed creation contract.

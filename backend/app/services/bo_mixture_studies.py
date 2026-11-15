@@ -16,6 +16,7 @@ from app.api.v1.schemas.bo_mixture import (
     MixtureStudyResponse,
     MixtureTrialResponse,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.core.errors import ApiError
 from app.services import bayesian_studies as legacy
@@ -123,7 +124,7 @@ def new_mixture_trial_record(
     values, vector = design.canonical(actual)
     if (
         not mixed_constraints_satisfied(values, design.constraints)
-        or not 1 <= trial_number <= 200
+        or not 1 <= trial_number <= MAX_BAYESIAN_TRIALS
         or origin not in {"initial_design", "recommendation", "replicate"}
         or (origin == "replicate") != (replicate_of_trial_id is not None)
     ):
@@ -342,14 +343,14 @@ def load_validated_mixture_study(settings: Settings, study_id: str) -> MixtureVa
         imported_initial = MixtureDatasetImportedInitialDesign.model_validate(initial)
     try:
         trials = storage.list_bayesian_trial_records(
-            settings.workspace_root, version.study_version_id, limit=200
+            settings.workspace_root, version.study_version_id, limit=MAX_BAYESIAN_TRIALS
         )
         if (
             len(trials)
             != storage.count_bayesian_trial_records(
                 settings.workspace_root, version.study_version_id
             )
-            or not initial["generated_size"] <= len(trials) <= 200
+            or not initial["generated_size"] <= len(trials) <= MAX_BAYESIAN_TRIALS
             or [t.trial_number for t in trials] != list(range(1, len(trials) + 1))
         ):
             raise ValueError
@@ -370,7 +371,7 @@ def load_validated_mixture_study(settings: Settings, study_id: str) -> MixtureVa
             raise ValueError
         event = storage.get_bayesian_study_lifecycle_event_record(settings.workspace_root, study_id)
         batches = storage.list_bayesian_recommendation_batch_records(
-            settings.workspace_root, version.study_version_id, limit=200
+            settings.workspace_root, version.study_version_id, limit=MAX_BAYESIAN_TRIALS
         )
         if storage.count_bayesian_recommendation_batch_records(
             settings.workspace_root, version.study_version_id
@@ -511,7 +512,7 @@ def mixture_study_response(bundle: MixtureValidatedStudy) -> MixtureStudyRespons
         blockers.append("bayesian_optimization_pending_recommendation_exists")
     if bundle.study.status != "active":
         blockers.append("bayesian_study_not_active")
-    if len(bundle.trials) >= 200:
+    if len(bundle.trials) >= MAX_BAYESIAN_TRIALS:
         blockers.append("bayesian_optimization_budget_exhausted")
     return MixtureStudyResponse(
         study_id=UUID(bundle.study.study_id),

@@ -31,6 +31,7 @@ from app.api.v1.schemas.bo_mixed_planning import (
     MixedPlanningSelectionCalculation,
 )
 from app.api.v1.schemas.bo_planning import CandidateGeneration, CandidateRemove, Sha256
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS, MAX_BO_RESPONSES
 
 
 class _Model(BaseModel):
@@ -42,11 +43,13 @@ class MixedSourceRequest(_Model):
     expected_definition_sha256: Sha256
     expected_history_revision_id: UUID
     expected_history_sha256: Sha256
-    expected_trial_count: int = Field(ge=1, le=200, strict=True)
+    expected_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS, strict=True)
 
 
 class MixedFitOptions(_Model):
-    response_models: list[DesirabilityResponseModelRequest] = Field(min_length=1, max_length=4)
+    response_models: list[DesirabilityResponseModelRequest] = Field(
+        min_length=1, max_length=MAX_BO_RESPONSES
+    )
     observation_policy: MixedPlanningObservationPolicy
     xi_desirability: FiniteFloat = Field(ge=0)
     search: DesirabilitySearch
@@ -91,8 +94,12 @@ class MixedIncumbent(_Model):
     latent_incumbent_trial_id: UUID
     latent_incumbent_encoded_coordinates: EncodedPoint
     coordinate_encoding: Literal["numeric_normalized_category_index_v1"]
-    observed_trial_desirabilities: list[MixedObservedDesirability] = Field(max_length=200)
-    training_posterior_desirabilities: list[MixedTrainingDesirability] = Field(max_length=200)
+    observed_trial_desirabilities: list[MixedObservedDesirability] = Field(
+        max_length=MAX_BAYESIAN_TRIALS
+    )
+    training_posterior_desirabilities: list[MixedTrainingDesirability] = Field(
+        max_length=MAX_BAYESIAN_TRIALS
+    )
 
 
 class MixedResponseModel(_Model):
@@ -105,7 +112,7 @@ class MixedResponseModel(_Model):
 class MixedModelDetail(MixedModelSummary):
     fit: MixedFitOptions
     objective: AnyDesirabilityObjective
-    response_models: list[MixedResponseModel] = Field(min_length=1, max_length=4)
+    response_models: list[MixedResponseModel] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
     incumbent: MixedIncumbent
     observation_view: dict[str, JsonValue]
     warnings: list[str] = Field(max_length=128)
@@ -186,7 +193,7 @@ class MixedCandidateSummary(_Model):
     rows_sha256: Sha256
     config_sha256: Sha256
     excluded_coordinates_sha256: Sha256
-    source_trial_count: int = Field(ge=1, le=200)
+    source_trial_count: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     duplicate_tolerance: FiniteFloat = Field(ge=1e-12, le=0.1)
     ordinal_rank_distance: bool
     row_count: int = Field(ge=1, le=10000)
@@ -216,7 +223,7 @@ class _MixedSelectionRequest(MixedSourceRequest):
     row_ids: list[Sha256] = Field(default_factory=list, max_length=8)
     policy: AugmentationPolicy | None = None
     batch_size: int = Field(ge=1, le=8, strict=True)
-    total_trial_budget: int = Field(ge=2, le=200, strict=True)
+    total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS, strict=True)
     duplicate_tolerance: FiniteFloat = Field(default=1e-6, ge=1e-12, le=0.1)
     ordinal_rank_distance: bool = False
     min_batch_distance: FiniteFloat = Field(default=0, ge=0)

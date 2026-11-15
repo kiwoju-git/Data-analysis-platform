@@ -7,6 +7,7 @@ import { mixedCorrelationLabel, mixedMessages } from "../../i18n/boMixed";
 import { formatExactNumericValue as exact } from "../../statisticalNumberFormat";
 import { isMixedCategory, mixedStudyKey } from "./boMixedDraft";
 import { planningInteger } from "./boPlanningDraft";
+import { MAX_BO_TRIALS, suggestedBoTrialBudget } from "./boLimits";
 import { vectorDraftCell } from "./bayesianVectorDraft";
 import { BayesianCurveSummary } from "./BayesianCurvePolicy";
 import { BayesianDatasetSourceSummary } from "./BayesianDatasetSourceSummary";
@@ -18,7 +19,7 @@ export function BayesianMixedStudyWorkspace({ study, disabled, onCommitted, onRe
   const { locale } = useI18n(), text = mixedMessages(locale);
   const initial = study.initial_design;
   const state = useMixedStudyActions({ study, disabled, onCommitted, onRefresh });
-  const [offset, setOffset] = useState(0), [replicateTrial, setReplicateTrial] = useState(""), [count, setCount] = useState("1"), [budget, setBudget] = useState("200"), [intent, setIntent] = useState(false);
+  const [offset, setOffset] = useState(0), [replicateTrial, setReplicateTrial] = useState(""), [count, setCount] = useState("1"), [budget, setBudget] = useState(() => String(suggestedBoTrialBudget(study.trial_count, 200))), [intent, setIntent] = useState(false);
   const [closingIntent, setClosingIntent] = useState(false), [closeTarget, setCloseTarget] = useState<"completed" | "abandoned">("completed");
   const [reason, setReason] = useState<BayesianStudyCloseRequest["reason_code"]>("confirmation_complete"), [note, setNote] = useState("");
   const sourceKey = mixedStudyKey(study);
@@ -26,7 +27,7 @@ export function BayesianMixedStudyWorkspace({ study, disabled, onCommitted, onRe
   useEffect(() => { onBusyChange(state.busy); return () => onBusyChange(false); }, [state.busy, onBusyChange]);
   const locked = disabled || state.busy, readOnly = locked || study.status !== "active";
   const states = { pending: text.pending, completed: text.completed, abandoned: text.abandoned }, rows = study.trials.slice(offset, offset + 25);
-  const counts = { count: planningInteger(count, 1, 8), budget: planningInteger(budget, 2, 200) };
+  const counts = { count: planningInteger(count, 1, 8), budget: planningInteger(budget, 2, MAX_BO_TRIALS) };
   const reasons = { objective_satisfied: text.objectiveSatisfied, budget_reached: text.budgetReached, confirmation_complete: text.confirmationComplete,
     unsafe_or_infeasible: text.unsafe, resources_unavailable: text.resources, study_cancelled: text.cancelled };
   const closeReasons: BayesianStudyCloseRequest["reason_code"][] = closeTarget === "completed" ? ["objective_satisfied", "budget_reached", "confirmation_complete"] : ["unsafe_or_infeasible", "resources_unavailable", "study_cancelled"];

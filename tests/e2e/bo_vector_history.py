@@ -195,7 +195,7 @@ def verify_bo_vector_history(browser: Browser, base: str, output: Path) -> dict:
             browser, base, output / "augmentation"
         )
         receipt["mixed_planning"] = verify_mixed_workflow(
-            browser, base, output / "mixed-planning"
+            browser, base, output / "mixed-planning", response_count=6
         )
         receipt["numeric_auto_evidence"] = verify_persistent_planning(
             browser, base, output / "numeric-auto-evidence", auto_evidence_only=True

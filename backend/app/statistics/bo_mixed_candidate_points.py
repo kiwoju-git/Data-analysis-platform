@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 from decimal import Decimal
 from typing import Any
 
+from app.core.bo_limits import MAX_BAYESIAN_REFERENCE_POINTS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_factor_domains import (
     BoCategoricalFactorDomain,
@@ -124,7 +125,7 @@ def validated_mixed_candidate_rows(
         type(points) is not list
         or not 1 <= len(points) <= 10000
         or type(excluded_encoded) is not list
-        or len(excluded_encoded) > 400
+        or len(excluded_encoded) > MAX_BAYESIAN_REFERENCE_POINTS
         or type(duplicate_tolerance) not in {int, float}
         or not math.isfinite(duplicate_tolerance)
         or not 1e-12 <= duplicate_tolerance <= 0.1

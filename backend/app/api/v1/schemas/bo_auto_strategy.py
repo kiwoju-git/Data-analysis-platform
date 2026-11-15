@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat
 
 from app.api.v1.schemas.bo_loo import LooRequest, LooSnapshot, LooView
 from app.api.v1.schemas.bo_planning import Sha256
+from app.core.bo_limits import MAX_BO_RESPONSES
 
 
 class AutoStrategyRequest(LooRequest):
@@ -32,9 +33,9 @@ class AutoStrategyDecision(BaseModel):
         "any_response_below_threshold",
         "all_responses_meet_threshold",
     ]
-    response_ids: list[str] = Field(min_length=1, max_length=4)
-    below_threshold_response_ids: list[str] = Field(max_length=4)
-    unavailable_response_ids: list[str] = Field(max_length=4)
+    response_ids: list[str] = Field(min_length=1, max_length=MAX_BO_RESPONSES)
+    below_threshold_response_ids: list[str] = Field(max_length=MAX_BO_RESPONSES)
+    unavailable_response_ids: list[str] = Field(max_length=MAX_BO_RESPONSES)
     ordinal_rank_distance_requires_consent: bool
     warnings: list[str] = Field(min_length=2, max_length=3)
 

@@ -77,7 +77,7 @@ def test_populated_graph_and_renewal_are_not_rewritten(request, monkeypatch, fix
     metadata.initialize_metadata_store(settings.workspace_root)
     assert snapshot(settings.workspace_root) == before
     with sqlite3.connect(metadata.metadata_db_path(settings.workspace_root)) as db:
-        assert db.execute("PRAGMA user_version").fetchone() == (37,)
+        assert db.execute("PRAGMA user_version").fetchone() == (metadata.SCHEMA_VERSION,)
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
         assert db.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     assert (

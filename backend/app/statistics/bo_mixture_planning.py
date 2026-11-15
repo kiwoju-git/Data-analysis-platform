@@ -11,6 +11,7 @@ from typing import Any
 
 from app.api.v1.schemas.bo_curve_policy import AnyDesirabilityObjective
 from app.api.v1.schemas.bo_mixed_workflow import MixedFitOptions
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_desirability import composite_desirability
 from app.statistics.bo_desirability_acquisition import beta_expected_improvement
@@ -55,7 +56,7 @@ def _parsed(
     )
     fit = MixedFitOptions.model_validate(payload["fit"])
     rows = payload["observations"]
-    if type(rows) is not list or not max(2, len(design.keys)) <= len(rows) <= 200:
+    if type(rows) is not list or not max(2, len(design.keys)) <= len(rows) <= MAX_BAYESIAN_TRIALS:
         raise _error("bayesian_optimization_history_incomplete")
     ids, unique = set(), set()
     response_ids = {r.response_id for r in objective.responses}

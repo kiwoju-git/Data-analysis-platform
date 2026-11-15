@@ -16,6 +16,7 @@ from app.api.v1.schemas.bayesian import (
     BayesianRecommendationSearchRequest,
     BayesianTrialResponse,
 )
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 
 NOISE_BATCH_POLICY: Final = "greedy_mc_joint_latent_improvement_v2"
 
@@ -79,7 +80,7 @@ class BayesianNoiseBatchSearchRequest(_StrictModel):
     time_budget_ms: int = Field(default=15_000, ge=1000, le=60_000)
     jitter: FiniteFloat = Field(default=1e-8, ge=1e-12, le=1e-3)
     duplicate_tolerance: FiniteFloat = Field(default=1e-6, ge=1e-12, le=0.1)
-    total_trial_budget: int = Field(default=50, ge=2, le=200)
+    total_trial_budget: int = Field(default=50, ge=2, le=MAX_BAYESIAN_TRIALS)
     batch_policy: Literal["greedy_mc_joint_latent_improvement_v2"] = NOISE_BATCH_POLICY
 
 
@@ -224,8 +225,8 @@ class _NoiseSharedModelFields(_StrictModel):
     normalization: BayesianNoiseNormalization
     optimizer: BayesianNoiseOptimizer
     log_marginal_likelihood: FiniteFloat
-    raw_observation_count: int = Field(ge=2, le=200)
-    effective_training_count: int = Field(ge=2, le=200)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    effective_training_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     training_group_counts: list[int]
     fit_elapsed_ms: FiniteFloat = Field(ge=0)
     package_versions: dict[str, str]
@@ -269,7 +270,7 @@ class BayesianObservationGroupSummary(_StrictModel):
     canonical_actual_coordinates: dict[str, FiniteFloat]
     canonical_level_indices: dict[str, int | None]
     condition_key: str | None
-    n: int = Field(ge=1, le=200)
+    n: int = Field(ge=1, le=MAX_BAYESIAN_TRIALS)
     mean: FiniteFloat
     within_ss: FiniteFloat = Field(ge=0)
     sample_variance: FiniteFloat | None
@@ -302,10 +303,10 @@ class BayesianNearbyDiagnostics(_StrictModel):
 class BayesianObservationViewSummary(_StrictModel):
     policy_version: Literal[1]
     mode: Literal["retain_raw", "exact_replicates", "nearby_diagnostics"]
-    raw_observation_count: int = Field(ge=2, le=200)
-    unique_condition_count: int = Field(ge=2, le=200)
-    unique_coordinate_count: int = Field(ge=2, le=200)
-    effective_training_count: int = Field(ge=2, le=200)
+    raw_observation_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    unique_condition_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    unique_coordinate_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
+    effective_training_count: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
     normalization: BayesianObservationNormalization
     groups: list[BayesianObservationGroupSummary]
     nearby_diagnostics: BayesianNearbyDiagnostics
@@ -475,7 +476,7 @@ class _NoiseBatchResponseFields(_StrictModel):
     batch_state: Literal[
         "pending", "partially_completed", "completed", "abandoned", "closed_mixed"
     ] = "pending"
-    requested_total_trial_budget: int = Field(ge=2, le=200)
+    requested_total_trial_budget: int = Field(ge=2, le=MAX_BAYESIAN_TRIALS)
 
 
 class BayesianNoiseBatchResponse(_NoiseBatchResponseFields):

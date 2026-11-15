@@ -23,11 +23,13 @@ import {
 } from "../bayesianDisplay";
 import { buildNoisePolicy, defaultNoiseDraft, strictBoNumber, type BayesianNoiseDraft } from "../boNoisePolicy";
 import { DEFAULT_BO_KERNEL, parseBoKernelKind, savedBoKernelKind } from "../boKernelPolicy";
+import { suggestedBoTrialBudget } from "../boLimits";
 
 const ignoreSelection = () => undefined;
 
 export function useBayesianRecommendationState({
   selectedStudyId,
+  sourceTrialCount = 0,
   sourceHistoryKey = null,
   requestedBatchId = null,
   requestedRecommendationId,
@@ -35,6 +37,7 @@ export function useBayesianRecommendationState({
   onRecommendationSelected,
 }: {
   selectedStudyId: string | null;
+  sourceTrialCount?: number;
   sourceHistoryKey?: string | null;
   requestedBatchId?: string | null;
   requestedRecommendationId: string | null;
@@ -71,6 +74,9 @@ export function useBayesianRecommendationState({
   const sourceKey = `${selectedStudyId}:${sourceHistoryKey}:${requestedBatchId}:${requestedRecommendationId}`;
   const currentSource = useRef(sourceKey);
   currentSource.current = sourceKey;
+  const budgetOwner = useRef<string | null>(null);
+  const currentTrialCount = useRef(sourceTrialCount);
+  currentTrialCount.current = sourceTrialCount;
 
   useEffect(() => {
     createGuard.cancel();
@@ -175,6 +181,9 @@ export function useBayesianRecommendationState({
         setRecommendation(restoredLegacy);
         setKernelKind(DEFAULT_BO_KERNEL);
         if (restoredLegacy !== null) {
+          if (restoredLegacy.requested_total_trial_budget !== null) {
+            setTotalTrialBudget(String(restoredLegacy.requested_total_trial_budget));
+          }
           onRecommendationSelected(restoredLegacy.recommendation_id);
         }
         return restoredLegacy;
@@ -209,6 +218,11 @@ export function useBayesianRecommendationState({
     activeReviewId.current = null;
     setReview(null);
     setKernelKind(DEFAULT_BO_KERNEL);
+    if (budgetOwner.current !== selectedStudyId) {
+      budgetOwner.current = selectedStudyId;
+      setTotalTrialBudget(String(suggestedBoTrialBudget(currentTrialCount.current,
+        defaultBayesianBatchSearch.total_trial_budget)));
+    }
     if (selectedStudyId !== null) {
       void loadRecommendation(
         selectedStudyId,

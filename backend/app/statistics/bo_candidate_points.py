@@ -9,6 +9,7 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Any
 
+from app.core.bo_limits import MAX_BAYESIAN_REFERENCE_POINTS
 from app.statistics.bayesian_optimization import (
     BayesianOptimizationError,
     _constraint_evaluations,
@@ -62,9 +63,12 @@ def validated_candidate_rows(
     ):
         raise BayesianOptimizationError("bayesian_candidate_input_invalid")
     keys = [factor["factor_id"] for factor in factors]
-    # A validated 200-trial history may also carry its canonical re-normalized
+    # A validated bounded trial history may also carry its canonical re-normalized
     # coordinates, which can differ from stored coordinates by one ULP.
-    if not isinstance(excluded_normalized, list) or len(excluded_normalized) > 400:
+    if (
+        not isinstance(excluded_normalized, list)
+        or len(excluded_normalized) > MAX_BAYESIAN_REFERENCE_POINTS
+    ):
         raise BayesianOptimizationError("bayesian_candidate_input_invalid")
     for excluded_point in excluded_normalized:
         if check_budget is not None:

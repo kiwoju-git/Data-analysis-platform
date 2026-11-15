@@ -11,6 +11,7 @@ import { formatExactNumericValue as exact } from "../../statisticalNumberFormat"
 import { augmentationFailureCode } from "./boAugmentationDraft";
 import { createPlanningRequestFence, planningInteger } from "./boPlanningDraft";
 import { bayesianRequestId } from "./bayesianRequestId";
+import { MAX_BO_TRIALS, suggestedBoTrialBudget } from "./boLimits";
 import { currentMixtureModel, mixtureFit, mixtureSource, mixtureSourceKey, mixtureReviewDraftKey, parseMixturePoints, validMixtureModel, validMixturePage, validMixtureSelection, validMixtureStudy } from "./boMixtureDraft";
 import { BayesianMixtureDiagnostics } from "./BayesianMixtureDiagnostics";
 import { BayesianCurveSummary } from "./BayesianCurvePolicy";
@@ -31,7 +32,7 @@ function MixtureSourceWorkspace({ study, disabled, onRefresh, onBusyChange, init
   const [models, setModels] = useState<api.MixtureModel[]>([]), [model, setModel] = useState<api.MixtureModel | null>(null);
   const [kernel, setKernel] = useState<BayesianKernelKind>("matern_5_2"), [seconds, setSeconds] = useState("60"), [seed, setSeed] = useState("42");
   const [page, setPage] = useState<api.MixturePage | null>(null), [selected, setSelected] = useState<string[]>([]), [selection, setSelection] = useState<api.MixtureSelection | null>(null);
-  const [count, setCount] = useState("32"), [batch, setBatch] = useState("1"), [budget, setBudget] = useState("200"), [distance, setDistance] = useState("0"), [manual, setManual] = useState(true), [paste, setPaste] = useState("");
+  const [count, setCount] = useState("32"), [batch, setBatch] = useState("1"), [budget, setBudget] = useState(() => String(suggestedBoTrialBudget(study.trial_count, 200))), [distance, setDistance] = useState("0"), [manual, setManual] = useState(true), [paste, setPaste] = useState("");
   const [intent, setIntent] = useState(false), [replicateIntent, setReplicateIntent] = useState(false), [closeIntent, setCloseIntent] = useState(false);
   const [observations, setObservations] = useState<Record<string, string>>({});
   const [replicateTrial, setReplicateTrial] = useState(""), [replicateCount, setReplicateCount] = useState("1");
@@ -103,7 +104,7 @@ function MixtureSourceWorkspace({ study, disabled, onRefresh, onBusyChange, init
   }
   async function review() {
     if (locked || !model || !page || !page.source_is_current || !current || !active || study.pending_trial_count > 0) return;
-    const size = manual ? selected.length : planningInteger(batch, 1, 8), total = planningInteger(budget, study.trial_count + (size ?? 1), 200), minimum = parseDoeResponseNumber(distance);
+    const size = manual ? selected.length : planningInteger(batch, 1, 8), total = planningInteger(budget, study.trial_count + (size ?? 1), MAX_BO_TRIALS), minimum = parseDoeResponseNumber(distance);
     if (!size || size > 8 || total === null || minimum === null || minimum < 0) { setError("bayesian_mixture_selection_invalid"); return; }
     const captured = model;
     const body: api.MixtureSelectionRequest = { ...mixtureSource(study), schema_version: 6, request_id: bayesianRequestId(), candidate_revision_id: page.revision.revision_id, expected_rows_sha256: page.revision.rows_sha256, model_id: model.model_id, expected_model_sha256: model.snapshot_sha256, policy: manual ? "manual_mixture_base_posterior_v1" : "greedy_mixture_maximin_v1", row_ids: manual ? [...selected] : [], batch_size: size, total_trial_budget: total, min_batch_distance: minimum, time_budget_ms: 60000, max_moment_evaluations: 65536 };
@@ -136,7 +137,7 @@ function MixtureSourceWorkspace({ study, disabled, onRefresh, onBusyChange, init
     await run(async current => { const restored = await restoreMixtureReview(study, restoreId.trim(), current); if (restored) applyStoredReview(restored); });
   }
   async function replicate() {
-    const amount = planningInteger(replicateCount, 1, 8), total = planningInteger(budget, study.trial_count + (amount ?? 1), 200);
+    const amount = planningInteger(replicateCount, 1, 8), total = planningInteger(budget, study.trial_count + (amount ?? 1), MAX_BO_TRIALS);
     if (locked || !active || !replicateIntent || study.pending_trial_count > 0 || !study.trials.some(t => t.trial_id === replicateTrial && t.state === "completed") || amount === null || total === null) return;
     const body = { request_id: bayesianRequestId(), expected_history_revision_id: study.observation_history.history_revision_id, expected_history_sha256: study.observation_history.observation_history_sha256, count: amount, total_trial_budget: total, confirm_replicate_intent: true as const };
     await run(async current => { const value = await api.replicateMixtureTrial(study.study_id, replicateTrial, body); if (!current()) return; if (value.study_id !== study.study_id || value.request_id !== body.request_id) throw Error("bayesian_mixture_source_mismatch"); onRefresh(); }, true);

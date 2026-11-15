@@ -226,6 +226,16 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
         raise ValueError(
             "Synthetic BO import requires an explicitly isolated workspace"
         )
+    from bo_import_validation import verify_import_fields
+    from bo_six_responses import verify_six_responses
+
+    verify_six_responses(
+        browser, base, output / "six-responses", isolated_workspace=isolated_workspace
+    )
+
+    verify_import_fields(
+        browser, base, output / "field-validation", isolated_workspace=True
+    )
     output.mkdir(parents=True, exist_ok=True)
     with diagnosed_page(
         browser,
@@ -491,7 +501,9 @@ def verify_bo_dataset_import(browser, base, output, *, isolated_workspace=False)
         receipt = {
             "synthetic": True,
             "browser": browser.version,
-            "api_contract": 43,
+            "api_contract": page.request.get(base + "/api/v1/runtime-info").json()[
+                "api_contract_version"
+            ],
             "study_id": study["study_id"],
             "imported": 3,
             "completed_after_batch": 5,

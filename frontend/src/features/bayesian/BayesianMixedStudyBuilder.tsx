@@ -11,6 +11,7 @@ import { buildMixedStudyRequest, newMixedFactor, validMixedStudy, type MixedCons
 import { buildVectorObjective, newResponseDraft, type ResponseGoalDraft } from "./bayesianVectorDraft";
 import { sameDesirabilityJson } from "./desirabilityResponseGuard";
 import { BayesianResponseGoals } from "./BayesianResponseGoals";
+import { MAX_BO_RESPONSES } from "./boLimits";
 import { BayesianConstraintEditor } from "./BayesianConstraintEditor";
 import "./boPlanning.css";
 
@@ -29,7 +30,7 @@ export function BayesianMixedStudyBuilder({ ownerKey, disabled, onCreated, onCan
   useEffect(() => { onBusyChange(creating); return () => onBusyChange(false); }, [creating, onBusyChange]);
   const goalEditor = { responseGoals: goals,
     updateResponseGoal: <Field extends keyof Omit<ResponseGoalDraft, "key">>(key: number, field: Field, value: ResponseGoalDraft[Field]) => setGoals(current => current.map(row => row.key === key ? { ...row, [field]: value } : row)),
-    addResponseGoal: () => { const next = newResponseDraft(nextResponse.current++); setGoals(current => current.length < 4 ? [...current, next] : current); },
+    addResponseGoal: () => { const next = newResponseDraft(nextResponse.current++); setGoals(current => current.length < MAX_BO_RESPONSES ? [...current, next] : current); },
     removeResponseGoal: (key: number) => setGoals(current => current.length > 1 ? current.filter(row => row.key !== key) : current),
   };
   function changeFactor<Field extends keyof Omit<MixedFactorDraft, "key">>(key: number, field: Field, value: MixedFactorDraft[Field]) { setError(null); setFactors(current => current.map(row => row.key === key ? { ...row, [field]: value } : row)); }

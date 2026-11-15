@@ -30,7 +30,7 @@ const en = {
   addPredictor: "Add predictor",
   responseObjective: "Response objective",
   singleResponse: "Single response",
-  desirabilityResponses: "Desirability · 1–4 responses",
+  desirabilityResponses: "Desirability · 1–6 responses",
   goal: "Goal",
   maximize: "Maximize",
   minimize: "Minimize",
@@ -41,7 +41,7 @@ const en = {
   missingPolicy: "Missing-data policy",
   rejectMissing: "Reject missing values",
   completeCases: "Use complete cases of selected X/Y",
-  domainNotice: "Confirm domain bounds in actual units. Up to 200 measured rows; repeated observations remain separate.",
+  domainNotice: "Confirm domain bounds in actual units. Up to 500 trials in total, including imported measurements and subsequent experiments. Repeated observations remain separate.",
   displayNames: "BO display names",
   advanced: "Advanced options",
   invalidNumber: "Enter a complete finite number. Leave an unused coefficient empty.",
@@ -103,7 +103,7 @@ const ko: typeof en = {
   addPredictor: "입력 추가",
   responseObjective: "반응 목표",
   singleResponse: "단일 반응",
-  desirabilityResponses: "Desirability · 1~4 반응",
+  desirabilityResponses: "Desirability · 1~6 반응",
   goal: "목표",
   maximize: "최대화",
   minimize: "최소화",
@@ -114,7 +114,7 @@ const ko: typeof en = {
   missingPolicy: "결측 처리",
   rejectMissing: "결측이 있으면 중단",
   completeCases: "선택한 X/Y의 완전한 행만 사용",
-  domainNotice: "허용 영역은 사용자가 확인한 실제 단위입니다. 최대 200개 측정행이며 반복행도 각각 보존합니다.",
+  domainNotice: "허용 영역은 사용자가 확인한 실제 단위입니다. 기존 측정행과 이후 추가 실험을 합쳐 최대 500개이며 반복행도 각각 보존합니다.",
   displayNames: "BO 표시 이름",
   advanced: "고급 옵션",
   invalidNumber: "유한한 숫자를 완전하게 입력하세요. 사용하지 않는 계수는 비워 두세요.",
@@ -147,3 +147,14 @@ const ko: typeof en = {
   create: "관측 가져오기 및 Study 생성",
 };
 export const datasetImportMessages = (locale: AppLocale) => locale === "en" ? en : ko;
+
+export function datasetImportErrorNotice(locale: AppLocale, code: string, limits?: { observed_count: number; maximum_count: number } | null): string {
+  if (code !== "bayesian_import_trial_limit") return datasetImportMessages(locale).errorNotice;
+  const counts = limits ? (locale === "en"
+    ? `${limits.observed_count} valid measurement rows; maximum ${limits.maximum_count}.`
+    : `사용할 측정행 ${limits.observed_count}개 / 허용 ${limits.maximum_count}개.`)
+    : locale === "en" ? "The valid measurement count exceeds the import limit." : "사용할 측정행 수가 가져오기 상한을 초과했습니다.";
+  return `${counts} ${locale === "en"
+    ? "Review an explicit filter or use a smaller dataset. No rows were automatically sampled or changed."
+    : "명시적인 필터를 검토하거나 더 작은 데이터셋을 선택하세요. 행을 자동으로 추출하거나 변경하지 않았습니다."}`;
+}

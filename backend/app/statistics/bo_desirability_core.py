@@ -12,6 +12,7 @@ from collections import OrderedDict
 from dataclasses import asdict
 from typing import Any
 
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.statistics.bayesian_optimization import BayesianOptimizationError
 from app.statistics.bo_desirability import (
     CURVE_POLICY,
@@ -391,7 +392,7 @@ def _observation_views(payload: dict[str, Any], goals: Any, factors: Any) -> dic
     rows, policy = payload["observations"], payload["observation_policy"]
     if (
         not isinstance(rows, list)
-        or not 1 <= len(rows) <= 200
+        or not 1 <= len(rows) <= MAX_BAYESIAN_TRIALS
         or not isinstance(policy, dict)
         or set(policy) - {"mode", "nearby_tolerances", "nearby_units"}
     ):

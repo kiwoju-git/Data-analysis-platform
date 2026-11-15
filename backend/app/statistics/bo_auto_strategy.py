@@ -3,6 +3,8 @@
 import math
 from typing import Any
 
+from app.core.bo_limits import MAX_BO_RESPONSES
+
 
 def suggest_augmentation(
     responses: list[dict[str, Any]], factor_kinds: list[str], threshold: float
@@ -11,7 +13,7 @@ def suggest_augmentation(
         type(threshold) not in {int, float}
         or not math.isfinite(threshold)
         or not 0 <= threshold <= 1
-        or not 1 <= len(responses) <= 4
+        or not 1 <= len(responses) <= MAX_BO_RESPONSES
         or not 1 <= len(factor_kinds) <= 10
         or any(
             kind not in {"continuous", "discrete_numeric", "nominal", "ordinal"}

@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 
 from app.api.v1.schemas.reports import BayesianHistoryReportSource
+from app.core.bo_limits import MAX_BAYESIAN_TRIALS
 from app.core.config import Settings
 from app.services.bayesian_studies import canonical_bayesian_observation_history_sha256
 from app.services.bo_mixture_studies import (
@@ -42,7 +43,7 @@ def read_mixture_bayesian(
         or not all(isinstance(item, str) for item in members)
         or len(members) != history.completed_trial_count
         or len(set(members)) != len(members)
-        or len(members) > 200
+        or len(members) > MAX_BAYESIAN_TRIALS
     ):
         raise invalid("report_source_changed")
     observations = []
@@ -84,9 +85,9 @@ def read_mixture_bayesian(
         cutoff = config.get("expected_trial_count") if isinstance(config, dict) else None
         if (
             type(cutoff) is not int
-            or not 1 <= cutoff <= 200
+            or not 1 <= cutoff <= MAX_BAYESIAN_TRIALS
             or not 1 <= record.batch_size <= 8
-            or cutoff + record.batch_size > 200
+            or cutoff + record.batch_size > MAX_BAYESIAN_TRIALS
         ):
             raise invalid("report_source_changed")
         trials = storage.list_bayesian_trial_records(

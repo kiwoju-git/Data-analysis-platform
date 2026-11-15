@@ -28,6 +28,27 @@ def _in_process(encoded, *, entrypoint, timeout_ms, cancel, max_result_bytes):
     return output.data
 
 
+@pytest.mark.parametrize("operation", ["auto_augmentation", "auto_mixed_augmentation"])
+def test_distinct_auto_snapshots_are_not_deduplicated(monkeypatch, operation):
+    payload = {
+        "snapshot": {"synthetic_model": "a"},
+        "routing": {"snapshot": {"synthetic_model": "b"}},
+    }
+    seen = []
+
+    def transport(encoded, **kwargs):
+        assert json.loads(encoded)["payload"] == payload
+        seen.append(True)
+        return json.dumps(
+            {"status": "error", "code": "bayesian_optimization_budget_exhausted"}
+        ).encode()
+
+    monkeypatch.setattr(execution, "_run_owned_worker", transport)
+    with pytest.raises(BayesianOptimizationError, match="bayesian_optimization_budget_exhausted"):
+        worker.run_planning_operation(operation, payload, time_budget_ms=1000)
+    assert seen == [True]
+
+
 @pytest.mark.parametrize("operation", ["evaluate", "selection", "candidates", "fit"])
 def test_validation_is_inside_admission_and_original_worker_deadline(monkeypatch, operation):
     from app.services import bo_planning_contract as contract
